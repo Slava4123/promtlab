@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.idea/
+.vscode/
+.git/
+.gitignore
+*.md
+Dockerfile.*

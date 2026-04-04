@@ -1,0 +1,41 @@
+# Environment
+.env
+.env.dev
+.env.prod
+.env.local
+.env.*.local
+
+# Go
+backend/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude Code
+.claude/
+
+# SSL certificates (secrets)
+ca.crt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Backups
+backups/*.sql.gz

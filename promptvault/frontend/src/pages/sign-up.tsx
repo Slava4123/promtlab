@@ -1,0 +1,161 @@
+import { useState } from "react"
+import { useNavigate, Link } from "react-router-dom"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { AuthLayout } from "@/components/auth/auth-layout"
+import { api } from "@/api/client"
+
+const registerSchema = z.object({
+  name: z.string().min(1, "Введите имя").max(100),
+  email: z.email("Введите корректный email"),
+  password: z.string().min(8, "Минимум 8 символов").max(128),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Пароли не совпадают",
+  path: ["confirmPassword"],
+})
+
+type RegisterForm = z.infer<typeof registerSchema>
+
+export default function SignUp() {
+  const navigate = useNavigate()
+  const [error, setError] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterForm>({
+    resolver: zodResolver(registerSchema),
+  })
+
+  const onSubmit = async (data: RegisterForm) => {
+    setError("")
+    try {
+      await api("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ email: data.email, password: data.password, name: data.name }),
+      })
+      navigate(`/verify-email?email=${encodeURIComponent(data.email)}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка регистрации")
+    }
+  }
+
+  return (
+    <AuthLayout>
+      <div className="mb-6 text-center">
+        <h1 className="text-xl font-semibold text-white">Создать аккаунт</h1>
+        <p className="mt-1.5 text-sm text-zinc-500">Заполните данные для регистрации</p>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} noValidate onChange={() => error && setError("")} className="space-y-4">
+        {error && (
+          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="name" className="text-zinc-300">Имя</Label>
+          <Input
+            id="name"
+            placeholder="Ваше имя"
+            className="h-10 border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+            {...register("name")}
+          />
+          {errors.name && (
+            <p className="text-sm text-destructive">{errors.name.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-zinc-300">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            className="h-10 border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+            {...register("email")}
+          />
+          {errors.email && (
+            <p className="text-sm text-destructive">{errors.email.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="password" className="text-zinc-300">Пароль</Label>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Минимум 8 символов"
+              className="h-10 border-white/[0.08] bg-white/[0.04] pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              {...register("password")}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 transition-colors hover:text-zinc-400"
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {errors.password && (
+            <p className="text-sm text-destructive">{errors.password.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="confirmPassword" className="text-zinc-300">Подтвердите пароль</Label>
+          <div className="relative">
+            <Input
+              id="confirmPassword"
+              type={showConfirm ? "text" : "password"}
+              placeholder="Повторите пароль"
+              className="h-10 border-white/[0.08] bg-white/[0.04] pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              onPaste={(e) => e.preventDefault()}
+              {...register("confirmPassword")}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm(!showConfirm)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 transition-colors hover:text-zinc-400"
+              tabIndex={-1}
+            >
+              {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {errors.confirmPassword && (
+            <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
+          )}
+        </div>
+
+        <Button
+          type="submit"
+          className="h-10 w-full bg-violet-600 text-white hover:bg-violet-500 active:bg-violet-700"
+          disabled={isSubmitting}
+        >
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isSubmitting ? "Регистрация..." : "Зарегистрироваться"}
+        </Button>
+      </form>
+
+      <p className="mt-6 text-center text-sm text-zinc-500">
+        Уже есть аккаунт?{" "}
+        <Link to="/sign-in" className="font-medium text-zinc-200 underline underline-offset-4 transition-colors hover:text-white">
+          Войти
+        </Link>
+      </p>
+    </AuthLayout>
+  )
+}

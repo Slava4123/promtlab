@@ -1,0 +1,12 @@
+tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+.idea/
+.vscode/
+.git/
+.gitignore
+*.md
+Dockerfile.*
