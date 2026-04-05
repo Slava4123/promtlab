@@ -6,8 +6,7 @@ services:
     env_file: .env.prod
     volumes:
       - ./ca.crt:/app/ca.crt:ro
-    networks:
-      - app
+    network_mode: host
     restart: unless-stopped
     deploy:
       resources:
@@ -28,6 +27,8 @@ services:
     environment:
       - CERTBOT_EMAIL=${CERTBOT_EMAIL}
       - CERTBOT_DOMAINS=${DOMAIN}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - letsencrypt:/etc/letsencrypt
     ports:
