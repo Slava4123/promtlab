@@ -47,7 +47,7 @@ func (r *userRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 
 func (r *userRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
 	var user models.User
-	if err := r.db.WithContext(ctx).Where("username = ?", username).First(&user).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("LOWER(username) = LOWER(?)", username).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, repo.ErrNotFound
 		}

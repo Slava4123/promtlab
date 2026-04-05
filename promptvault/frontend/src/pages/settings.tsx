@@ -132,7 +132,7 @@ function ProfileSection({ user, onUpdate }: { user: { name: string; email: strin
         </div>
 
         <div>
-          <label className="text-[0.75rem] text-muted-foreground">Username</label>
+          <label className="text-[0.75rem] text-muted-foreground">Никнейм</label>
           <div className="relative mt-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">@</span>
             <input

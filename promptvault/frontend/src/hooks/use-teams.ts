@@ -14,6 +14,7 @@ export function useTeam(slug: string) {
     queryKey: ["team", slug],
     queryFn: () => api<TeamDetail>(`/teams/${slug}`),
     enabled: !!slug,
+    refetchInterval: 15_000,
   })
 }
 
@@ -66,6 +67,7 @@ export function useTeamInvitations(slug: string) {
     queryKey: ["team-invitations", slug],
     queryFn: () => api<PendingInvitation[]>(`/teams/${slug}/invitations`),
     enabled: !!slug,
+    refetchInterval: 15_000,
   })
 }
 
@@ -84,6 +86,7 @@ export function useMyInvitations() {
   return useQuery({
     queryKey: ["my-invitations"],
     queryFn: () => api<TeamInvitation[]>("/invitations"),
+    refetchInterval: 30_000,
   })
 }
 

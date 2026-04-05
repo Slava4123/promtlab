@@ -54,13 +54,13 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Username != "" {
-		if matched, _ := regexp.MatchString(`^[a-z0-9_]+$`, req.Username); !matched {
-			httperr.Respond(w, httperr.BadRequest("Username может содержать только строчные латинские буквы, цифры и _"))
+		if matched, _ := regexp.MatchString(`^[a-zA-Z0-9_]+$`, req.Username); !matched {
+			httperr.Respond(w, httperr.BadRequest("Никнейм может содержать только латинские буквы, цифры и _"))
 			return
 		}
 	}
 
-	user, err := h.auth.Register(r.Context(), req.Email, req.Password, utils.SanitizeString(req.Name), strings.ToLower(strings.TrimSpace(req.Username)))
+	user, err := h.auth.Register(r.Context(), req.Email, req.Password, utils.SanitizeString(req.Name), strings.TrimSpace(req.Username))
 	if err != nil {
 		respondError(w, err)
 		return
@@ -247,15 +247,15 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Username != nil && *req.Username != "" {
-		if matched, _ := regexp.MatchString(`^[a-z0-9_]+$`, *req.Username); !matched {
-			httperr.Respond(w, httperr.BadRequest("Username может содержать только строчные латинские буквы, цифры и _"))
+		if matched, _ := regexp.MatchString(`^[a-zA-Z0-9_]+$`, *req.Username); !matched {
+			httperr.Respond(w, httperr.BadRequest("Никнейм может содержать только латинские буквы, цифры и _"))
 			return
 		}
 	}
 
 	if req.Username != nil {
-		lower := strings.ToLower(strings.TrimSpace(*req.Username))
-		req.Username = &lower
+		trimmed := strings.TrimSpace(*req.Username)
+		req.Username = &trimmed
 	}
 
 	user, err := h.auth.UpdateProfile(r.Context(), userID, utils.SanitizeString(req.Name), req.AvatarURL, req.Username)
