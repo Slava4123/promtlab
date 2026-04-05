@@ -76,6 +76,7 @@ func (s *Service) send(to, subject, body string) error {
 			lastErr = s.sendSTARTTLS(to, msg)
 		}
 		if lastErr == nil {
+			slog.Info("email sent", "to", to, "port", s.port)
 			return nil
 		}
 		slog.Warn("email send failed, retrying", "attempt", attempt+1, "to", to, "error", lastErr)
