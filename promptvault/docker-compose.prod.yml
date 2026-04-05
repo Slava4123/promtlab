@@ -6,6 +6,8 @@ services:
     env_file: .env.prod
     volumes:
       - ./ca.crt:/app/ca.crt:ro
+    extra_hosts:
+      - "smtp-relay:host-gateway"
     networks:
       - app
     restart: unless-stopped
@@ -18,6 +20,16 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  smtp-relay:
+    image: alpine:3.21
+    entrypoint: ["/bin/sh", "-c", "apk add --no-cache socat > /dev/null 2>&1 && exec socat TCP-LISTEN:2525,fork,reuseaddr TCP:smtp.gmail.com:587"]
+    network_mode: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 16M
 
   frontend:
     build:
