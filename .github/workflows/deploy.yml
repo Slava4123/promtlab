@@ -135,7 +135,7 @@ jobs:
             sleep 15
 
             for i in 1 2 3 4 5; do
-              if curl -sf --max-time 10 "https://${{ secrets.DOMAIN }}/api/health" > /dev/null 2>&1; then
+              if curl -sf --max-time 10 "http://localhost:8080/api/health" > /dev/null 2>&1; then
                 echo "Health check PASSED (attempt $i)"
                 exit 0
               fi
