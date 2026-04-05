@@ -39,3 +39,6 @@ docker-compose.override.yml
 
 # Backups
 backups/*.sql.gz
+
+# CI/CD rollback marker
+.prev_deploy_commit

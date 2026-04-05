@@ -265,6 +265,104 @@ docker compose -f docker-compose.prod.yml up -d --build
 curl -vI https://promtlabs.ru 2>&1 | grep "SSL certificate"
 ```
 
+## Шаг 10: CI/CD через GitHub Actions
+
+Автоматический pipeline: **Lint → Тесты (Go + React параллельно) → Deploy → Health Check → Rollback при ошибке**.
+
+Workflow файл: `.github/workflows/deploy.yml` (в корне репозитория).
+
+### 10.1 Создать SSH ключ для GitHub Actions
+
+На **VPS** (как deploy):
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/github-actions -N ""
+cat ~/.ssh/github-actions.pub >> ~/.ssh/authorized_keys
+cat ~/.ssh/github-actions  # скопировать приватный ключ → GitHub Secret
+```
+
+### 10.2 Настроить Deploy Key (для git fetch на VPS)
+
+Чтобы VPS мог подтягивать код из приватного репозитория:
+
+```bash
+# На VPS (как deploy):
+ssh-keygen -t ed25519 -f ~/.ssh/github-deploy -N ""
+cat ~/.ssh/github-deploy.pub
+# → Добавить в GitHub → Repo → Settings → Deploy keys (Allow read access)
+
+# Настроить SSH config:
+cat >> ~/.ssh/config << 'EOF'
+Host github.com
+  IdentityFile ~/.ssh/github-deploy
+EOF
+```
+
+### 10.3 Добавить Secrets в GitHub
+
+GitHub → Repository → Settings → Secrets and variables → Actions → New repository secret:
+
+| Secret | Значение |
+|--------|----------|
+| `VPS_HOST` | `85.239.39.45` |
+| `VPS_USER` | `deploy` |
+| `VPS_SSH_KEY` | Содержимое `~/.ssh/github-actions` (приватный ключ) |
+| `VPS_PORT` | `22` |
+| `DOMAIN` | `promtlabs.ru` (для health check) |
+
+### 10.4 Pipeline
+
+```
+Push to main (promptvault/** changed)
+         │
+    ┌────┴────┐
+    │  Lint   │  golangci-lint v2
+    └────┬────┘
+         │
+    ┌────┴────────────┐
+    │                 │
+┌───┴──────┐  ┌──────┴───────┐
+│  Test Go │  │ Test React   │  (параллельно)
+│  -short  │  │ vitest run   │
+│  -race   │  │              │
+└───┬──────┘  └──────┬───────┘
+    └────┬───────────┘
+         │
+    ┌────┴─────┐
+    │  Deploy  │  SSH → git pull → docker compose up --build
+    └────┬─────┘
+         │
+    ┌────┴──────────┐
+    │ Health Check  │  curl /api/health (5 попыток × 10с)
+    └────┬──────────┘
+         │
+      SUCCESS ──── done
+         │ (failure)
+    ┌────┴──────┐
+    │ Rollback  │  git reset --hard PREV → rebuild
+    └───────────┘
+```
+
+### 10.5 Как это работает
+
+1. Push в `main` → запускается pipeline
+2. **Lint**: golangci-lint v2 проверяет Go-код
+3. **Тесты** (параллельно): Go unit-тесты (`-short -race`) + React vitest
+4. **Deploy**: SSH на VPS → `git fetch` + `docker compose up --build`
+5. **Health check**: 5 попыток curl к `https://DOMAIN/api/health`
+6. **Rollback**: при ошибке откат к предыдущему коммиту + пересборка
+7. Всё кешируется: Go modules, npm, golangci-lint (~5-7 мин total)
+
+### 10.6 Безопасность
+
+- `permissions: contents: read` — минимальные права workflow
+- `concurrency: cancel-in-progress: true` — один деплой одновременно
+- `script_stop: true` — SSH-action падает при ошибке любой команды
+- `.env.prod` живёт только на VPS, никогда не попадает в git
+- Deploy key (read-only) для git fetch
+
+---
+
 ## Стоимость в месяц
 
 | Услуга | Цена |
