@@ -6,7 +6,8 @@ services:
     env_file: .env.prod
     volumes:
       - ./ca.crt:/app/ca.crt:ro
-    network_mode: host
+    networks:
+      - app
     restart: unless-stopped
     deploy:
       resources:
