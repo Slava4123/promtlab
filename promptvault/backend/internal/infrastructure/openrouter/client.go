@@ -65,7 +65,7 @@ func (c *Client) Stream(ctx context.Context, req ChatRequest, cb StreamCallback)
 	if err != nil {
 		return nil, fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, c.handleErrorResponse(resp)

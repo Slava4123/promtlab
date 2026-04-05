@@ -101,13 +101,13 @@ func (s *Service) sendSMTPS(to string, msg []byte) error {
 	if err != nil {
 		return fmt.Errorf("tls dial: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client, err := smtp.NewClient(conn, s.host)
 	if err != nil {
 		return fmt.Errorf("smtp client: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.Auth(smtp.PlainAuth("", s.user, s.pass, s.host)); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)

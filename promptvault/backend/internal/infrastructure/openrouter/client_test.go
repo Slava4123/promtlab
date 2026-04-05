@@ -261,17 +261,19 @@ func TestStream_ContextCanceled(t *testing.T) {
 	client := NewClientWithBaseURL("test-key", srv.URL)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	callCount := 0
+	called := make(chan struct{}, 1)
 	go func() {
-		// Cancel after receiving the first chunk
-		for callCount == 0 {
-			// spin briefly
-		}
+		<-called
 		cancel()
 	}()
 
+	callCount := 0
 	_, err := client.Stream(ctx, defaultRequest(), func(chunk string) error {
 		callCount++
+		select {
+		case called <- struct{}{}:
+		default:
+		}
 		return nil
 	})
 

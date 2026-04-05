@@ -9,7 +9,7 @@ import (
 )
 
 func DecodeJSON(r *http.Request, dst any) error {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		return fmt.Errorf("invalid request body: %w", err)
 	}

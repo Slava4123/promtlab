@@ -13,13 +13,11 @@ import (
 func Load() (*Config, error) {
 	k := koanf.New(".")
 
-	k.Load(confmap(defaults()), nil)
+	_ = k.Load(confmap(defaults()), nil)
 
-	if err := k.Load(file.Provider(".env"), dotenv.Parser()); err != nil {
-		// .env не найден — не критично
-	}
+	_ = k.Load(file.Provider(".env"), dotenv.Parser()) // .env не найден — не критично
 
-	k.Load(env.Provider("", ".", func(s string) string {
+	_ = k.Load(env.Provider("", ".", func(s string) string {
 		s = strings.ToLower(s)
 
 		// oauth.{github,google,yandex}.xxx — два уровня вложенности
