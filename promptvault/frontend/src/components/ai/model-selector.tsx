@@ -30,7 +30,8 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
     }
   }, [models, value, onChange])
 
-  const handleChange = (modelId: string) => {
+  const handleChange = (modelId: string | null) => {
+    if (!modelId) return
     onChange(modelId)
     localStorage.setItem(STORAGE_KEY, modelId)
   }

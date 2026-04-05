@@ -74,11 +74,6 @@ export default function CollectionView() {
     }
   }
 
-  const handleCopy = (content: string) => {
-    navigator.clipboard.writeText(content)
-    toast.success("Скопировано в буфер обмена")
-  }
-
   const IconComponent = (collection?.icon && ICON_MAP[collection.icon]) || FolderOpen
   const color = collection?.color || "#a78bfa"
 
@@ -192,7 +187,6 @@ export default function CollectionView() {
               key={prompt.id}
               prompt={prompt}
               onToggleFavorite={(id) => toggleFav.mutate(id)}
-              onCopy={handleCopy}
               onClick={(id) => navigate(`/prompts/${id}`)}
             />
           ))}

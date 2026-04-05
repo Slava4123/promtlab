@@ -143,8 +143,7 @@ export default function PromptEditor() {
               className="flex h-10 w-full rounded-lg px-3.5 text-sm text-white outline-none transition-all placeholder:text-zinc-600"
               style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.025)" }}
               onFocus={(e) => { e.target.style.borderColor = "rgba(139,92,246,0.4)"; e.target.style.boxShadow = "0 0 0 3px rgba(139,92,246,0.08)" }}
-              onBlur={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.boxShadow = "none" }}
-              {...register("title")}
+              {...register("title", { onBlur: (e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.boxShadow = "none" } })}
             />
             {errors.title && (
               <p className="text-[0.75rem] text-red-400">{errors.title.message}</p>
@@ -169,8 +168,7 @@ export default function PromptEditor() {
               className="flex w-full min-h-[280px] resize-y rounded-lg px-3.5 py-3 text-sm leading-relaxed text-white outline-none transition-all placeholder:text-zinc-600"
               style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.025)" }}
               onFocus={(e) => { e.target.style.borderColor = "rgba(139,92,246,0.4)"; e.target.style.boxShadow = "0 0 0 3px rgba(139,92,246,0.08)" }}
-              onBlur={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.boxShadow = "none" }}
-              {...register("content")}
+              {...register("content", { onBlur: (e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.boxShadow = "none" } })}
             />
             {errors.content && (
               <p className="text-[0.75rem] text-red-400">{errors.content.message}</p>
@@ -200,8 +198,7 @@ export default function PromptEditor() {
                 className="flex h-10 w-full rounded-lg px-3.5 text-sm text-white outline-none transition-all placeholder:text-zinc-600"
                 style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.025)" }}
                 onFocus={(e) => { e.target.style.borderColor = "rgba(139,92,246,0.4)"; e.target.style.boxShadow = "0 0 0 3px rgba(139,92,246,0.08)" }}
-                onBlur={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.boxShadow = "none" }}
-                {...register("model")}
+                {...register("model", { onBlur: (e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.boxShadow = "none" } })}
               />
             </div>
 
@@ -245,7 +242,7 @@ export default function PromptEditor() {
                               ? "text-white ring-1"
                               : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
                           }`}
-                          style={isSelected ? { background: `${c.color}18`, ringColor: `${c.color}30`, color: c.color } : undefined}
+                          style={isSelected ? { background: `${c.color}18`, boxShadow: `inset 0 0 0 1px ${c.color}30`, color: c.color } : undefined}
                         >
                           {c.name}
                         </button>

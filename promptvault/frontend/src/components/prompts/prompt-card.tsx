@@ -4,7 +4,6 @@ import type { Prompt } from "@/api/types"
 interface PromptCardProps {
   prompt: Prompt
   onToggleFavorite: (id: number) => void
-  onCopy: (content: string) => void
   onClick: (id: number) => void
   style?: React.CSSProperties
 }
@@ -23,7 +22,7 @@ function getModelDot(model?: string) {
   return modelDot.default
 }
 
-export function PromptCard({ prompt, onToggleFavorite, onCopy, onClick, style }: PromptCardProps) {
+export function PromptCard({ prompt, onToggleFavorite, onClick, style }: PromptCardProps) {
   return (
     <div
       className={`group cursor-pointer rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 ${

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Outlet, useNavigate } from "react-router-dom"
+import { Outlet } from "react-router-dom"
 import { Toaster } from "sonner"
 import { Search, Bell, Check, X, Users } from "lucide-react"
 import { toast } from "sonner"
@@ -13,7 +13,6 @@ import { RoleBadge } from "@/components/teams/role-badge"
 
 // TODO: centralize hardcoded dark theme colors (bg-[#0a0a0c], from-[#101015], etc.) as Tailwind theme tokens
 export default function AppLayout() {
-  const navigate = useNavigate()
   const { data: invitations } = useMyInvitations()
   const acceptInvitation = useAcceptInvitation()
   const declineInvitation = useDeclineInvitation()

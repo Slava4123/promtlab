@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom"
 import { LogOut, User, Moon, Sun } from "lucide-react"
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,

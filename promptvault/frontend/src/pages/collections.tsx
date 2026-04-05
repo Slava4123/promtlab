@@ -176,7 +176,6 @@ export default function Collections() {
                   className="flex h-9 w-9 items-center justify-center rounded-lg ring-1 text-sm"
                   style={{
                     background: `${c.color || "#8b5cf6"}12`,
-                    ringColor: `${c.color || "#8b5cf6"}20`,
                     boxShadow: `inset 0 0 0 1px ${c.color || "#8b5cf6"}20`,
                   }}
                 >

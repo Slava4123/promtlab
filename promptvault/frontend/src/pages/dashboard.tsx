@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Plus, Search, Star, FileText, Loader2 } from "lucide-react"
-import { toast } from "sonner"
 
 import { PromptCard, PromptCardSkeleton } from "@/components/prompts/prompt-card"
-import { usePrompts, useToggleFavorite, useDeletePrompt } from "@/hooks/use-prompts"
+import { usePrompts, useToggleFavorite } from "@/hooks/use-prompts"
 import { useTags } from "@/hooks/use-tags"
 import { useCollections } from "@/hooks/use-collections"
 import { useWorkspaceStore } from "@/stores/workspace-store"
@@ -46,16 +45,6 @@ export default function Dashboard() {
   })
 
   const toggleFav = useToggleFavorite()
-  const deletePrompt = useDeletePrompt()
-
-  const handleCopy = async (content: string) => {
-    try {
-      await navigator.clipboard.writeText(content)
-      toast.success("Скопировано в буфер обмена")
-    } catch {
-      toast.error("Не удалось скопировать")
-    }
-  }
 
   // Infinite scroll — IntersectionObserver
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -250,7 +239,6 @@ export default function Dashboard() {
                 key={prompt.id}
                 prompt={prompt}
                 onToggleFavorite={(id) => toggleFav.mutate(id)}
-                onCopy={handleCopy}
                 onClick={(id) => navigate(`/prompts/${id}`)}
               />
             ))}

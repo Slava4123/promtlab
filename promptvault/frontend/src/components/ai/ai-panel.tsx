@@ -106,7 +106,7 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
         <div className="space-y-4 px-4 pb-4">
           {/* Auto-select model (hidden, single model) */}
           <div className="hidden">
-            <ModelSelector value={selectedModel} onChange={setSelectedModel} />
+            <ModelSelector value={selectedModel} onChange={(v) => setSelectedModel(v)} />
           </div>
 
           {/* Rewrite style selector */}
@@ -147,7 +147,7 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
                       <Icon className="h-3.5 w-3.5" />
                       {label}
                     </button>
-                    <Select value={rewriteStyle} onValueChange={setRewriteStyle} modal={false}>
+                    <Select value={rewriteStyle} onValueChange={(v) => { if (v) setRewriteStyle(v) }} modal={false}>
                       <SelectTrigger size="sm" className="h-[30px] text-[0.72rem] text-zinc-400">
                         <SelectValue>
                           {rewriteStyles.find((s) => s.value === rewriteStyle)?.label}
