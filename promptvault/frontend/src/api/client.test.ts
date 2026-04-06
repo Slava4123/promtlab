@@ -131,7 +131,7 @@ describe("api()", () => {
       json: () => Promise.reject(new Error("not json")),
     })
 
-    await expect(api("/prompts")).rejects.toThrow("request failed")
+    await expect(api("/prompts")).rejects.toThrow("Ошибка запроса")
   })
 })
 
@@ -211,7 +211,7 @@ describe("ensureFreshToken", () => {
       json: () => Promise.resolve({ error: "invalid refresh token" }),
     })
 
-    await expect(ensureFreshToken()).rejects.toThrow("refresh failed")
+    await expect(ensureFreshToken()).rejects.toThrow("Сессия истекла")
     expect(getAccessToken()).toBeNull()
   })
 })

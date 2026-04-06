@@ -811,18 +811,12 @@ func TestList_Success(t *testing.T) {
 	svc, tr, _ := newTestService()
 	ctx := context.Background()
 
-	teams := []models.Team{
-		{ID: 10, Name: "Team A"},
-		{ID: 20, Name: "Team B"},
+	rows := []models.TeamWithRoleAndCount{
+		{Team: models.Team{ID: 10, Name: "Team A"}, Role: models.RoleOwner, MemberCount: 3},
+		{Team: models.Team{ID: 20, Name: "Team B"}, Role: models.RoleViewer, MemberCount: 5},
 	}
-	memberA := &models.TeamMember{TeamID: 10, UserID: 1, Role: models.RoleOwner}
-	memberB := &models.TeamMember{TeamID: 20, UserID: 1, Role: models.RoleViewer}
 
-	tr.On("ListByUserID", ctx, uint(1)).Return(teams, nil)
-	tr.On("GetMember", ctx, uint(10), uint(1)).Return(memberA, nil)
-	tr.On("CountMembers", ctx, uint(10)).Return(3, nil)
-	tr.On("GetMember", ctx, uint(20), uint(1)).Return(memberB, nil)
-	tr.On("CountMembers", ctx, uint(20)).Return(5, nil)
+	tr.On("ListByUserIDWithRolesAndCounts", ctx, uint(1)).Return(rows, nil)
 
 	items, err := svc.List(ctx, 1)
 
