@@ -15,6 +15,7 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
   const [query, setQuery] = useState("")
   const [role, setRole] = useState<TeamRole>("editor")
   const [debouncedQuery, setDebouncedQuery] = useState("")
+  const [inputFocused, setInputFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -24,7 +25,7 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
 
   const { data: searchResults } = useSearchUsers(debouncedQuery)
 
-  const showDropdown = !!searchResults && searchResults.length > 0 && query.length >= 2
+  const showDropdown = inputFocused && !!searchResults && searchResults.length > 0 && query.length >= 2
 
   if (!open) return null
 
@@ -42,7 +43,7 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
 
   const handleSelectUser = (username: string) => {
     setQuery(`@${username}`)
-    setShowDropdown(false)
+    setDebouncedQuery(`@${username}`)
     inputRef.current?.focus()
   }
 
@@ -69,10 +70,10 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
             placeholder="user@example.com или @username"
             autoFocus
             className="flex h-10 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
-            onFocus={() => {}}
+            onFocus={() => setInputFocused(true)}
             onBlur={() => {
               // Delay hiding so click on dropdown registers
-              setTimeout(() => setShowDropdown(false), 200)
+              setTimeout(() => setInputFocused(false), 200)
             }}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           />
