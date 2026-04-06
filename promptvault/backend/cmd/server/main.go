@@ -99,5 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	application.Shutdown(15 * time.Second)
+
 	slog.Info("server stopped")
 }

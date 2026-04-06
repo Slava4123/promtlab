@@ -37,6 +37,11 @@ jobs:
           version: v2.11.4
           working-directory: promptvault/backend
 
+      - name: Security scan (Go)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
   test-backend:
     name: Test Backend
     needs: lint
@@ -101,7 +106,7 @@ jobs:
 
             echo "=== Pulling latest code ==="
             git fetch origin main
-            git reset --hard origin/main
+            git pull --ff-only origin main || { echo "WARN: ff-only failed, forcing reset"; git reset --hard origin/main; }
 
             echo "=== Building and deploying ==="
             cd promptvault

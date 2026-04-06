@@ -178,7 +178,7 @@ export default function Collections() {
                 >
                   <CollectionIcon icon={c.icon} color={c.color} />
                 </div>
-                <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex gap-1 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                   <button
                     className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={(e) => { e.stopPropagation(); openEdit(c) }}

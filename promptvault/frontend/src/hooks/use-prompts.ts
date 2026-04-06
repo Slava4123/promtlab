@@ -84,7 +84,34 @@ export function useToggleFavorite() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api<Prompt>(`/prompts/${id}/favorite`, { method: "POST" }),
-    onSuccess: (_data, id) => {
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["prompts"] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prev = qc.getQueriesData<any>({ queryKey: ["prompts"] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      qc.setQueriesData<any>({ queryKey: ["prompts"] }, (old: any) => {
+        if (!old?.pages) return old
+        return {
+          ...old,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            items: page.items.map((p: Prompt) =>
+              p.id === id ? { ...p, favorite: !p.favorite } : p
+            ),
+          })),
+        }
+      })
+      return { prev }
+    },
+    onError: (_err, _id, context) => {
+      if (context?.prev) {
+        for (const [key, data] of context.prev) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: (_data, _err, id) => {
       qc.invalidateQueries({ queryKey: ["prompts"] })
       qc.invalidateQueries({ queryKey: ["prompt", id] })
     },

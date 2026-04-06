@@ -1,9 +1,11 @@
 package config
 
 type AIConfig struct {
-	OpenRouterAPIKey string        `koanf:"openrouter_api_key"`
-	RateLimitRPM     int           `koanf:"rate_limit_rpm"`
-	Models           []ModelConfig `koanf:"models"`
+	OpenRouterAPIKey    string        `koanf:"openrouter_api_key"`
+	OpenRouterBaseURL   string        `koanf:"openrouter_base_url"`
+	OpenRouterTimeoutSec int          `koanf:"openrouter_timeout_seconds"`
+	RateLimitRPM        int           `koanf:"rate_limit_rpm"`
+	Models              []ModelConfig `koanf:"models"`
 }
 
 type ModelConfig struct {

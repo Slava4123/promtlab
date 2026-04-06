@@ -15,40 +15,57 @@ type Limiter[K comparable] struct {
 	window  time.Duration
 	limit   int
 	entries map[K][]time.Time
+	stopCh  chan struct{}
 }
 
 // NewLimiter creates a new sliding window rate limiter with the given requests-per-minute limit.
 func NewLimiter[K comparable](rpm int) *Limiter[K] {
+	return NewLimiterWithWindow[K](rpm, time.Minute)
+}
+
+// NewLimiterWithWindow creates a sliding window rate limiter with a custom window duration.
+func NewLimiterWithWindow[K comparable](limit int, window time.Duration) *Limiter[K] {
 	l := &Limiter[K]{
-		window:  time.Minute,
-		limit:   rpm,
+		window:  window,
+		limit:   limit,
 		entries: make(map[K][]time.Time),
+		stopCh:  make(chan struct{}),
 	}
 	go l.evictLoop()
 	return l
+}
+
+// Close stops the background eviction goroutine.
+func (l *Limiter[K]) Close() {
+	close(l.stopCh)
 }
 
 // evictLoop удаляет устаревшие записи каждые 5 минут.
 func (l *Limiter[K]) evictLoop() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		l.mu.Lock()
-		cutoff := time.Now().Add(-l.window)
-		for key, timestamps := range l.entries {
-			valid := timestamps[:0]
-			for _, t := range timestamps {
-				if t.After(cutoff) {
-					valid = append(valid, t)
+	for {
+		select {
+		case <-ticker.C:
+			l.mu.Lock()
+			cutoff := time.Now().Add(-l.window)
+			for key, timestamps := range l.entries {
+				valid := timestamps[:0]
+				for _, t := range timestamps {
+					if t.After(cutoff) {
+						valid = append(valid, t)
+					}
+				}
+				if len(valid) == 0 {
+					delete(l.entries, key)
+				} else {
+					l.entries[key] = valid
 				}
 			}
-			if len(valid) == 0 {
-				delete(l.entries, key)
-			} else {
-				l.entries[key] = valid
-			}
+			l.mu.Unlock()
+		case <-l.stopCh:
+			return
 		}
-		l.mu.Unlock()
 	}
 }
 

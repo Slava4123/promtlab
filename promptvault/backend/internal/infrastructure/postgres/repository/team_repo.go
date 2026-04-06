@@ -57,8 +57,9 @@ func (r *teamRepo) ListByUserIDWithRolesAndCounts(ctx context.Context, userID ui
 	var results []models.TeamWithRoleAndCount
 	err := r.db.WithContext(ctx).
 		Table("teams").
-		Select("teams.*, tm.role, (SELECT COUNT(*) FROM team_members WHERE team_id = teams.id) AS member_count").
+		Select("teams.*, tm.role, COALESCE(mc.cnt, 0) AS member_count").
 		Joins("JOIN team_members tm ON tm.team_id = teams.id AND tm.user_id = ?", userID).
+		Joins("LEFT JOIN (SELECT team_id, COUNT(*) AS cnt FROM team_members GROUP BY team_id) mc ON mc.team_id = teams.id").
 		Order("teams.name").
 		Scan(&results).Error
 	return results, err

@@ -22,22 +22,23 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// NewClient creates a new OpenRouter client with the given API key.
-func NewClient(apiKey string) *Client {
+// NewClient creates a new OpenRouter client with the given API key, base URL, and timeout.
+// If baseURL is empty, the default OpenRouter URL is used.
+// If timeout is 0, a default of 5 minutes is used.
+func NewClient(apiKey, baseURL string, timeout time.Duration) *Client {
+	if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
+	if timeout == 0 {
+		timeout = 5 * time.Minute
+	}
 	return &Client{
 		apiKey:  apiKey,
-		baseURL: defaultBaseURL,
+		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 5 * time.Minute,
+			Timeout: timeout,
 		},
 	}
-}
-
-// NewClientWithBaseURL creates a client with a custom base URL (for testing).
-func NewClientWithBaseURL(apiKey, baseURL string) *Client {
-	c := NewClient(apiKey)
-	c.baseURL = baseURL
-	return c
 }
 
 // Stream sends a chat completion request with streaming enabled and calls cb

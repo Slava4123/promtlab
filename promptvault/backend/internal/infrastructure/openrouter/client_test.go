@@ -48,7 +48,7 @@ func TestStream_ValidChunks(t *testing.T) {
 	)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	var chunks []string
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
@@ -70,7 +70,7 @@ func TestStream_DoneSignal(t *testing.T) {
 	)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	callCount := 0
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
@@ -91,7 +91,7 @@ func TestStream_EmptyResponse(t *testing.T) {
 	)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
 		t.Fatal("callback should not be called")
@@ -114,7 +114,7 @@ func TestStream_CallbackError(t *testing.T) {
 	)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	cbErr := errors.New("callback failed")
 	callCount := 0
@@ -140,7 +140,7 @@ func TestStream_MalformedJSON(t *testing.T) {
 	)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	var chunks []string
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
@@ -165,7 +165,7 @@ func TestStream_EmptyChoices(t *testing.T) {
 	)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	var chunks []string
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
@@ -182,7 +182,7 @@ func TestHandleError_401(t *testing.T) {
 	srv := errorServer(t, http.StatusUnauthorized)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("bad-key", srv.URL)
+	client := NewClient("bad-key", srv.URL, 0)
 
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
 		t.Fatal("callback should not be called")
@@ -197,7 +197,7 @@ func TestHandleError_429(t *testing.T) {
 	srv := errorServer(t, http.StatusTooManyRequests)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
 		t.Fatal("callback should not be called")
@@ -212,7 +212,7 @@ func TestHandleError_402(t *testing.T) {
 	srv := errorServer(t, http.StatusPaymentRequired)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
 		t.Fatal("callback should not be called")
@@ -233,7 +233,7 @@ func TestStream_MultilineChunk(t *testing.T) {
 	)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	var chunks []string
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
@@ -258,7 +258,7 @@ func TestStream_ContextCanceled(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	called := make(chan struct{}, 1)
@@ -286,7 +286,7 @@ func TestHandleError_500(t *testing.T) {
 	srv := errorServer(t, http.StatusInternalServerError)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
 		t.Fatal("callback should not be called")
@@ -306,7 +306,7 @@ func TestHandleError_404(t *testing.T) {
 	srv := errorServer(t, http.StatusNotFound)
 	defer srv.Close()
 
-	client := NewClientWithBaseURL("test-key", srv.URL)
+	client := NewClient("test-key", srv.URL, 0)
 
 	_, err := client.Stream(context.Background(), defaultRequest(), func(chunk string) error {
 		t.Fatal("callback should not be called")

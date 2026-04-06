@@ -101,8 +101,10 @@ func defaults() map[string]any {
 			"callback_base": "http://localhost:8080",
 		},
 		"ai": map[string]any{
-			"openrouter_api_key": "",
-			"rate_limit_rpm":     10,
+			"openrouter_api_key":       "",
+			"openrouter_base_url":      "https://openrouter.ai/api/v1",
+			"openrouter_timeout_seconds": 300,
+			"rate_limit_rpm":           10,
 		},
 	}
 }

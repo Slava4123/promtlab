@@ -1,6 +1,8 @@
 package app
 
 import (
+	"time"
+
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
@@ -31,6 +33,7 @@ import (
 
 type App struct {
 	cfg            *config.Config
+	authSvc        *authuc.Service
 	tokenValidator authmw.TokenValidator
 	authHandler    *authhttp.Handler
 	oauthHandler      *authhttp.OAuthHandler
@@ -65,7 +68,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	tagSvc := taguc.NewService(tagRepo, teamRepo)
 
 	// AI
-	orClient := openrouter.NewClient(cfg.AI.OpenRouterAPIKey)
+	orClient := openrouter.NewClient(cfg.AI.OpenRouterAPIKey, cfg.AI.OpenRouterBaseURL, time.Duration(cfg.AI.OpenRouterTimeoutSec)*time.Second)
 	aiSvc := aiuc.NewService(orClient, &cfg.AI)
 
 	// Search
@@ -73,6 +76,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 
 	return &App{
 		cfg:               cfg,
+		authSvc:           authSvc,
 		tokenValidator:    authSvc,
 		authHandler:       authhttp.NewHandler(authSvc, cfg.Server.SecureCookies),
 		oauthHandler:      authhttp.NewOAuthHandler(oauthSvc, cfg.Server.FrontendURL, cfg.JWT.Secret, cfg.Server.SecureCookies),
@@ -84,6 +88,11 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		teamHandler:       teamhttp.NewHandler(teamSvc),
 		userHandler:       userhttp.NewHandler(useruc.NewService(userRepo)),
 	}
+}
+
+// Shutdown waits for background tasks to complete.
+func (a *App) Shutdown(timeout time.Duration) {
+	a.authSvc.WaitBackground(timeout)
 }
 
 func (a *App) MountRoutes(r chi.Router) {

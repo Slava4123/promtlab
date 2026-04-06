@@ -43,7 +43,7 @@ export function PromptCard({ prompt, onToggleFavorite, onClick, style }: PromptC
         </h3>
         <button
           className={`shrink-0 transition-opacity ${
-            prompt.favorite ? "text-yellow-500" : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-yellow-400"
+            prompt.favorite ? "text-yellow-500" : "text-muted-foreground sm:opacity-0 sm:group-hover:opacity-100 hover:text-yellow-400"
           }`}
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(prompt.id) }}
         >

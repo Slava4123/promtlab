@@ -44,14 +44,14 @@ func generateSlug(name string) string {
 	}
 
 	// Обрезаем ДО добавления суффикса чтобы суффикс не пострадал
-	if len(slug) > 95 {
-		slug = slug[:95]
+	if len(slug) > 93 {
+		slug = slug[:93]
 	}
 
-	// Добавляем 4-char hex суффикс для уникальности
-	suffix := make([]byte, 2)
+	// Добавляем 6-char hex суффикс для уникальности (16M комбинаций)
+	suffix := make([]byte, 3)
 	if _, err := rand.Read(suffix); err != nil {
-		suffix = []byte{0x42, 0xff} // fallback
+		suffix = []byte{0x42, 0xff, 0xab} // fallback
 	}
 	slug = slug + "-" + hex.EncodeToString(suffix)
 

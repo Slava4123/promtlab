@@ -38,9 +38,12 @@ export default function AppLayout() {
     <TooltipProvider>
       <SidebarProvider>
         <div className="flex min-h-screen w-full">
+          <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:text-foreground focus:shadow-lg focus:ring-2 focus:ring-violet-500">
+            Перейти к содержимому
+          </a>
           <AppSidebar />
           <div className="flex flex-1 flex-col">
-            <header className="flex h-14 items-center justify-between px-4">
+            <header role="banner" className="flex h-14 items-center justify-between px-4">
               <div className="lg:hidden">
                 <SidebarTrigger />
               </div>
@@ -133,7 +136,7 @@ export default function AppLayout() {
                 </button>
               </div>
             </header>
-            <main className="flex-1 px-8 py-7">
+            <main id="main-content" role="main" className="flex-1 px-8 py-7">
               <Outlet />
             </main>
           </div>

@@ -129,7 +129,7 @@ export default function Teams() {
                 <div className="flex items-center gap-1">
                   <RoleBadge role={t.role} />
                   {t.role === "owner" && (
-                    <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex gap-1 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                       <button
                         className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                         onClick={(e) => { e.stopPropagation(); openEdit(t) }}

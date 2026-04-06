@@ -9,14 +9,16 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"promptvault/internal/infrastructure/config"
-	"promptvault/internal/infrastructure/email"
 	repo "promptvault/internal/interface/repository"
+	iservice "promptvault/internal/interface/service"
+	"promptvault/internal/middleware/ratelimit"
 	"promptvault/internal/models"
 )
 
@@ -24,13 +26,15 @@ type Service struct {
 	users           repo.UserRepository
 	linkedAccounts  repo.LinkedAccountRepository
 	verifications   repo.VerificationRepository
-	email           *email.Service
+	email           iservice.EmailSender
 	secret          []byte
 	accessDuration  time.Duration
 	refreshDuration time.Duration
+	backgroundWg    sync.WaitGroup
+	forgotLimiter   *ratelimit.Limiter[string]
 }
 
-func NewService(cfg *config.Config, users repo.UserRepository, linkedAccounts repo.LinkedAccountRepository, verifications repo.VerificationRepository, emailSvc *email.Service) *Service {
+func NewService(cfg *config.Config, users repo.UserRepository, linkedAccounts repo.LinkedAccountRepository, verifications repo.VerificationRepository, emailSvc iservice.EmailSender) *Service {
 	accessDur, err := time.ParseDuration(cfg.JWT.AccessDuration)
 	if err != nil || accessDur == 0 {
 		if err != nil {
@@ -55,6 +59,31 @@ func NewService(cfg *config.Config, users repo.UserRepository, linkedAccounts re
 		secret:          []byte(cfg.JWT.Secret),
 		accessDuration:  accessDur,
 		refreshDuration: refreshDur,
+		forgotLimiter:   ratelimit.NewLimiterWithWindow[string](3, 15*time.Minute),
+	}
+}
+
+// runBackground запускает функцию в горутине с отслеживанием через WaitGroup.
+func (s *Service) runBackground(fn func()) {
+	s.backgroundWg.Add(1)
+	go func() {
+		defer s.backgroundWg.Done()
+		fn()
+	}()
+}
+
+// WaitBackground ожидает завершения фоновых задач с таймаутом.
+func (s *Service) WaitBackground(timeout time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		s.backgroundWg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		slog.Info("background tasks completed")
+	case <-time.After(timeout):
+		slog.Warn("background tasks timeout", "timeout", timeout)
 	}
 }
 
@@ -98,11 +127,11 @@ func (s *Service) Register(ctx context.Context, userEmail, password, name, usern
 			return nil, err
 		}
 		if s.email != nil && s.email.Configured() {
-			go func() {
+			s.runBackground(func() {
 				if err := s.sendVerificationCode(context.Background(), existing); err != nil {
 					slog.Error("verification code failed", "user_id", existing.ID, "error", err)
 				}
-			}()
+			})
 		}
 		return existing, nil
 	}
@@ -133,12 +162,11 @@ func (s *Service) Register(ctx context.Context, userEmail, password, name, usern
 	}
 
 	if s.email != nil && s.email.Configured() {
-		// Отправляем в фоне — не блокируем регистрацию
-		go func() {
-				if err := s.sendVerificationCode(context.Background(), user); err != nil {
-					slog.Error("verification code failed", "user_id", user.ID, "error", err)
-				}
-			}()
+		s.runBackground(func() {
+			if err := s.sendVerificationCode(context.Background(), user); err != nil {
+				slog.Error("verification code failed", "user_id", user.ID, "error", err)
+			}
+		})
 	}
 
 	return user, nil
@@ -199,11 +227,11 @@ func (s *Service) ResendCode(ctx context.Context, userEmail string) error {
 		return nil
 	}
 
-	go func() {
+	s.runBackground(func() {
 		if err := s.sendVerificationCode(context.Background(), user); err != nil {
 			slog.Error("resend verification code failed", "user_id", user.ID, "error", err)
 		}
-	}()
+	})
 	return nil
 }
 
@@ -328,11 +356,11 @@ func (s *Service) InitiateSetPassword(ctx context.Context, userID uint) error {
 	if s.email == nil || !s.email.Configured() {
 		return fmt.Errorf("email не настроен")
 	}
-	go func() {
+	s.runBackground(func() {
 		if err := s.sendSetPasswordCode(context.Background(), user); err != nil {
 			slog.Error("set-password code failed", "user_id", user.ID, "error", err)
 		}
-	}()
+	})
 	return nil
 }
 
@@ -395,9 +423,21 @@ func (s *Service) sendSetPasswordCode(ctx context.Context, user *models.User) er
 
 // ForgotPassword — отправляет код сброса на email (публичный, без авторизации)
 func (s *Service) ForgotPassword(ctx context.Context, userEmail string) error {
+	// Constant-time delay — не раскрываем существование аккаунта через timing
+	defer func(start time.Time) {
+		elapsed := time.Since(start)
+		if elapsed < 200*time.Millisecond {
+			time.Sleep(200*time.Millisecond - elapsed)
+		}
+	}(time.Now())
+
+	// Per-email rate limiting — 3 запроса за 15 минут
+	if !s.forgotLimiter.Allow(userEmail) {
+		return nil
+	}
+
 	user, err := s.users.GetByEmail(ctx, userEmail)
 	if err != nil {
-		// Не раскрываем существование аккаунта
 		return nil
 	}
 	if !user.HasPassword() {
@@ -406,11 +446,11 @@ func (s *Service) ForgotPassword(ctx context.Context, userEmail string) error {
 	if s.email == nil || !s.email.Configured() {
 		return nil
 	}
-	go func() {
+	s.runBackground(func() {
 		if err := s.sendResetCode(context.Background(), user); err != nil {
 			slog.Error("reset code failed", "user_id", user.ID, "error", err)
 		}
-	}()
+	})
 	return nil
 }
 
@@ -557,11 +597,11 @@ func (s *Service) ChangePassword(ctx context.Context, userID uint, oldPassword, 
 	}
 
 	if s.email != nil && s.email.Configured() {
-		go func() {
+		s.runBackground(func() {
 			if err := s.email.SendPasswordChangedNotification(user.Email); err != nil {
 				slog.Error("password changed notification failed", "user_id", user.ID, "error", err)
 			}
-		}()
+		})
 	}
 	return nil
 }
