@@ -62,6 +62,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	// Teams
 	teamRepo := pgrepo.NewTeamRepository(db)
 	teamSvc := teamuc.NewService(teamRepo, userRepo)
+	teamSvc.SetEmail(emailSvc)
 
 	promptSvc := promptuc.NewService(promptRepo, tagRepo, collectionRepo, versionRepo, teamRepo)
 	collectionSvc := colluc.NewService(collectionRepo, teamRepo)

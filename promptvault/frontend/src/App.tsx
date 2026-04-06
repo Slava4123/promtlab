@@ -26,6 +26,7 @@ const Versions = lazy(() => import("@/pages/versions"))
 const SettingsPage = lazy(() => import("@/pages/settings"))
 const Teams = lazy(() => import("@/pages/teams"))
 const TeamView = lazy(() => import("@/pages/team-view"))
+const Pricing = lazy(() => import("@/pages/pricing"))
 
 function PageFallback() {
   return (
@@ -73,6 +74,7 @@ function AppRoutes() {
           <Route path="/teams" element={<Suspense fallback={<PageFallback />}><Teams /></Suspense>} />
           <Route path="/teams/:slug" element={<Suspense fallback={<PageFallback />}><TeamView /></Suspense>} />
           <Route path="/settings" element={<Suspense fallback={<PageFallback />}><SettingsPage /></Suspense>} />
+          <Route path="/pricing" element={<Suspense fallback={<PageFallback />}><Pricing /></Suspense>} />
         </Route>
       </Route>
     </Routes>

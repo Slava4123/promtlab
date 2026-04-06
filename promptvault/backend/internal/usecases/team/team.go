@@ -7,16 +7,23 @@ import (
 	"strings"
 
 	repo "promptvault/internal/interface/repository"
+	iservice "promptvault/internal/interface/service"
 	"promptvault/internal/models"
 )
 
 type Service struct {
 	teams repo.TeamRepository
 	users repo.UserRepository
+	email iservice.EmailSender
 }
 
 func NewService(teams repo.TeamRepository, users repo.UserRepository) *Service {
 	return &Service{teams: teams, users: users}
+}
+
+// SetEmail sets the email service for team notifications.
+func (s *Service) SetEmail(email iservice.EmailSender) {
+	s.email = email
 }
 
 func (s *Service) Create(ctx context.Context, userID uint, input CreateInput) (*models.Team, error) {
@@ -163,6 +170,19 @@ func (s *Service) InviteMember(ctx context.Context, slug string, userID uint, in
 		slog.Error("failed to load inviter", "user_id", userID, "error", err)
 	} else {
 		inv.Inviter = *inviter
+	}
+
+	// Отправляем email-уведомление о приглашении
+	if s.email != nil && s.email.Configured() {
+		inviterName := "Пользователь"
+		if inviter != nil {
+			inviterName = inviter.Name
+		}
+		go func() {
+			if err := s.email.SendTeamInvitation(targetUser.Email, team.Name, inviterName); err != nil {
+				slog.Error("team invitation email failed", "user_id", targetUser.ID, "team", team.Name, "error", err)
+			}
+		}()
 	}
 
 	return inv, nil

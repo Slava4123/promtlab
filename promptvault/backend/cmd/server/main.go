@@ -18,6 +18,7 @@ import (
 	"promptvault/internal/infrastructure/config"
 	"promptvault/internal/infrastructure/postgres"
 	corsmw "promptvault/internal/middleware/cors"
+	loggermw "promptvault/internal/middleware/logger"
 )
 
 func main() {
@@ -49,7 +50,7 @@ func main() {
 	application := app.New(cfg, db)
 
 	r := chi.NewRouter()
-	r.Use(chimw.Logger)
+	r.Use(loggermw.Middleware)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
 	r.Use(corsmw.Middleware(cfg))

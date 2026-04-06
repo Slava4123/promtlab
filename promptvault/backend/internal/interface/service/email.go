@@ -7,4 +7,5 @@ type EmailSender interface {
 	SendPasswordResetCode(to, code string) error
 	SendSetPasswordCode(to, code string) error
 	SendPasswordChangedNotification(to string) error
+	SendTeamInvitation(to, teamName, inviterName string) error
 }

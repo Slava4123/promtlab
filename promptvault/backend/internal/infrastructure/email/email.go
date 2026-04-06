@@ -63,6 +63,13 @@ func (s *Service) SendPasswordChangedNotification(to string) error {
 	)
 }
 
+func (s *Service) SendTeamInvitation(to, teamName, inviterName string) error {
+	return s.send(to,
+		fmt.Sprintf("Приглашение в команду «%s» — ПромтЛаб", teamName),
+		fmt.Sprintf("%s приглашает вас в команду «%s» на ПромтЛаб.\r\n\r\nВойдите в приложение, чтобы принять или отклонить приглашение.", inviterName, teamName),
+	)
+}
+
 // --- Internal ---
 
 func (s *Service) send(to, subject, body string) error {

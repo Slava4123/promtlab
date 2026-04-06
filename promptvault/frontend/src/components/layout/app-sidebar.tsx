@@ -10,6 +10,7 @@ import {
   Search,
   User,
   Check,
+  CreditCard,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
@@ -39,6 +40,7 @@ const mainNav: NavItem[] = [
 ]
 
 const bottomNav: NavItem[] = [
+  { title: "Тарифы", icon: CreditCard, path: "/pricing" },
   { title: "Настройки", icon: Settings, path: "/settings" },
 ]
 
