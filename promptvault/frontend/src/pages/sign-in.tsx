@@ -50,8 +50,8 @@ export default function SignIn() {
   return (
     <AuthLayout>
       <div className="mb-6 text-center">
-        <h1 className="text-xl font-semibold text-white">Вход в аккаунт</h1>
-        <p className="mt-1.5 text-sm text-zinc-500">Войдите, чтобы продолжить работу</p>
+        <h1 className="text-xl font-semibold text-foreground">Вход в аккаунт</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">Войдите, чтобы продолжить работу</p>
       </div>
 
       {/* OAuth */}
@@ -59,7 +59,7 @@ export default function SignIn() {
         <Button
           variant="outline"
           size="lg"
-          className="h-10 w-full gap-2.5 border-white/[0.08] bg-white/[0.03] text-zinc-200 hover:bg-white/[0.07]"
+          className="w-full gap-2.5 border-border bg-card text-foreground hover:bg-muted"
           onClick={() => window.location.href = "/api/auth/oauth/github"}
         >
           <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="currentColor">
@@ -70,7 +70,7 @@ export default function SignIn() {
         <Button
           variant="outline"
           size="lg"
-          className="h-10 w-full gap-2.5 border-white/[0.08] bg-white/[0.03] text-zinc-200 hover:bg-white/[0.07]"
+          className="w-full gap-2.5 border-border bg-card text-foreground hover:bg-muted"
           onClick={() => window.location.href = "/api/auth/oauth/google"}
         >
           <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24">
@@ -84,7 +84,7 @@ export default function SignIn() {
         <Button
           variant="outline"
           size="lg"
-          className="h-10 w-full gap-2.5 border-white/[0.08] bg-white/[0.03] text-zinc-200 hover:bg-white/[0.07]"
+          className="w-full gap-2.5 border-border bg-card text-foreground hover:bg-muted"
           onClick={() => window.location.href = "/api/auth/oauth/yandex"}
         >
           <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none">
@@ -101,7 +101,7 @@ export default function SignIn() {
           <div className="w-full border-t border-white/[0.06]" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-zinc-900/60 px-3 text-zinc-600">или по email</span>
+          <span className="bg-card px-3 text-muted-foreground">или по email</span>
         </div>
       </div>
 
@@ -114,12 +114,12 @@ export default function SignIn() {
         )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-zinc-300">Email</Label>
+          <Label htmlFor="email" className="text-foreground">Email</Label>
           <Input
             id="email"
             type="email"
             placeholder="you@example.com"
-            className="h-10 border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+            className="border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             {...register("email")}
           />
           {errors.email && (
@@ -129,9 +129,9 @@ export default function SignIn() {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password" className="text-zinc-300">Пароль</Label>
-            <a href="/forgot-password" className="text-xs text-zinc-500 transition-colors hover:text-zinc-300" tabIndex={-1}>
-              Забыли?
+            <Label htmlFor="password" className="text-foreground">Пароль</Label>
+            <a href="/forgot-password" className="rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground hover:bg-muted min-h-[44px] flex items-center" tabIndex={-1}>
+              Забыли пароль?
             </a>
           </div>
           <div className="relative">
@@ -139,14 +139,15 @@ export default function SignIn() {
               id="password"
               type={showPassword ? "text" : "password"}
               placeholder="••••••••"
-              className="h-10 border-white/[0.08] bg-white/[0.04] pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="border-white/[0.08] bg-white/[0.04] pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
               {...register("password")}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 transition-colors hover:text-zinc-400"
+              className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground transition-colors hover:text-foreground/70 hover:bg-muted"
               tabIndex={-1}
+              aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -158,7 +159,7 @@ export default function SignIn() {
 
         <Button
           type="submit"
-          className="h-10 w-full bg-violet-600 text-white hover:bg-violet-500 active:bg-violet-700"
+          className="w-full bg-violet-600 text-white hover:bg-violet-500 active:bg-violet-700"
           disabled={isSubmitting}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -167,9 +168,9 @@ export default function SignIn() {
       </form>
 
       {/* Регистрация */}
-      <p className="mt-6 text-center text-sm text-zinc-500">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Нет аккаунта?{" "}
-        <Link to="/sign-up" className="font-medium text-zinc-200 underline underline-offset-4 transition-colors hover:text-white">
+        <Link to="/sign-up" className="inline-flex items-center min-h-[44px] font-medium text-foreground underline underline-offset-4 transition-colors hover:text-foreground">
           Зарегистрироваться
         </Link>
       </p>

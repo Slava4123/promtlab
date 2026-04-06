@@ -33,6 +33,13 @@ func (m *mockTeamRepo) ListByUserID(ctx context.Context, userID uint) ([]models.
 	}
 	return args.Get(0).([]models.Team), args.Error(1)
 }
+func (m *mockTeamRepo) ListByUserIDWithRolesAndCounts(ctx context.Context, userID uint) ([]models.TeamWithRoleAndCount, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.TeamWithRoleAndCount), args.Error(1)
+}
 func (m *mockTeamRepo) Update(ctx context.Context, team *models.Team) error {
 	return m.Called(ctx, team).Error(0)
 }

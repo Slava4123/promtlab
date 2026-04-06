@@ -121,7 +121,7 @@ export default function Collections() {
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{teamName ? `Коллекции — ${teamName}` : "Коллекции"}</h1>
-          <p className="mt-0.5 text-[0.8rem] text-zinc-500">Группируйте промпты по темам и проектам</p>
+          <p className="mt-0.5 text-[0.8rem] text-muted-foreground">Группируйте промпты по темам и проектам</p>
         </div>
         <button
           onClick={openCreate}
@@ -136,10 +136,10 @@ export default function Collections() {
       {isLoading ? (
         <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-white/[0.04] bg-[#0f0f12] p-5">
-              <div className="mb-3 h-9 w-9 animate-pulse rounded-lg bg-white/[0.04]" />
-              <div className="mb-2 h-4 w-2/3 animate-pulse rounded-md bg-white/[0.04]" />
-              <div className="h-3 w-1/2 animate-pulse rounded-md bg-white/[0.03]" />
+            <div key={i} className="rounded-xl border border-border bg-card p-5">
+              <div className="mb-3 h-9 w-9 animate-pulse rounded-lg bg-muted/40" />
+              <div className="mb-2 h-4 w-2/3 animate-pulse rounded-md bg-muted/40" />
+              <div className="h-3 w-1/2 animate-pulse rounded-md bg-muted/30" />
             </div>
           ))}
         </div>
@@ -148,8 +148,8 @@ export default function Collections() {
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/[0.08] ring-1 ring-violet-500/10">
             <FolderOpen className="h-7 w-7 text-violet-400/60" />
           </div>
-          <p className="text-base font-medium text-zinc-400">Пока нет коллекций</p>
-          <p className="mt-1 text-sm text-zinc-600">Создайте первую коллекцию для организации промптов</p>
+          <p className="text-base font-medium text-muted-foreground">Пока нет коллекций</p>
+          <p className="mt-1 text-sm text-muted-foreground">Создайте первую коллекцию для организации промптов</p>
           <button
             onClick={openCreate}
             className="mt-5 flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-4 text-[0.8rem] font-medium text-white shadow-lg shadow-violet-600/10 transition-all hover:bg-violet-500 active:scale-[0.97]"
@@ -163,10 +163,7 @@ export default function Collections() {
           {collections.map((c) => (
             <div
               key={c.id}
-              className="group cursor-pointer rounded-xl border bg-[#0f0f12] p-5 transition-all duration-200 hover:-translate-y-0.5"
-              style={{
-                borderColor: `${c.color || "#8b5cf6"}15`,
-              }}
+              className="group cursor-pointer rounded-xl border border-border bg-card p-5 transition-all duration-200 hover:-translate-y-0.5"
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = `${c.color || "#8b5cf6"}30`; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px -8px rgba(0,0,0,0.5), 0 0 0 1px ${c.color || "#8b5cf6"}15` }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = `${c.color || "#8b5cf6"}15`; (e.currentTarget as HTMLElement).style.boxShadow = "none" }}
               onClick={() => navigate(`/collections/${c.id}`)}
@@ -183,24 +180,24 @@ export default function Collections() {
                 </div>
                 <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button
-                    className="rounded-md p-1 text-zinc-600 hover:bg-white/[0.06] hover:text-zinc-300"
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={(e) => { e.stopPropagation(); openEdit(c) }}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    className="rounded-md p-1 text-zinc-600 hover:bg-red-500/10 hover:text-red-400"
+                    className="rounded-md p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-400"
                     onClick={(e) => { e.stopPropagation(); confirmDelete(c.id) }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
-              <h3 className="mb-1 text-[0.85rem] font-medium text-white">{c.name}</h3>
+              <h3 className="mb-1 text-[0.85rem] font-medium text-foreground">{c.name}</h3>
               {c.description && (
-                <p className="mb-3 text-[0.75rem] text-zinc-500 line-clamp-2">{c.description}</p>
+                <p className="mb-3 text-[0.75rem] text-muted-foreground line-clamp-2">{c.description}</p>
               )}
-              <div className="flex items-center gap-1.5 text-[0.7rem] text-zinc-600">
+              <div className="flex items-center gap-1.5 text-[0.7rem] text-muted-foreground">
                 <FileText className="h-3 w-3" />
                 <span>{c.prompt_count} {c.prompt_count === 1 ? "промпт" : "промптов"}</span>
               </div>
@@ -212,19 +209,19 @@ export default function Collections() {
       {/* Create/Edit Dialog */}
       {dialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDialogOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl p-6 space-y-4" style={{ border: "1px solid rgba(255,255,255,0.06)", background: "linear-gradient(145deg, #101015, #0d0d10)" }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-white">{editing ? "Редактировать коллекцию" : "Новая коллекция"}</h2>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-foreground">{editing ? "Редактировать коллекцию" : "Новая коллекция"}</h2>
 
             {/* Иконка */}
             <div className="space-y-2">
-              <label className="text-[0.8rem] font-medium text-zinc-300">Иконка</label>
+              <label className="text-[0.8rem] font-medium text-foreground">Иконка</label>
               <div className="flex flex-wrap gap-1.5">
                 {ICON_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => setIcon(opt.value)}
                     title={opt.label}
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all ${icon === opt.value || (!icon && opt.value === "folder") ? "ring-2 ring-violet-500 bg-white/[0.08]" : "bg-white/[0.03] hover:bg-white/[0.06]"}`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all ${icon === opt.value || (!icon && opt.value === "folder") ? "ring-2 ring-violet-500 bg-muted/60" : "bg-muted/30 hover:bg-muted"}`}
                   >
                     <opt.Icon className="h-4 w-4" style={{ color }} />
                   </button>
@@ -234,29 +231,26 @@ export default function Collections() {
 
             {/* Название */}
             <div className="space-y-2">
-              <label className="text-[0.8rem] font-medium text-zinc-300">Название</label>
+              <label className="text-[0.8rem] font-medium text-foreground">Название</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Например: Код-ревью"
                 autoFocus
-                className="flex h-10 w-full rounded-lg px-3.5 text-sm text-white outline-none transition-all placeholder:text-zinc-600"
-                style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.025)" }}
-                onFocus={(e) => { e.target.style.borderColor = "rgba(139,92,246,0.4)"; e.target.style.boxShadow = "0 0 0 3px rgba(139,92,246,0.08)" }}
-                onBlur={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.boxShadow = "none" }}
+                className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
               />
             </div>
 
             {/* Цвет */}
             <div className="space-y-2">
-              <label className="text-[0.8rem] font-medium text-zinc-300">Цвет</label>
+              <label className="text-[0.8rem] font-medium text-foreground">Цвет</label>
               <div className="flex gap-2">
                 {COLORS.map((c) => (
                   <button
                     key={c.value}
                     onClick={() => setColor(c.value)}
-                    className={`h-7 w-7 rounded-full transition-all ${color === c.value ? "ring-2 ring-white ring-offset-2 ring-offset-[#0d0d10] scale-110" : "hover:scale-110"}`}
+                    className={`h-7 w-7 rounded-full transition-all ${color === c.value ? "ring-2 ring-white ring-offset-2 ring-offset-background scale-110" : "hover:scale-110"}`}
                     style={{ background: c.value }}
                     title={c.label}
                   />
@@ -266,24 +260,20 @@ export default function Collections() {
 
             {/* Описание */}
             <div className="space-y-2">
-              <label className="text-[0.8rem] font-medium text-zinc-300">Описание <span className="text-zinc-600">(необязательно)</span></label>
+              <label className="text-[0.8rem] font-medium text-foreground">Описание <span className="text-muted-foreground">(необязательно)</span></label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Для чего эта коллекция?"
                 rows={2}
-                className="flex w-full resize-none rounded-lg px-3.5 py-2.5 text-sm text-white outline-none transition-all placeholder:text-zinc-600"
-                style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.025)" }}
-                onFocus={(e) => { e.target.style.borderColor = "rgba(139,92,246,0.4)"; e.target.style.boxShadow = "0 0 0 3px rgba(139,92,246,0.08)" }}
-                onBlur={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.boxShadow = "none" }}
+                className="flex w-full resize-none rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
               />
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={() => setDialogOpen(false)}
-                className="flex h-9 items-center rounded-lg px-4 text-[0.8rem] text-zinc-500 transition-all hover:text-zinc-300"
-                style={{ border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}
+                className="flex h-9 items-center rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-foreground"
               >
                 Отмена
               </button>
@@ -304,21 +294,20 @@ export default function Collections() {
       {/* Delete Confirmation Dialog */}
       {deleteDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDeleteDialogOpen(false)}>
-          <div className="w-full max-w-sm rounded-2xl p-6 space-y-4" style={{ border: "1px solid rgba(239,68,68,0.12)", background: "linear-gradient(145deg, #101015, #0d0d10)" }} onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl border border-red-500/15 bg-card p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
                 <AlertTriangle className="h-5 w-5 text-red-400" />
               </div>
               <div>
-                <h3 className="text-[0.9rem] font-semibold text-white">Удалить коллекцию?</h3>
-                <p className="text-[0.75rem] text-zinc-500">Промпты не удалятся, только открепятся</p>
+                <h3 className="text-[0.9rem] font-semibold text-foreground">Удалить коллекцию?</h3>
+                <p className="text-[0.75rem] text-muted-foreground">Промпты не удалятся, только открепятся</p>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={() => setDeleteDialogOpen(false)}
-                className="flex h-9 items-center rounded-lg px-4 text-[0.8rem] text-zinc-500 transition-all hover:text-zinc-300"
-                style={{ border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}
+                className="flex h-9 items-center rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-foreground"
               >
                 Отмена
               </button>

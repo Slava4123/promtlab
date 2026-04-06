@@ -61,7 +61,7 @@ export default function Versions() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-zinc-600" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -72,7 +72,7 @@ export default function Versions() {
       <div className="mb-8 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/[0.04] hover:text-zinc-300"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
@@ -80,10 +80,10 @@ export default function Versions() {
           <History className="h-4 w-4 text-violet-400" />
         </div>
         <div>
-          <h1 className="text-lg font-bold tracking-tight text-white">
+          <h1 className="text-lg font-bold tracking-tight text-foreground">
             История версий
           </h1>
-          <p className="text-[0.75rem] text-zinc-500">
+          <p className="text-[0.75rem] text-muted-foreground">
             {prompt?.title}
           </p>
         </div>
@@ -91,11 +91,11 @@ export default function Versions() {
 
       {versions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-800/50 ring-1 ring-white/[0.04]">
-            <FileText className="h-5 w-5 text-zinc-600" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted ring-1 ring-border">
+            <FileText className="h-5 w-5 text-muted-foreground" />
           </div>
-          <p className="mt-4 text-sm text-zinc-500">Нет сохранённых версий</p>
-          <p className="mt-1 text-[0.75rem] text-zinc-600">
+          <p className="mt-4 text-sm text-muted-foreground">Нет сохранённых версий</p>
+          <p className="mt-1 text-[0.75rem] text-muted-foreground">
             Версии создаются автоматически при каждом обновлении промпта
           </p>
         </div>
@@ -103,7 +103,7 @@ export default function Versions() {
         <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[280px_1fr]">
           {/* Timeline */}
           <div className="space-y-1">
-            <div className="mb-3 text-[0.75rem] font-medium text-zinc-500">
+            <div className="mb-3 text-[0.75rem] font-medium text-muted-foreground">
               {totalVersions} {totalVersions === 1 ? "версия" : totalVersions < 5 ? "версии" : "версий"}
             </div>
             <div className="flex flex-col gap-1">
@@ -119,21 +119,21 @@ export default function Versions() {
                 >
                   <div className="flex items-center gap-2">
                     <span className={`text-[0.8rem] font-semibold tabular-nums ${
-                      selected?.id === v.id ? "text-violet-400" : "text-zinc-300"
+                      selected?.id === v.id ? "text-violet-400" : "text-foreground"
                     }`}>
                       v{v.version_number}
                     </span>
-                    <span className="whitespace-nowrap text-[0.7rem] text-zinc-600">
+                    <span className="whitespace-nowrap text-[0.7rem] text-muted-foreground">
                       {formatDate(v.created_at)}
                     </span>
                   </div>
                   {v.change_note && (
-                    <span className="line-clamp-2 text-[0.72rem] text-zinc-500">
+                    <span className="line-clamp-2 text-[0.72rem] text-muted-foreground">
                       {v.change_note}
                     </span>
                   )}
                   {v.title && (
-                    <span className="line-clamp-1 text-[0.7rem] text-zinc-600">
+                    <span className="line-clamp-1 text-[0.7rem] text-muted-foreground">
                       {v.title}
                     </span>
                   )}
@@ -141,7 +141,7 @@ export default function Versions() {
               ))}
               {hasNextPage && (
                 <div ref={loadMoreRef} className="flex justify-center py-3">
-                  {isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin text-zinc-600" />}
+                  {isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                 </div>
               )}
             </div>
@@ -152,10 +152,10 @@ export default function Versions() {
             {selected ? (
               <div className="space-y-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-[0.82rem] text-zinc-300">
+                  <div className="text-[0.82rem] text-foreground">
                     <span className="font-medium text-violet-400">Версия {selected.version_number}</span>
                     {selected.change_note && (
-                      <span className="ml-2 text-zinc-500"> — {selected.change_note}</span>
+                      <span className="ml-2 text-muted-foreground"> — {selected.change_note}</span>
                     )}
                   </div>
                   <button
@@ -176,7 +176,7 @@ export default function Versions() {
                 {/* Title diff (если отличается) */}
                 {prompt && selected.title !== prompt.title && (
                   <div className="space-y-1.5">
-                    <span className="text-[0.75rem] font-medium text-zinc-500">Название</span>
+                    <span className="text-[0.75rem] font-medium text-muted-foreground">Название</span>
                     <VersionDiff
                       oldValue={selected.title}
                       newValue={prompt.title}
@@ -189,7 +189,7 @@ export default function Versions() {
                 {/* Content diff */}
                 {prompt && (
                   <div className="space-y-1.5">
-                    <span className="text-[0.75rem] font-medium text-zinc-500">Содержимое</span>
+                    <span className="text-[0.75rem] font-medium text-muted-foreground">Содержимое</span>
                     <VersionDiff
                       oldValue={selected.content}
                       newValue={prompt.content}
@@ -201,9 +201,9 @@ export default function Versions() {
               </div>
             ) : (
               <div className="hidden flex-col items-center justify-center py-20 text-center lg:flex">
-                <History className="h-8 w-8 text-zinc-700" />
-                <p className="mt-3 text-sm text-zinc-500">Выберите версию для сравнения</p>
-                <p className="mt-1 text-[0.75rem] text-zinc-600">
+                <History className="h-8 w-8 text-muted-foreground/50" />
+                <p className="mt-3 text-sm text-muted-foreground">Выберите версию для сравнения</p>
+                <p className="mt-1 text-[0.75rem] text-muted-foreground">
                   Будет показан diff между выбранной версией и текущим состоянием
                 </p>
               </div>

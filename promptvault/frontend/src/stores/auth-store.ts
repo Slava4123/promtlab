@@ -62,7 +62,7 @@ export const useAuthStore = create<AuthState>()(
           set({ user, isAuthenticated: true, isLoading: false })
         } catch (err) {
           const msg = err instanceof Error ? err.message : ""
-          const isAuthError = msg === "unauthorized" || msg.includes("refresh failed") || msg.includes("invalid") || msg.includes("expired")
+          const isAuthError = msg.includes("Сессия истекла") || msg.includes("unauthorized") || msg.includes("refresh failed") || msg.includes("invalid") || msg.includes("expired")
           if (isAuthError) {
             clearTokens()
             set({ user: null, isAuthenticated: false, isLoading: false })

@@ -12,12 +12,14 @@ import {
   Check,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
 
 import {
   Sidebar,
   SidebarContent,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { UserMenu } from "@/components/layout/user-menu"
 import { useCollections } from "@/hooks/use-collections"
@@ -47,8 +49,8 @@ function NavLink({ item, isActive, onClick }: { item: NavItem; isActive: boolean
       onClick={onClick}
       className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-[7px] text-[0.8rem] transition-colors ${
         isActive
-          ? "bg-sidebar-accent font-medium text-white"
-          : "text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-300"
+          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+          : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
       }`}
     >
       <Icon className={`h-[15px] w-[15px] shrink-0 ${isActive ? "text-violet-400" : ""}`} />
@@ -60,12 +62,14 @@ function NavLink({ item, isActive, onClick }: { item: NavItem; isActive: boolean
 export function AppSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { isMobile, setOpenMobile } = useSidebar()
   const team = useWorkspaceStore((s) => s.team)
   const setTeam = useWorkspaceStore((s) => s.setTeam)
   const clearTeam = useWorkspaceStore((s) => s.clearTeam)
   const teamSlug = team?.teamSlug ?? null
   const teamId = team?.teamId ?? null
   const teamName = team?.teamName ?? null
+  const qc = useQueryClient()
   const { data: collections } = useCollections(teamId)
   const { data: teams } = useTeams()
   const [collectionsOpen, setCollectionsOpen] = useState(true)
@@ -82,16 +86,39 @@ export function AppSidebar() {
     }
   }, [teamId, teams, clearTeam])
 
+  const go = (path: string) => {
+    navigate(path)
+    if (isMobile) setOpenMobile(false)
+  }
+
+  const invalidateWorkspaceQueries = () => {
+    qc.invalidateQueries({ queryKey: ["prompts"] })
+    qc.invalidateQueries({ queryKey: ["collections"] })
+    qc.invalidateQueries({ queryKey: ["tags"] })
+  }
+
+  const stayOrRedirect = () => {
+    const path = location.pathname
+    // Detail pages are workspace-bound — redirect to parent list
+    if (/^\/collections\/\d+/.test(path)) return go("/collections")
+    if (/^\/teams\/[^/]+$/.test(path)) return go("/teams")
+    if (/^\/prompts\/\d+/.test(path)) return go("/dashboard")
+    // List pages — stay
+    if (isMobile) setOpenMobile(false)
+  }
+
   const handleSwitchToPersonal = () => {
     clearTeam()
+    invalidateWorkspaceQueries()
     setSwitcherOpen(false)
-    navigate("/dashboard")
+    stayOrRedirect()
   }
 
   const handleSwitchToTeam = (slug: string, id: number, name: string) => {
     setTeam(slug, id, name)
+    invalidateWorkspaceQueries()
     setSwitcherOpen(false)
-    navigate("/dashboard")
+    stayOrRedirect()
   }
 
   return (
@@ -112,30 +139,28 @@ export function AppSidebar() {
           <div className="relative px-1 pb-2">
             <button
               onClick={() => setSwitcherOpen(!switcherOpen)}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[0.78rem] font-medium transition-colors hover:bg-white/[0.04]"
-              style={{ border: "1px solid rgba(255,255,255,0.06)" }}
+              className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border px-2 py-1.5 text-[0.78rem] font-medium transition-colors hover:bg-sidebar-accent"
             >
               {teamSlug ? (
                 <Users className="h-3.5 w-3.5 text-violet-400" />
               ) : (
-                <User className="h-3.5 w-3.5 text-zinc-400" />
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
               )}
-              <span className="flex-1 truncate text-left text-white">
+              <span className="flex-1 truncate text-left text-sidebar-foreground">
                 {currentTeamName || "Личное пространство"}
               </span>
-              <ChevronDown className={`h-3 w-3 text-zinc-600 transition-transform ${switcherOpen ? "rotate-180" : ""}`} />
+              <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${switcherOpen ? "rotate-180" : ""}`} />
             </button>
 
             {switcherOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSwitcherOpen(false)} />
                 <div
-                  className="absolute left-1 right-1 top-10 z-50 rounded-xl py-1 shadow-xl"
-                  style={{ border: "1px solid rgba(255,255,255,0.08)", background: "#151518" }}
+                  className="absolute left-1 right-1 top-10 z-50 rounded-xl py-1 shadow-xl border border-border bg-popover"
                 >
                   <button
                     onClick={handleSwitchToPersonal}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-white"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
                   >
                     <User className="h-3.5 w-3.5" />
                     <span className="flex-1 text-left">Личное пространство</span>
@@ -143,12 +168,12 @@ export function AppSidebar() {
                   </button>
                   {teams && teams.length > 0 && (
                     <>
-                      <div className="mx-3 my-1 border-t border-white/[0.06]" />
+                      <div className="mx-3 my-1 border-t border-border" />
                       {teams.map((t) => (
                         <button
                           key={t.id}
                           onClick={() => handleSwitchToTeam(t.slug, t.id, t.name)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-white"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
                         >
                           <Users className="h-3.5 w-3.5 text-violet-400/50" />
                           <span className="flex-1 text-left">{t.name}</span>
@@ -162,38 +187,38 @@ export function AppSidebar() {
             )}
           </div>
 
-          <p className="px-2.5 pb-1.5 pt-2 text-[0.65rem] font-medium uppercase tracking-wider text-zinc-600">Главное</p>
+          <p className="px-2.5 pb-1.5 pt-2 text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">Главное</p>
           {mainNav.map((item) => (
             <NavLink
               key={item.path}
               item={item}
               isActive={location.pathname === item.path}
-              onClick={() => navigate(item.path)}
+              onClick={() => go(item.path)}
             />
           ))}
 
           {/* Коллекции */}
           {collections && collections.length > 0 && (
-            <div className="!mt-3 border-t border-white/[0.04] pt-3">
+            <div className="!mt-3 border-t border-border pt-3">
               <button
                 onClick={() => setCollectionsOpen(!collectionsOpen)}
                 className="flex w-full items-center justify-between px-2.5 pb-1.5 pt-2"
               >
-                <p className="text-[0.65rem] font-medium uppercase tracking-wider text-zinc-600">
+                <p className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
                   Коллекции
                 </p>
-                <ChevronDown className={`h-3 w-3 text-zinc-600 transition-transform ${collectionsOpen ? "" : "-rotate-90"}`} />
+                <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${collectionsOpen ? "" : "-rotate-90"}`} />
               </button>
               {collectionsOpen && (
                 <div className="space-y-1">
                   {collections.length > 5 && (
                     <div className="relative px-1 pb-0.5">
-                      <Search className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-600" />
+                      <Search className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
                       <input
                         value={collectionSearch}
                         onChange={(e) => setCollectionSearch(e.target.value)}
                         placeholder="Найти..."
-                        className="h-7 w-full rounded-md bg-white/[0.03] pl-7 pr-2 text-[0.72rem] text-zinc-400 outline-none placeholder:text-zinc-700 focus:bg-white/[0.05]"
+                        className="h-7 w-full rounded-md bg-muted/30 pl-7 pr-2 text-[0.72rem] text-muted-foreground outline-none placeholder:text-muted-foreground/50 focus:bg-muted/50"
                       />
                     </div>
                   )}
@@ -203,16 +228,16 @@ export function AppSidebar() {
                     .map((c) => (
                     <button
                       key={c.id}
-                      onClick={() => navigate(`/collections/${c.id}`)}
+                      onClick={() => go(`/collections/${c.id}`)}
                       className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-[7px] text-[0.8rem] transition-colors ${
                         location.pathname === `/collections/${c.id}`
-                          ? "bg-sidebar-accent font-medium text-white"
-                          : "text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-300"
+                          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                       }`}
                     >
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: c.color || "#8b5cf6" }} />
                       <span className="truncate">{c.name}</span>
-                      <span className="ml-auto text-[0.65rem] tabular-nums text-zinc-600">{c.prompt_count}</span>
+                      <span className="ml-auto text-[0.65rem] tabular-nums text-muted-foreground">{c.prompt_count}</span>
                     </button>
                   ))}
                   </div>
@@ -221,13 +246,13 @@ export function AppSidebar() {
             </div>
           )}
 
-          <div className="!mt-3 border-t border-white/[0.04] pt-3">
+          <div className="!mt-3 border-t border-border pt-3">
             {bottomNav.map((item) => (
               <NavLink
                 key={item.path}
                 item={item}
                 isActive={location.pathname === item.path}
-                onClick={() => navigate(item.path)}
+                onClick={() => go(item.path)}
               />
             ))}
           </div>

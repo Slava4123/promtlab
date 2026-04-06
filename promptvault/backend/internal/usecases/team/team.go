@@ -52,29 +52,18 @@ func (s *Service) GetBySlug(ctx context.Context, slug string, userID uint) (*mod
 	return team, members, nil
 }
 
-// TODO: N+1 query pattern — GetMember + CountMembers are called per team.
-// Consider adding a batch repository method (e.g. ListByUserIDWithRoleAndCount)
-// that joins team_members in a single query to eliminate the N+1.
 func (s *Service) List(ctx context.Context, userID uint) ([]TeamListItem, error) {
-	teams, err := s.teams.ListByUserID(ctx, userID)
+	rows, err := s.teams.ListByUserIDWithRolesAndCounts(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	items := make([]TeamListItem, 0, len(teams))
-	for _, t := range teams {
-		member, err := s.teams.GetMember(ctx, t.ID, userID)
-		if err != nil {
-			return nil, err
-		}
-		count, err := s.teams.CountMembers(ctx, t.ID)
-		if err != nil {
-			return nil, err
-		}
+	items := make([]TeamListItem, 0, len(rows))
+	for _, r := range rows {
 		items = append(items, TeamListItem{
-			Team:        t,
-			Role:        member.Role,
-			MemberCount: count,
+			Team:        r.Team,
+			Role:        r.Role,
+			MemberCount: r.MemberCount,
 		})
 	}
 

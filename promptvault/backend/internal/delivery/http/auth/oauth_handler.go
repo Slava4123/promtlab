@@ -141,6 +141,15 @@ func (h *OAuthHandler) verifyLinkCookie(value string) (uint, bool) {
 	return uint(uid), true
 }
 
+func (h *OAuthHandler) clearOAuthCookies(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name: "oauth_state", Value: "", Path: "/", HttpOnly: true, MaxAge: -1,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name: "oauth_verifier", Value: "", Path: "/", HttpOnly: true, MaxAge: -1,
+	})
+}
+
 func (h *OAuthHandler) clearLinkCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "oauth_link", Value: "", Path: "/", HttpOnly: true, MaxAge: -1,
@@ -181,6 +190,7 @@ func (h *OAuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		httperr.Respond(w, httperr.BadRequest(err.Error()))
 		return
 	}
+	h.clearOAuthCookies(w)
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -230,6 +240,7 @@ func (h *OAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		httperr.Respond(w, httperr.BadRequest(err.Error()))
 		return
 	}
+	h.clearOAuthCookies(w)
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -279,6 +290,7 @@ func (h *OAuthHandler) YandexCallback(w http.ResponseWriter, r *http.Request) {
 		httperr.Respond(w, httperr.BadRequest(err.Error()))
 		return
 	}
+	h.clearOAuthCookies(w)
 
 	code := r.URL.Query().Get("code")
 	if code == "" {

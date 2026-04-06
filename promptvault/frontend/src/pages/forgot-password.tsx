@@ -49,8 +49,8 @@ export default function ForgotPasswordPage() {
       })
       setEmail(data.email)
       setStep("reset")
-    } catch (e: any) {
-      setError(e.message || "Ошибка")
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Ошибка")
     } finally {
       setIsSubmitting(false)
     }
@@ -69,8 +69,8 @@ export default function ForgotPasswordPage() {
         }),
       })
       navigate("/sign-in", { replace: true })
-    } catch (e: any) {
-      setError(e.message || "Неверный код или ошибка")
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Неверный код или ошибка")
     } finally {
       setIsSubmitting(false)
     }
@@ -80,10 +80,10 @@ export default function ForgotPasswordPage() {
     <AuthLayout>
       <div className="text-center">
         <KeyRound className="mx-auto mb-3 h-10 w-10 text-violet-400" />
-        <h1 className="text-xl font-bold text-white">
+        <h1 className="text-xl font-bold text-foreground">
           {step === "email" ? "Сброс пароля" : "Новый пароль"}
         </h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-1 text-sm text-muted-foreground">
           {step === "email"
             ? "Введите email для получения кода"
             : `Код отправлен на ${email}`}
@@ -99,13 +99,13 @@ export default function ForgotPasswordPage() {
       {step === "email" ? (
         <form onSubmit={handleSendCode} noValidate className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-zinc-300">Email</Label>
+            <Label htmlFor="email" className="text-foreground">Email</Label>
             <Input
               id="email"
               type="email"
               placeholder="you@example.com"
               {...emailForm.register("email")}
-              className="h-10 border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="h-10 border-border bg-card focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             />
             {emailForm.formState.errors.email && (
               <p className="text-xs text-red-400">{emailForm.formState.errors.email.message}</p>
@@ -118,7 +118,7 @@ export default function ForgotPasswordPage() {
             Отправить код
           </Button>
 
-          <p className="text-center text-sm text-zinc-500">
+          <p className="text-center text-sm text-muted-foreground">
             Вспомнили пароль?{" "}
             <a href="/sign-in" className="text-violet-400 hover:text-violet-300">Войти</a>
           </p>
@@ -126,14 +126,14 @@ export default function ForgotPasswordPage() {
       ) : (
         <form onSubmit={handleReset} noValidate className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="code" className="text-zinc-300">Код из email</Label>
+            <Label htmlFor="code" className="text-foreground">Код из email</Label>
             <Input
               id="code"
               inputMode="numeric"
               maxLength={6}
               placeholder="000000"
               {...resetForm.register("code")}
-              className="h-10 border-white/[0.08] bg-white/[0.04] tracking-[0.3em] text-center focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="h-10 border-border bg-card tracking-[0.3em] text-center focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             />
             {resetForm.formState.errors.code && (
               <p className="text-xs text-red-400">{resetForm.formState.errors.code.message}</p>
@@ -141,13 +141,13 @@ export default function ForgotPasswordPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="new_password" className="text-zinc-300">Новый пароль</Label>
+            <Label htmlFor="new_password" className="text-foreground">Новый пароль</Label>
             <Input
               id="new_password"
               type="password"
               placeholder="Минимум 8 символов"
               {...resetForm.register("new_password")}
-              className="h-10 border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="h-10 border-border bg-card focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             />
             {resetForm.formState.errors.new_password && (
               <p className="text-xs text-red-400">{resetForm.formState.errors.new_password.message}</p>
@@ -155,13 +155,13 @@ export default function ForgotPasswordPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="confirm" className="text-zinc-300">Подтвердите пароль</Label>
+            <Label htmlFor="confirm" className="text-foreground">Подтвердите пароль</Label>
             <Input
               id="confirm"
               type="password"
               placeholder="Повторите пароль"
               {...resetForm.register("confirm")}
-              className="h-10 border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="h-10 border-border bg-card focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             />
             {resetForm.formState.errors.confirm && (
               <p className="text-xs text-red-400">{resetForm.formState.errors.confirm.message}</p>
@@ -175,7 +175,7 @@ export default function ForgotPasswordPage() {
           </Button>
 
           <button type="button" onClick={() => { setStep("email"); setError("") }}
-            className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300">
+            className="w-full text-center text-sm text-muted-foreground hover:text-foreground">
             Отправить код заново
           </button>
         </form>

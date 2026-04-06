@@ -44,7 +44,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Prompt, e
 		// Проверка что теги принадлежат тому же workspace
 		for _, t := range tags {
 			if !sameWorkspace(in.TeamID, t.TeamID) {
-				return nil, ErrForbidden
+				return nil, ErrWorkspaceMismatch
 			}
 		}
 		p.Tags = tags
@@ -58,7 +58,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Prompt, e
 		// Проверка что коллекции принадлежат тому же workspace
 		for _, c := range cols {
 			if !sameWorkspace(in.TeamID, c.TeamID) {
-				return nil, ErrForbidden
+				return nil, ErrWorkspaceMismatch
 			}
 		}
 		p.Collections = cols
@@ -149,7 +149,7 @@ func (s *Service) Update(ctx context.Context, id, userID uint, in UpdateInput) (
 		}
 		for _, c := range cols {
 			if !sameWorkspace(p.TeamID, c.TeamID) {
-				return nil, ErrForbidden
+				return nil, ErrWorkspaceMismatch
 			}
 		}
 		p.Collections = cols
@@ -161,7 +161,7 @@ func (s *Service) Update(ctx context.Context, id, userID uint, in UpdateInput) (
 		}
 		for _, t := range tags {
 			if !sameWorkspace(p.TeamID, t.TeamID) {
-				return nil, ErrForbidden
+				return nil, ErrWorkspaceMismatch
 			}
 		}
 		p.Tags = tags

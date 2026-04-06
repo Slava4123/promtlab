@@ -53,8 +53,8 @@ export default function SignUp() {
   return (
     <AuthLayout>
       <div className="mb-6 text-center">
-        <h1 className="text-xl font-semibold text-white">Создать аккаунт</h1>
-        <p className="mt-1.5 text-sm text-zinc-500">Заполните данные для регистрации</p>
+        <h1 className="text-xl font-semibold text-foreground">Создать аккаунт</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">Заполните данные для регистрации</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate onChange={() => error && setError("")} className="space-y-4">
@@ -65,11 +65,11 @@ export default function SignUp() {
         )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="name" className="text-zinc-300">Имя</Label>
+          <Label htmlFor="name" className="text-foreground">Имя</Label>
           <Input
             id="name"
             placeholder="Ваше имя"
-            className="h-10 border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+            className="border-border bg-card focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             {...register("name")}
           />
           {errors.name && (
@@ -78,12 +78,12 @@ export default function SignUp() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-zinc-300">Email</Label>
+          <Label htmlFor="email" className="text-foreground">Email</Label>
           <Input
             id="email"
             type="email"
             placeholder="you@example.com"
-            className="h-10 border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+            className="border-border bg-card focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             {...register("email")}
           />
           {errors.email && (
@@ -92,20 +92,21 @@ export default function SignUp() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="password" className="text-zinc-300">Пароль</Label>
+          <Label htmlFor="password" className="text-foreground">Пароль</Label>
           <div className="relative">
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
               placeholder="Минимум 8 символов"
-              className="h-10 border-white/[0.08] bg-white/[0.04] pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="border-border bg-card pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
               {...register("password")}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 transition-colors hover:text-zinc-400"
+              className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground transition-colors hover:text-foreground/70 hover:bg-muted"
               tabIndex={-1}
+              aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -116,21 +117,22 @@ export default function SignUp() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="confirmPassword" className="text-zinc-300">Подтвердите пароль</Label>
+          <Label htmlFor="confirmPassword" className="text-foreground">Подтвердите пароль</Label>
           <div className="relative">
             <Input
               id="confirmPassword"
               type={showConfirm ? "text" : "password"}
               placeholder="Повторите пароль"
-              className="h-10 border-white/[0.08] bg-white/[0.04] pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="border-border bg-card pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
               onPaste={(e) => e.preventDefault()}
               {...register("confirmPassword")}
             />
             <button
               type="button"
               onClick={() => setShowConfirm(!showConfirm)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 transition-colors hover:text-zinc-400"
+              className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground transition-colors hover:text-foreground/70 hover:bg-muted"
               tabIndex={-1}
+              aria-label={showConfirm ? "Скрыть пароль" : "Показать пароль"}
             >
               {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -142,7 +144,7 @@ export default function SignUp() {
 
         <Button
           type="submit"
-          className="h-10 w-full bg-violet-600 text-white hover:bg-violet-500 active:bg-violet-700"
+          className="w-full bg-violet-600 text-white hover:bg-violet-500 active:bg-violet-700"
           disabled={isSubmitting}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -150,9 +152,9 @@ export default function SignUp() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-zinc-500">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Уже есть аккаунт?{" "}
-        <Link to="/sign-in" className="font-medium text-zinc-200 underline underline-offset-4 transition-colors hover:text-white">
+        <Link to="/sign-in" className="inline-flex items-center min-h-[44px] font-medium text-foreground underline underline-offset-4 transition-colors hover:text-foreground">
           Войти
         </Link>
       </p>

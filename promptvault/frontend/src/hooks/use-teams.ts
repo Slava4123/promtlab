@@ -98,6 +98,8 @@ export function useAcceptInvitation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-invitations"] })
       qc.invalidateQueries({ queryKey: ["teams"] })
+      qc.invalidateQueries({ queryKey: ["team-invitations"] })
+      qc.invalidateQueries({ queryKey: ["team"] })
     },
   })
 }
@@ -109,6 +111,7 @@ export function useDeclineInvitation() {
       apiVoid(`/invitations/${invitationId}/decline`, { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-invitations"] })
+      qc.invalidateQueries({ queryKey: ["team-invitations"] })
     },
   })
 }

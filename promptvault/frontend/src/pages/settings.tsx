@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, type UseFormRegisterReturn } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Settings, User, Lock, Link2, Palette, Eye, EyeOff, Loader2, Check, AlertTriangle } from "lucide-react"
@@ -52,7 +52,7 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -91,8 +91,8 @@ function ProfileSection({ user, onUpdate }: { user: { name: string; email: strin
       await updateProfile.mutateAsync({ name: data.name, username: data.username || undefined })
       onUpdate()
       toast.success("Профиль обновлён")
-    } catch (e: any) {
-      toast.error(e.message || "Ошибка обновления")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Ошибка обновления")
     }
   }
 
@@ -126,7 +126,7 @@ function ProfileSection({ user, onUpdate }: { user: { name: string; email: strin
           <label className="text-[0.75rem] text-muted-foreground">Имя</label>
           <input
             {...register("name")}
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-violet-500"
+            className="mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-violet-500"
           />
           {errors.name && <p className="mt-1 text-xs text-red-400">{errors.name.message}</p>}
         </div>
@@ -138,7 +138,7 @@ function ProfileSection({ user, onUpdate }: { user: { name: string; email: strin
             <input
               {...register("username")}
               placeholder="username"
-              className="w-full rounded-lg border border-border bg-background pl-7 pr-3 py-2 text-sm text-foreground outline-none focus:border-violet-500"
+              className="h-11 w-full rounded-lg border border-border bg-background pl-7 pr-3 text-sm text-foreground outline-none focus:border-violet-500"
             />
           </div>
           {errors.username && <p className="mt-1 text-xs text-red-400">{errors.username.message}</p>}
@@ -149,14 +149,14 @@ function ProfileSection({ user, onUpdate }: { user: { name: string; email: strin
           <input
             value={user.email}
             disabled
-            className="mt-1 w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-muted-foreground outline-none cursor-not-allowed"
+            className="mt-1 h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm text-muted-foreground outline-none cursor-not-allowed"
           />
         </div>
 
         <button
           type="submit"
           disabled={updateProfile.isPending}
-          className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
+          className="flex h-11 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
           style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)" }}
         >
           {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -197,8 +197,8 @@ function SetPasswordForm({ showPasswords, toggleShow, onUpdate }: { showPassword
       await initiateMut.mutateAsync()
       setCodeSent(true)
       toast.success("Код отправлен на email")
-    } catch (e: any) {
-      toast.error(e.message || "Ошибка отправки кода")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Ошибка отправки кода")
     }
   }
 
@@ -210,8 +210,8 @@ function SetPasswordForm({ showPasswords, toggleShow, onUpdate }: { showPassword
       setCode("")
       setCodeSent(false)
       onUpdate()
-    } catch (e: any) {
-      toast.error(e.message || "Ошибка")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Ошибка")
     }
   })
 
@@ -227,7 +227,7 @@ function SetPasswordForm({ showPasswords, toggleShow, onUpdate }: { showPassword
           type="button"
           onClick={handleSendCode}
           disabled={initiateMut.isPending}
-          className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
+          className="flex h-11 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
           style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)" }}
         >
           {initiateMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
@@ -281,8 +281,8 @@ function ChangePasswordForm({ showPasswords, toggleShow }: { showPasswords: bool
       })
       toast.success("Пароль изменён")
       reset()
-    } catch (e: any) {
-      toast.error(e.message || "Ошибка")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Ошибка")
     }
   })
 
@@ -306,7 +306,7 @@ function ChangePasswordForm({ showPasswords, toggleShow }: { showPasswords: bool
 
 function PasswordField({ label, placeholder, show, toggleShow, ToggleIcon, register, error }: {
   label: string; placeholder?: string; show: boolean; toggleShow: () => void
-  ToggleIcon: typeof Eye; register: any; error?: string
+  ToggleIcon: typeof Eye; register: UseFormRegisterReturn; error?: string
 }) {
   return (
     <div>
@@ -316,10 +316,11 @@ function PasswordField({ label, placeholder, show, toggleShow, ToggleIcon, regis
           type={show ? "text" : "password"}
           placeholder={placeholder}
           {...register}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-violet-500"
+          className="h-11 w-full rounded-lg border border-border bg-background px-3 pr-12 text-sm text-foreground outline-none focus:border-violet-500"
         />
         <button type="button" onClick={toggleShow}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+          className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+          aria-label={show ? "Скрыть пароль" : "Показать пароль"}>
           <ToggleIcon className="h-4 w-4" />
         </button>
       </div>
@@ -333,7 +334,7 @@ function SubmitButton({ isPending, label }: { isPending: boolean; label: string 
     <button
       type="submit"
       disabled={isPending}
-      className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
+      className="flex h-11 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
       style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)" }}
     >
       {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
@@ -391,8 +392,8 @@ function LinkedAccountsSection() {
       await unlinkMut.mutateAsync(provider)
       toast.success("Аккаунт отвязан")
       setConfirmUnlink(null)
-    } catch (e: any) {
-      toast.error(e.message || "Ошибка")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Ошибка")
       setConfirmUnlink(null)
     }
   }
@@ -400,9 +401,9 @@ function LinkedAccountsSection() {
   const handleLink = async (provider: string) => {
     try {
       const res = await api<{ redirect_url: string }>(`/auth/link/${provider}`, { method: "POST" })
-      window.location.href = res.redirect_url
-    } catch (e: any) {
-      toast.error(e.message || "Ошибка привязки")
+      window.location.assign(res.redirect_url)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Ошибка привязки")
     }
   }
 
@@ -435,14 +436,14 @@ function LinkedAccountsSection() {
                     <button
                       onClick={() => setConfirmUnlink(key)}
                       disabled={unlinkMut.isPending}
-                      className="text-[0.78rem] text-red-400 hover:text-red-300 disabled:opacity-50"
+                      className="rounded-lg px-3 py-2 text-[0.78rem] text-red-400 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-50 min-h-[44px]"
                     >
                       Отвязать
                     </button>
                   ) : (
                     <button
                       onClick={() => handleLink(key)}
-                      className="text-[0.78rem] text-violet-400 hover:text-violet-300"
+                      className="rounded-lg px-3 py-2 text-[0.78rem] text-violet-400 hover:text-violet-300 hover:bg-violet-500/10 min-h-[44px]"
                     >
                       Привязать
                     </button>
@@ -451,20 +452,22 @@ function LinkedAccountsSection() {
 
                 {/* Confirm dialog */}
                 {confirmUnlink === key && (
-                  <div className="mt-2 flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
-                    <p className="text-xs text-muted-foreground">Отвязать {name}?</p>
-                    <div className="ml-auto flex gap-2">
+                  <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+                      <p className="text-xs text-muted-foreground">Отвязать {name}?</p>
+                    </div>
+                    <div className="mt-2 flex justify-end gap-2">
                       <button
                         onClick={() => setConfirmUnlink(null)}
-                        className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                        className="rounded-lg px-3 min-h-[44px] text-xs text-muted-foreground hover:text-foreground"
                       >
                         Отмена
                       </button>
                       <button
                         onClick={() => handleUnlink(key)}
                         disabled={unlinkMut.isPending}
-                        className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                        className="rounded-lg bg-red-500/10 px-3 min-h-[44px] text-xs text-red-400 hover:bg-red-500/20 disabled:opacity-50"
                       >
                         {unlinkMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Да, отвязать"}
                       </button>
@@ -492,7 +495,7 @@ function ThemeSection() {
           <button
             key={t}
             onClick={() => setTheme(t)}
-            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+            className={`rounded-lg border px-4 h-11 text-sm font-medium transition-all ${
               theme === t
                 ? "border-violet-500/40 bg-violet-500/10 text-violet-400"
                 : "border-border bg-background text-muted-foreground hover:text-foreground"
@@ -510,7 +513,7 @@ function ThemeSection() {
 
 function Section({ icon: Icon, title, children }: { icon: typeof Settings; title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-xl border border-border bg-card p-5 overflow-hidden">
       <div className="mb-4 flex items-center gap-2">
         <Icon className="h-4 w-4 text-violet-400" />
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>

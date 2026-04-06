@@ -34,7 +34,10 @@ export function useUpdateCollection() {
   return useMutation({
     mutationFn: ({ id, ...data }: { id: number; name: string; description?: string; color?: string; icon?: string }) =>
       api<Collection>(`/collections/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["collections"] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["collections"] })
+      qc.invalidateQueries({ queryKey: ["collection", vars.id] })
+    },
   })
 }
 
@@ -42,6 +45,9 @@ export function useDeleteCollection() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => apiVoid(`/collections/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["collections"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["collections"] })
+      qc.invalidateQueries({ queryKey: ["prompts"] })
+    },
   })
 }

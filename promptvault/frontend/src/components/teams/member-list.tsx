@@ -20,7 +20,7 @@ export function MemberList({ members, currentUserRole, currentUserId, onChangeRo
       {members.map((m) => (
         <div
           key={m.user_id}
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-white/[0.02]"
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/20"
         >
           {/* Avatar */}
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-[0.75rem] font-medium text-violet-400">
@@ -33,11 +33,11 @@ export function MemberList({ members, currentUserRole, currentUserId, onChangeRo
 
           {/* Info */}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[0.8rem] font-medium text-white">
+            <p className="truncate text-[0.8rem] font-medium text-foreground">
               {m.name || m.email}
-              {m.user_id === currentUserId && <span className="ml-1.5 text-zinc-600">(вы)</span>}
+              {m.user_id === currentUserId && <span className="ml-1.5 text-muted-foreground">(вы)</span>}
             </p>
-            <p className="truncate text-[0.7rem] text-zinc-600">{m.email}</p>
+            <p className="truncate text-[0.7rem] text-muted-foreground">{m.email}</p>
           </div>
 
           {/* Role badge */}
@@ -48,7 +48,7 @@ export function MemberList({ members, currentUserRole, currentUserId, onChangeRo
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(menuOpen === m.user_id ? null : m.user_id)}
-                className="rounded-md p-1 text-zinc-600 transition-colors hover:bg-white/[0.06] hover:text-zinc-300"
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </button>
@@ -57,15 +57,14 @@ export function MemberList({ members, currentUserRole, currentUserId, onChangeRo
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(null)} />
                   <div
-                    className="absolute right-0 top-8 z-50 w-44 rounded-xl py-1 shadow-xl"
-                    style={{ border: "1px solid rgba(255,255,255,0.08)", background: "#151518" }}
+                    className="absolute right-0 top-8 z-50 w-44 rounded-xl py-1 shadow-xl border border-border bg-popover"
                   >
                     <button
                       onClick={() => {
                         onChangeRole(m.user_id, m.role === "editor" ? "viewer" : "editor")
                         setMenuOpen(null)
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-white"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
                       <ArrowUpDown className="h-3.5 w-3.5" />
                       {m.role === "editor" ? "Сделать читателем" : "Сделать редактором"}
@@ -90,7 +89,7 @@ export function MemberList({ members, currentUserRole, currentUserId, onChangeRo
           {!isOwner && m.user_id === currentUserId && (
             <button
               onClick={() => onRemove(m.user_id)}
-              className="rounded-md p-1 text-zinc-600 transition-colors hover:bg-red-500/10 hover:text-red-400"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-400"
               title="Покинуть команду"
             >
               <UserMinus className="h-4 w-4" />

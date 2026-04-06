@@ -31,6 +31,12 @@ type TeamMember struct {
 	Team   Team     `gorm:"foreignKey:TeamID" json:"-"`
 }
 
+type TeamWithRoleAndCount struct {
+	Team
+	Role        TeamRole `gorm:"column:role" json:"role"`
+	MemberCount int      `gorm:"column:member_count" json:"member_count"`
+}
+
 type InvitationStatus string
 
 const (

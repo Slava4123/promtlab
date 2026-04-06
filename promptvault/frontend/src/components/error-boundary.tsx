@@ -22,13 +22,13 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-[#0a0a0c] p-6">
+        <div className="flex min-h-screen items-center justify-center bg-background p-6">
           <div className="max-w-md text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/[0.08] ring-1 ring-red-500/10">
               <span className="text-2xl">!</span>
             </div>
-            <h1 className="text-lg font-semibold text-white">Что-то пошло не так</h1>
-            <p className="mt-2 text-sm text-zinc-500">
+            <h1 className="text-lg font-semibold text-foreground">Что-то пошло не так</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
               Произошла непредвиденная ошибка. Попробуйте перезагрузить страницу.
             </p>
             {this.state.error && (

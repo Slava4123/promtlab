@@ -16,6 +16,8 @@ func respondError(w http.ResponseWriter, err error) {
 		httperr.Respond(w, httperr.Forbidden(err.Error()))
 	case errors.Is(err, colluc.ErrViewerReadOnly):
 		httperr.Respond(w, httperr.Forbidden(err.Error()))
+	case errors.Is(err, colluc.ErrInvalidColor), errors.Is(err, colluc.ErrInvalidIcon):
+		httperr.Respond(w, httperr.BadRequest(err.Error()))
 	default:
 		httperr.Respond(w, httperr.Internal(err))
 	}

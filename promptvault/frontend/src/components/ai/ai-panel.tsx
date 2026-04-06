@@ -50,13 +50,14 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
   const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
-    if (!isStreaming) { setElapsed(0); return }
+    if (!isStreaming) return
     const id = setInterval(() => setElapsed((e) => e + 1), 1000)
     return () => clearInterval(id)
   }, [isStreaming])
 
   const handleAction = useCallback((action: AIAction) => {
     setActiveAction(action)
+    setElapsed(0)
     const body: Record<string, unknown> = {
       content,
       model: selectedModel,
@@ -99,7 +100,7 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
       >
         <Sparkles className="h-3.5 w-3.5 text-violet-400" />
         <span className="text-[0.82rem] font-medium text-violet-300">AI-ассистент</span>
-        <ChevronDown className={`ml-auto h-3.5 w-3.5 text-zinc-600 transition-transform ${expanded ? "rotate-180" : ""}`} />
+        <ChevronDown className={`ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
 
       {expanded && (
@@ -148,7 +149,7 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
                       {label}
                     </button>
                     <Select value={rewriteStyle} onValueChange={(v) => { if (v) setRewriteStyle(v) }} modal={false}>
-                      <SelectTrigger size="sm" className="h-[30px] text-[0.72rem] text-zinc-400">
+                      <SelectTrigger size="sm" className="h-[30px] text-[0.72rem] text-muted-foreground">
                         <SelectValue>
                           {rewriteStyles.find((s) => s.value === rewriteStyle)?.label}
                         </SelectValue>
@@ -213,7 +214,7 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
           {/* Result area */}
           {(hasResult || isStreaming) && (
             <div
-              className="relative min-h-[120px] max-h-[400px] overflow-y-auto rounded-lg px-3.5 py-3 text-[0.82rem] leading-relaxed text-zinc-200"
+              className="relative min-h-[120px] max-h-[400px] overflow-y-auto rounded-lg px-3.5 py-3 text-[0.82rem] leading-relaxed text-foreground"
               style={{ border: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.02)" }}
             >
               {/* Skeleton + bouncing dots while waiting for first token */}
@@ -240,7 +241,7 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
               {/* Spinner + elapsed timer */}
               {isStreaming && (
                 <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                  <span className="text-[0.7rem] text-zinc-500 tabular-nums">{elapsed} сек</span>
+                  <span className="text-[0.7rem] text-muted-foreground tabular-nums">{elapsed} сек</span>
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400/60" />
                 </div>
               )}
@@ -264,7 +265,7 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
               <button
                 type="button"
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] text-zinc-400 transition-all hover:text-zinc-200"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] text-muted-foreground transition-all hover:text-foreground"
                 style={{ border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}
               >
                 <Copy className="h-3.5 w-3.5" />

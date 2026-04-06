@@ -53,6 +53,17 @@ func (r *teamRepo) ListByUserID(ctx context.Context, userID uint) ([]models.Team
 	return teams, err
 }
 
+func (r *teamRepo) ListByUserIDWithRolesAndCounts(ctx context.Context, userID uint) ([]models.TeamWithRoleAndCount, error) {
+	var results []models.TeamWithRoleAndCount
+	err := r.db.WithContext(ctx).
+		Table("teams").
+		Select("teams.*, tm.role, (SELECT COUNT(*) FROM team_members WHERE team_id = teams.id) AS member_count").
+		Joins("JOIN team_members tm ON tm.team_id = teams.id AND tm.user_id = ?", userID).
+		Order("teams.name").
+		Scan(&results).Error
+	return results, err
+}
+
 func (r *teamRepo) Update(ctx context.Context, team *models.Team) error {
 	return r.db.WithContext(ctx).Save(team).Error
 }

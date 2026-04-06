@@ -3,11 +3,14 @@ package collection
 import (
 	"context"
 	"errors"
+	"regexp"
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 	"promptvault/internal/usecases/teamcheck"
 )
+
+var validHexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 type Service struct {
 	collections repo.CollectionRepository
@@ -26,6 +29,11 @@ func (s *Service) Create(ctx context.Context, userID uint, name, description, co
 
 	if color == "" {
 		color = "#8b5cf6"
+	} else if !validHexColor.MatchString(color) {
+		return nil, ErrInvalidColor
+	}
+	if len(icon) > 30 {
+		return nil, ErrInvalidIcon
 	}
 	c := &models.Collection{
 		UserID:      userID,
@@ -95,9 +103,15 @@ func (s *Service) Update(ctx context.Context, id, userID uint, name, description
 	}
 	c.Description = description
 	if color != "" {
+		if !validHexColor.MatchString(color) {
+			return nil, ErrInvalidColor
+		}
 		c.Color = color
 	}
 	if icon != "" {
+		if len(icon) > 30 {
+			return nil, ErrInvalidIcon
+		}
 		c.Icon = icon
 	}
 

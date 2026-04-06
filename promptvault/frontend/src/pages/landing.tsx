@@ -41,16 +41,16 @@ export default function Landing() {
           </div>
           <span className="text-lg font-semibold">ПромтЛаб</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Link
             to="/sign-in"
-            className="rounded-lg px-4 py-2 text-sm text-zinc-400 transition-colors hover:text-white"
+            className="rounded-lg px-4 py-3 text-sm text-zinc-400 transition-colors hover:text-white"
           >
             Войти
           </Link>
           <Link
             to="/sign-up"
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium transition-colors hover:bg-violet-500"
+            className="rounded-lg bg-violet-600 px-4 py-3 text-sm font-medium transition-colors hover:bg-violet-500"
           >
             Регистрация
           </Link>
@@ -92,7 +92,7 @@ export default function Landing() {
               className="rounded-xl border border-white/5 bg-white/[0.02] p-6 text-left transition-colors hover:border-violet-500/20 hover:bg-white/[0.04]"
             >
               <f.icon className="mb-3 h-6 w-6 text-violet-400" />
-              <h3 className="text-sm font-semibold">{f.title}</h3>
+              <h2 className="text-sm font-semibold">{f.title}</h2>
               <p className="mt-1 text-sm text-zinc-500">{f.desc}</p>
             </div>
           ))}

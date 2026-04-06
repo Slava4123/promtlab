@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { Plus, ArrowLeft, FileText, FolderOpen, PackagePlus, Check, Loader2, Search } from "lucide-react"
 import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
 
 import { PromptCard, PromptCardSkeleton } from "@/components/prompts/prompt-card"
 import { useCollection } from "@/hooks/use-collections"
@@ -27,10 +28,11 @@ export default function CollectionView() {
   const { id } = useParams()
   const collectionId = Number(id)
 
+  const qc = useQueryClient()
   const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
   const { data: collection, isLoading: loadingCollection } = useCollection(collectionId)
   const { data: promptsData, isLoading: loadingPrompts } = usePrompts({ collection_id: collectionId, team_id: teamId })
-  const { data: allPromptsData } = usePrompts({})
+  const { data: allPromptsData } = usePrompts({ team_id: teamId })
   const toggleFav = useToggleFavorite()
   const updatePrompt = useUpdatePrompt()
 
@@ -64,8 +66,11 @@ export default function CollectionView() {
         const existingIds = prompt?.collections?.map(c => c.id) || []
         await updatePrompt.mutateAsync({ id: promptId, collection_ids: [...existingIds, collectionId] })
       }
+      await qc.invalidateQueries({ queryKey: ["prompts"] })
+      await qc.invalidateQueries({ queryKey: ["collection", collectionId] })
       toast.success(`Добавлено ${selected.size} ${selected.size === 1 ? "промпт" : "промптов"}`)
-      { setAddDialogOpen(false); setAddSearch("") }
+      setAddDialogOpen(false)
+      setAddSearch("")
       setSelected(new Set())
     } catch {
       toast.error("Ошибка при добавлении")
@@ -81,11 +86,11 @@ export default function CollectionView() {
     return (
       <div className="mx-auto max-w-[64rem]">
         <div className="mb-6 flex items-center gap-3">
-          <div className="h-5 w-20 animate-pulse rounded-md bg-white/[0.04]" />
+          <div className="h-5 w-20 animate-pulse rounded-md bg-muted/40" />
         </div>
         <div className="mb-6 flex items-center gap-3">
-          <div className="h-10 w-10 animate-pulse rounded-lg bg-white/[0.04]" />
-          <div className="h-6 w-48 animate-pulse rounded-md bg-white/[0.04]" />
+          <div className="h-10 w-10 animate-pulse rounded-lg bg-muted/40" />
+          <div className="h-6 w-48 animate-pulse rounded-md bg-muted/40" />
         </div>
       </div>
     )
@@ -94,7 +99,7 @@ export default function CollectionView() {
   if (!collection) {
     return (
       <div className="mx-auto max-w-[64rem] py-20 text-center">
-        <p className="text-zinc-400">Коллекция не найдена</p>
+        <p className="text-muted-foreground">Коллекция не найдена</p>
       </div>
     )
   }
@@ -105,13 +110,13 @@ export default function CollectionView() {
       <div className="flex items-center gap-1.5 text-[0.8rem]">
         <button
           onClick={() => navigate("/collections")}
-          className="flex items-center gap-1 text-zinc-500 transition-colors hover:text-zinc-300"
+          className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Коллекции
         </button>
-        <span className="text-zinc-600">/</span>
-        <span className="text-zinc-300">{collection.name}</span>
+        <span className="text-muted-foreground">/</span>
+        <span className="text-foreground">{collection.name}</span>
       </div>
 
       {/* Header */}
@@ -127,17 +132,16 @@ export default function CollectionView() {
             <IconComponent style={{ width: 20, height: 20, color }} />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">{collection.name}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">{collection.name}</h1>
             {collection.description && (
-              <p className="mt-0.5 text-[0.8rem] text-zinc-500">{collection.description}</p>
+              <p className="mt-0.5 text-[0.8rem] text-muted-foreground">{collection.description}</p>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setSelected(new Set()); setAddDialogOpen(true) }}
-            className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] font-medium text-zinc-400 transition-all hover:text-zinc-200 active:scale-[0.97]"
-            style={{ border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}
+            className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] font-medium text-muted-foreground transition-all hover:text-foreground active:scale-[0.97] border border-border bg-card"
           >
             <PackagePlus className="h-3.5 w-3.5" />
             Из списка
@@ -170,8 +174,8 @@ export default function CollectionView() {
           >
             <FileText className="h-7 w-7" style={{ color: `${color}90` }} />
           </div>
-          <p className="text-base font-medium text-zinc-400">Коллекция пока пуста</p>
-          <p className="mt-1 text-sm text-zinc-600">Добавьте первый промпт в эту коллекцию</p>
+          <p className="text-base font-medium text-muted-foreground">Коллекция пока пуста</p>
+          <p className="mt-1 text-sm text-muted-foreground">Добавьте первый промпт в эту коллекцию</p>
           <button
             onClick={() => navigate(`/prompts/new?collection_id=${collectionId}`)}
             className="mt-5 flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-4 text-[0.8rem] font-medium text-white shadow-lg shadow-violet-600/10 transition-all hover:bg-violet-500 active:scale-[0.97]"
@@ -197,15 +201,14 @@ export default function CollectionView() {
       {addDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { setAddDialogOpen(false); setAddSearch("") }}>
           <div
-            className="w-full max-w-lg max-h-[80vh] flex flex-col rounded-2xl"
-            style={{ border: "1px solid rgba(255,255,255,0.06)", background: "linear-gradient(145deg, #101015, #0d0d10)" }}
+            className="w-full max-w-lg max-h-[80vh] flex flex-col rounded-2xl border border-border bg-card"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 pt-5 pb-3">
               <div>
-                <h2 className="text-lg font-semibold text-white">Добавить в коллекцию</h2>
-                <p className="mt-0.5 text-[0.75rem] text-zinc-500">Выберите промпты для добавления в "{collection.name}"</p>
+                <h2 className="text-lg font-semibold text-foreground">Добавить в коллекцию</h2>
+                <p className="mt-0.5 text-[0.75rem] text-muted-foreground">Выберите промпты для добавления в "{collection.name}"</p>
               </div>
               {selected.size > 0 && (
                 <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-medium text-violet-300">
@@ -216,12 +219,12 @@ export default function CollectionView() {
 
             {/* Search */}
             <div className="relative px-6 pb-2">
-              <Search className="absolute left-8.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
+              <Search className="absolute left-8.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={addSearch}
                 onChange={(e) => setAddSearch(e.target.value)}
                 placeholder="Поиск по названию..."
-                className="h-8 w-full rounded-lg border border-white/[0.06] bg-white/[0.03] pl-8 pr-3 text-[0.8rem] text-white outline-none placeholder:text-zinc-600 focus:border-violet-500/25 focus:ring-1 focus:ring-violet-500/10"
+                className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-[0.8rem] text-foreground outline-none placeholder:text-muted-foreground focus:border-violet-500/25 focus:ring-1 focus:ring-violet-500/10"
               />
             </div>
 
@@ -229,7 +232,7 @@ export default function CollectionView() {
             <div className="flex-1 overflow-auto px-6 py-2 space-y-1.5">
               {availablePrompts.filter(p => !addSearch || p.title.toLowerCase().includes(addSearch.toLowerCase())).length === 0 ? (
                 <div className="py-10 text-center">
-                  <p className="text-sm text-zinc-500">{addSearch ? "Ничего не найдено" : "Все промпты уже в коллекциях"}</p>
+                  <p className="text-sm text-muted-foreground">{addSearch ? "Ничего не найдено" : "Все промпты уже в коллекциях"}</p>
                 </div>
               ) : (
                 availablePrompts.filter(p => !addSearch || p.title.toLowerCase().includes(addSearch.toLowerCase())).map((p) => (
@@ -239,22 +242,22 @@ export default function CollectionView() {
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all ${
                       selected.has(p.id)
                         ? "bg-violet-500/10 ring-1 ring-violet-500/20"
-                        : "hover:bg-white/[0.03]"
+                        : "hover:bg-muted"
                     }`}
                   >
                     <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-all ${
                       selected.has(p.id)
                         ? "bg-violet-500 text-white"
-                        : "border border-white/10 bg-white/[0.03]"
+                        : "border border-border bg-muted/30"
                     }`}>
                       {selected.has(p.id) && <Check className="h-3 w-3" />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[0.82rem] font-medium text-white">{p.title}</p>
-                      <p className="mt-0.5 truncate text-[0.72rem] text-zinc-500">{p.content}</p>
+                      <p className="truncate text-[0.82rem] font-medium text-foreground">{p.title}</p>
+                      <p className="mt-0.5 truncate text-[0.72rem] text-muted-foreground">{p.content}</p>
                     </div>
                     {p.model && (
-                      <span className="shrink-0 text-[0.65rem] text-zinc-600">{p.model}</span>
+                      <span className="shrink-0 text-[0.65rem] text-muted-foreground">{p.model}</span>
                     )}
                   </button>
                 ))
@@ -262,11 +265,10 @@ export default function CollectionView() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-2 border-t border-white/[0.04] px-6 py-4">
+            <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
               <button
                 onClick={() => { setAddDialogOpen(false); setAddSearch("") }}
-                className="flex h-9 items-center rounded-lg px-4 text-[0.8rem] text-zinc-500 transition-all hover:text-zinc-300"
-                style={{ border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}
+                className="flex h-9 items-center rounded-lg px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-foreground border border-border bg-card"
               >
                 Отмена
               </button>

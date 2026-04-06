@@ -48,6 +48,7 @@ export function useCreatePrompt() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["prompts"] })
       qc.invalidateQueries({ queryKey: ["collections"] })
+      qc.invalidateQueries({ queryKey: ["tags"] })
     },
   })
 }
@@ -83,6 +84,9 @@ export function useToggleFavorite() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api<Prompt>(`/prompts/${id}/favorite`, { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["prompts"] }),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ["prompts"] })
+      qc.invalidateQueries({ queryKey: ["prompt", id] })
+    },
   })
 }

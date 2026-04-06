@@ -10,6 +10,7 @@ type TeamRepository interface {
 	CreateWithOwner(ctx context.Context, team *models.Team, ownerUserID uint) error
 	GetBySlug(ctx context.Context, slug string) (*models.Team, error)
 	ListByUserID(ctx context.Context, userID uint) ([]models.Team, error)
+	ListByUserIDWithRolesAndCounts(ctx context.Context, userID uint) ([]models.TeamWithRoleAndCount, error)
 	Update(ctx context.Context, team *models.Team) error
 	Delete(ctx context.Context, id uint) error
 	GetMember(ctx context.Context, teamID, userID uint) (*models.TeamMember, error)

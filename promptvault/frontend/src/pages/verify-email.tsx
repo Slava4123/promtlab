@@ -97,11 +97,11 @@ export default function VerifyEmail() {
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10">
           <MailCheck className="h-6 w-6 text-violet-400" />
         </div>
-        <h1 className="text-xl font-semibold text-white">Подтвердите email</h1>
-        <p className="text-sm text-zinc-500">
+        <h1 className="text-xl font-semibold text-foreground">Подтвердите email</h1>
+        <p className="text-sm text-muted-foreground">
           Мы отправили 6-значный код на
           <br />
-          <span className="font-medium text-zinc-300">{emailFromQuery}</span>
+          <span className="font-medium text-foreground">{emailFromQuery}</span>
         </p>
       </div>
 
@@ -123,7 +123,7 @@ export default function VerifyEmail() {
               value={digit}
               onChange={(e) => handleChange(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(i, e)}
-              className="h-12 w-11 text-center text-lg font-semibold border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="h-12 w-11 text-center text-lg font-semibold border-border bg-background focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             />
           ))}
         </div>
@@ -138,14 +138,14 @@ export default function VerifyEmail() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-zinc-500">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Не пришёл код?{" "}
         {cooldown > 0 ? (
-          <span className="text-zinc-600">Отправить заново ({cooldown}с)</span>
+          <span className="text-muted-foreground">Отправить заново ({cooldown}с)</span>
         ) : (
           <button
             onClick={handleResend}
-            className="font-medium text-zinc-200 underline underline-offset-4 transition-colors hover:text-white"
+            className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-foreground"
           >
             Отправить заново
           </button>

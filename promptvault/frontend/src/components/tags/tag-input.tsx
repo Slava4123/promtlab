@@ -77,8 +77,7 @@ export function TagInput({ selectedTagIds, onChange }: TagInputProps) {
   return (
     <div ref={containerRef} className="relative">
       <div
-        className="flex flex-wrap items-center gap-1.5 rounded-lg px-3 py-2 min-h-[40px]"
-        style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.025)" }}
+        className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 min-h-[40px]"
         onClick={() => setOpen(true)}
       >
         {selectedTags.map((tag) => (
@@ -106,21 +105,20 @@ export function TagInput({ selectedTagIds, onChange }: TagInputProps) {
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={selectedTags.length === 0 ? "Добавить теги..." : ""}
-          className="flex-1 min-w-[80px] bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+          className="flex-1 min-w-[80px] bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
       </div>
 
       {open && (filtered.length > 0 || (input.trim() && !exactMatch)) && (
         <div
-          className="absolute z-50 mt-1 w-full overflow-y-auto rounded-lg py-1 shadow-xl"
-          style={{ border: "1px solid rgba(255,255,255,0.08)", background: "#161618", maxHeight: "240px" }}
+          className="absolute z-50 mt-1 w-full overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-xl" style={{ maxHeight: "240px" }}
         >
           {filtered.map((tag) => (
             <button
               key={tag.id}
               type="button"
               onClick={() => addTag(tag.id)}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-[0.8rem] text-zinc-300 transition-colors hover:bg-white/[0.04]"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-[0.8rem] text-foreground transition-colors hover:bg-muted"
             >
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -134,7 +132,7 @@ export function TagInput({ selectedTagIds, onChange }: TagInputProps) {
               type="button"
               onClick={handleCreate}
               disabled={createTag.isPending}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-[0.8rem] text-violet-400 transition-colors hover:bg-white/[0.04]"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-[0.8rem] text-violet-400 transition-colors hover:bg-muted"
             >
               <Plus className="h-3.5 w-3.5" />
               Создать «{input.trim()}»

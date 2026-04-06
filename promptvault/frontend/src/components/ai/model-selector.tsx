@@ -38,7 +38,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
 
   if (isLoading) {
     return (
-      <div className="flex h-8 items-center px-2.5 text-[0.78rem] text-zinc-600">
+      <div className="flex h-8 items-center px-2.5 text-[0.78rem] text-muted-foreground">
         Загрузка моделей...
       </div>
     )

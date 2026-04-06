@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { setAccessToken } from "@/api/client"
+import { setAccessToken, clearTokens } from "@/api/client"
 import { useAuthStore } from "@/stores/auth-store"
 
 export default function OAuthCallback() {
@@ -19,7 +19,7 @@ export default function OAuthCallback() {
       setAccessToken(accessToken)
       fetchMe()
         .then(() => navigate("/dashboard", { replace: true }))
-        .catch(() => navigate("/sign-in", { replace: true }))
+        .catch(() => { clearTokens(); navigate("/sign-in", { replace: true }) })
     } else {
       navigate("/sign-in", { replace: true })
     }
@@ -27,7 +27,7 @@ export default function OAuthCallback() {
 
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <p className="text-sm text-zinc-500">Авторизация...</p>
+      <p className="text-sm text-muted-foreground">Авторизация...</p>
     </div>
   )
 }

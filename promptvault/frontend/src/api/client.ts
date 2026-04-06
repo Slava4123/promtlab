@@ -1,5 +1,14 @@
 import type { TokenPair } from "./types"
 
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+  }
+}
+
 const API_BASE = "/api"
 
 let accessToken: string | null = null
@@ -40,7 +49,7 @@ async function refreshAccessToken(): Promise<void> {
 
   if (!res.ok) {
     clearTokens()
-    throw new Error("refresh failed")
+    throw new Error("Сессия истекла")
   }
 
   const tokens: TokenPair = await res.json()
@@ -67,20 +76,21 @@ export async function api<T>(
 
   let res = await fetch(url, { ...options, headers, credentials })
 
-  // Auto-refresh на 401
-  if (res.status === 401) {
+  // Auto-refresh на 401 (только для защищённых эндпоинтов, не для login/register/refresh)
+  const isAuthEndpoint = path.startsWith("/auth/login") || path.startsWith("/auth/register") || path.startsWith("/auth/refresh")
+  if (res.status === 401 && !isAuthEndpoint) {
     try {
       await ensureFreshToken()
       headers["Authorization"] = `Bearer ${accessToken}`
       res = await fetch(url, { ...options, headers, credentials })
     } catch {
-      throw new Error("unauthorized")
+      throw new Error("Сессия истекла, войдите снова")
     }
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: "request failed" }))
-    throw new Error(body.error || `HTTP ${res.status}`)
+    const body = await res.json().catch(() => ({ error: "Ошибка запроса" }))
+    throw new ApiError(body.error || `Ошибка сервера (${res.status})`, res.status)
   }
 
   if (res.status === 204) {

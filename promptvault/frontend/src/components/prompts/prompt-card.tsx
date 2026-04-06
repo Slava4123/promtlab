@@ -27,8 +27,8 @@ export function PromptCard({ prompt, onToggleFavorite, onClick, style }: PromptC
     <div
       className={`group cursor-pointer rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 ${
         prompt.favorite
-          ? "border-yellow-500/[0.08] bg-[#0f0f12] hover:border-yellow-500/[0.15] hover:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5),0_0_0_1px_rgba(234,179,8,0.1)]"
-          : "border-white/[0.04] bg-[#0f0f12] hover:border-white/[0.08] hover:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5),0_0_0_1px_rgba(139,92,246,0.08)]"
+          ? "border-yellow-500/15 bg-card hover:border-yellow-500/25 hover:shadow-lg"
+          : "border-border bg-card hover:border-violet-500/15 hover:shadow-lg"
       }`}
       onClick={() => onClick(prompt.id)}
       style={style}
@@ -38,12 +38,12 @@ export function PromptCard({ prompt, onToggleFavorite, onClick, style }: PromptC
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/[0.08] ring-1 ring-violet-500/10">
           <FileText className="h-3.5 w-3.5 text-violet-400" />
         </div>
-        <h3 className="min-w-0 flex-1 truncate text-[0.82rem] font-medium text-white">
+        <h3 className="min-w-0 flex-1 truncate text-[0.82rem] font-medium text-foreground">
           {prompt.title}
         </h3>
         <button
           className={`shrink-0 transition-opacity ${
-            prompt.favorite ? "text-yellow-500" : "text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-yellow-400"
+            prompt.favorite ? "text-yellow-500" : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-yellow-400"
           }`}
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(prompt.id) }}
         >
@@ -52,7 +52,7 @@ export function PromptCard({ prompt, onToggleFavorite, onClick, style }: PromptC
       </div>
 
       {/* Content preview */}
-      <p className="mb-3 line-clamp-2 text-[0.75rem] leading-relaxed text-zinc-500">
+      <p className="mb-3 line-clamp-2 text-[0.75rem] leading-relaxed text-muted-foreground">
         {prompt.content}
       </p>
 
@@ -75,7 +75,7 @@ export function PromptCard({ prompt, onToggleFavorite, onClick, style }: PromptC
       )}
 
       {/* Footer */}
-      <div className="flex items-center gap-2 text-[10px] text-zinc-600">
+      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
         {prompt.model && (
           <span className="flex items-center gap-1">
             <span className={`h-1.5 w-1.5 rounded-full ${getModelDot(prompt.model)}`} />
@@ -93,7 +93,7 @@ export function PromptCard({ prompt, onToggleFavorite, onClick, style }: PromptC
 
 export function PromptCardSkeleton() {
   return (
-    <div className="rounded-xl border border-white/[0.04] bg-[#0f0f12] p-4">
+    <div className="rounded-xl border border-border bg-card p-4">
       <div className="mb-3 flex items-center gap-2.5">
         <div className="h-8 w-8 animate-pulse rounded-lg bg-white/[0.04]" />
         <div className="h-4 flex-1 animate-pulse rounded-md bg-white/[0.04]" />
