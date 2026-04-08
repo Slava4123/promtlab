@@ -1,13 +1,16 @@
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { Plus, ArrowLeft, FileText, FolderOpen, PackagePlus, Check, Loader2, Search } from "lucide-react"
 import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
 
 import { PromptCard, PromptCardSkeleton } from "@/components/prompts/prompt-card"
+import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
 import { useCollection } from "@/hooks/use-collections"
-import { usePrompts, useToggleFavorite, useUpdatePrompt } from "@/hooks/use-prompts"
+import { usePrompts, useToggleFavorite, useUpdatePrompt, useIncrementUsage } from "@/hooks/use-prompts"
 import { useWorkspaceStore } from "@/stores/workspace-store"
+import { hasVariables } from "@/lib/template/parse"
+import type { Prompt } from "@/api/types"
 
 // Reuse ICON_MAP from collections page
 import {
@@ -35,6 +38,25 @@ export default function CollectionView() {
   const { data: allPromptsData } = usePrompts({ team_id: teamId })
   const toggleFav = useToggleFavorite()
   const updatePrompt = useUpdatePrompt()
+  const incrementUsage = useIncrementUsage()
+  const [usePromptModal, setUsePromptModal] = useState<Prompt | null>(null)
+
+  const handleUse = useCallback(
+    async (prompt: Prompt) => {
+      if (hasVariables(prompt.content)) {
+        setUsePromptModal(prompt)
+        return
+      }
+      try {
+        await navigator.clipboard.writeText(prompt.content)
+        incrementUsage.mutate(prompt.id)
+        toast.success("Скопировано")
+      } catch {
+        toast.error("Не удалось скопировать")
+      }
+    },
+    [incrementUsage],
+  )
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [addSearch, setAddSearch] = useState("")
@@ -192,9 +214,18 @@ export default function CollectionView() {
               prompt={prompt}
               onToggleFavorite={(id) => toggleFav.mutate(id)}
               onClick={(id) => navigate(`/prompts/${id}`)}
+              onUse={handleUse}
             />
           ))}
         </div>
+      )}
+
+      {usePromptModal && (
+        <UsePromptDialog
+          prompt={usePromptModal}
+          open
+          onOpenChange={(o) => !o && setUsePromptModal(null)}
+        />
       )}
 
       {/* Модалка "Добавить из списка" */}

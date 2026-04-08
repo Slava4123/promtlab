@@ -1,4 +1,5 @@
 import type { TokenPair } from "./types"
+import { captureException } from "@/lib/sentry"
 
 export class ApiError extends Error {
   status: number
@@ -90,7 +91,18 @@ export async function api<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Ошибка запроса" }))
-    throw new ApiError(body.error || `Ошибка сервера (${res.status})`, res.status)
+    const apiError = new ApiError(body.error || `Ошибка сервера (${res.status})`, res.status)
+    // Капчурим только 5xx — это server errors, которые разработчик должен увидеть.
+    // 4xx обычно user input errors (validation, auth, not found) — не шлём noise.
+    if (res.status >= 500) {
+      captureException(apiError, {
+        tags: {
+          api_status: String(res.status),
+          api_path: path,
+        },
+      })
+    }
+    throw apiError
   }
 
   if (res.status === 204) {

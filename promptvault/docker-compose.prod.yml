@@ -1,5 +1,6 @@
 services:
   api:
+    image: ghcr.io/slava4123/promtlab-api:latest
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
@@ -20,14 +21,16 @@ services:
         max-file: "3"
 
   frontend:
+    image: ghcr.io/slava4123/promtlab-frontend:latest
     build:
       context: .
       dockerfile: Dockerfile.frontend-nginx
       args:
         - DOMAIN=${DOMAIN}
+        - SENTRY_DOMAIN=${SENTRY_DOMAIN}
     environment:
       - CERTBOT_EMAIL=${CERTBOT_EMAIL}
-      - CERTBOT_DOMAINS=${DOMAIN}
+      - CERTBOT_DOMAINS=${DOMAIN},${SENTRY_DOMAIN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -50,8 +53,77 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # GlitchTip: self-hosted Sentry-compatible error tracking.
+  # Docs: https://glitchtip.com/documentation/install
+  glitchtip-web:
+    image: glitchtip/glitchtip:latest
+    env_file: .env.glitchtip
+    volumes:
+      - ./ca.crt:/app/ca.crt:ro
+      - glitchtip-uploads:/code/uploads
+    networks:
+      - app
+    # Bind к localhost — наружу доступ только через nginx reverse proxy.
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    # Memory limit — soft cap, upgrade VPS если нагрузка растёт.
+    # 768 MB комфортно для gunicorn workers=3 + Django ORM caches.
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - glitchtip-valkey
+
+  # GlitchTip worker совмещает celery worker + beat через run-celery-with-beat.sh
+  glitchtip-worker:
+    image: glitchtip/glitchtip:latest
+    command: ./bin/run-celery-with-beat.sh
+    env_file: .env.glitchtip
+    volumes:
+      - ./ca.crt:/app/ca.crt:ro
+      - glitchtip-uploads:/code/uploads
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - glitchtip-valkey
+
+  # Valkey — Redis-compatible, lighter footprint (Valkey 8+ fork Redis 7.2)
+  glitchtip-valkey:
+    image: valkey/valkey:8-alpine
+    command: valkey-server --save 60 1 --loglevel warning --maxmemory 128mb --maxmemory-policy allkeys-lru
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   app:
 
 volumes:
   letsencrypt:
+  glitchtip-uploads:

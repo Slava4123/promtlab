@@ -80,6 +80,20 @@ export function useDeletePrompt() {
   })
 }
 
+export function useIncrementUsage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => apiVoid(`/prompts/${id}/use`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["prompts"] })
+    },
+    onError: (err) => {
+      // Fire-and-forget: log but do not surface to user — copy already succeeded.
+      console.error("Failed to increment usage", err)
+    },
+  })
+}
+
 export function useToggleFavorite() {
   const qc = useQueryClient()
   return useMutation({

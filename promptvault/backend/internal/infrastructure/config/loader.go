@@ -66,6 +66,12 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Sentry safety — если включён, DSN обязателен (иначе silent no-op в SDK,
+	// что маскирует misconfiguration). Проверка применяется во всех env.
+	if cfg.Sentry.Enabled && cfg.Sentry.Dsn == "" {
+		return nil, fmt.Errorf("SENTRY_ENABLED=true but SENTRY_DSN is empty")
+	}
+
 	return cfg, nil
 }
 
@@ -105,6 +111,14 @@ func defaults() map[string]any {
 			"openrouter_base_url":      "https://openrouter.ai/api/v1",
 			"openrouter_timeout_seconds": 300,
 			"rate_limit_rpm":           10,
+		},
+		"sentry": map[string]any{
+			"enabled":            false,
+			"dsn":                "",
+			"environment":        "development",
+			"release":            "",
+			"traces_sample_rate": 0.0,
+			"debug":              false,
 		},
 	}
 }

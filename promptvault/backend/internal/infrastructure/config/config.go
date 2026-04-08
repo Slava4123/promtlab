@@ -7,4 +7,5 @@ type Config struct {
 	OAuth    OAuthConfig    `koanf:"oauth"`
 	SMTP     SMTPConfig     `koanf:"smtp"`
 	AI       AIConfig       `koanf:"ai"`
+	Sentry   SentryConfig   `koanf:"sentry"`
 }

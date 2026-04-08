@@ -18,6 +18,14 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // "hidden" — source maps генерируются в dist/assets/*.map, но bundle
+    // НЕ содержит ссылки //# sourceMappingURL. Это значит:
+    // 1. Браузеры не загружают maps автоматически (защита от утечек исходников)
+    // 2. sentry-cli загружает maps в GlitchTip по артефактам release
+    // 3. GlitchTip матчит maps к stack traces через release + file name
+    sourcemap: "hidden",
+  },
   test: {
     globals: true,
     environment: "jsdom",

@@ -1,10 +1,11 @@
-import { Star, FileText } from "lucide-react"
+import { Star, FileText, Copy } from "lucide-react"
 import type { Prompt } from "@/api/types"
 
 interface PromptCardProps {
   prompt: Prompt
   onToggleFavorite: (id: number) => void
   onClick: (id: number) => void
+  onUse?: (prompt: Prompt) => void
   style?: React.CSSProperties
 }
 
@@ -22,7 +23,7 @@ function getModelDot(model?: string) {
   return modelDot.default
 }
 
-export function PromptCard({ prompt, onToggleFavorite, onClick, style }: PromptCardProps) {
+export function PromptCard({ prompt, onToggleFavorite, onClick, onUse, style }: PromptCardProps) {
   return (
     <div
       className={`group cursor-pointer rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 ${
@@ -41,7 +42,20 @@ export function PromptCard({ prompt, onToggleFavorite, onClick, style }: PromptC
         <h3 className="min-w-0 flex-1 truncate text-[0.82rem] font-medium text-foreground">
           {prompt.title}
         </h3>
+        {onUse && (
+          <button
+            type="button"
+            title="Использовать промпт"
+            aria-label="Использовать промпт"
+            className="shrink-0 text-muted-foreground transition-opacity hover:text-violet-400 sm:opacity-0 sm:group-hover:opacity-100"
+            onClick={(e) => { e.stopPropagation(); onUse(prompt) }}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
+          type="button"
+          aria-label={prompt.favorite ? "Убрать из избранного" : "Добавить в избранное"}
           className={`shrink-0 transition-opacity ${
             prompt.favorite ? "text-yellow-500" : "text-muted-foreground sm:opacity-0 sm:group-hover:opacity-100 hover:text-yellow-400"
           }`}

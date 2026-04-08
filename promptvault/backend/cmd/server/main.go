@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
@@ -19,6 +20,7 @@ import (
 	"promptvault/internal/infrastructure/postgres"
 	corsmw "promptvault/internal/middleware/cors"
 	loggermw "promptvault/internal/middleware/logger"
+	sentrymw "promptvault/internal/middleware/sentry"
 )
 
 func main() {
@@ -36,6 +38,36 @@ func main() {
 	}
 	slog.SetDefault(slog.New(handler))
 
+	// Sentry init — только если явно включён. fail-open: если GlitchTip
+	// недоступен, SDK логирует ошибку и продолжает работу в no-op режиме.
+	if cfg.Sentry.Enabled {
+		if err := sentry.Init(sentry.ClientOptions{
+			Dsn:              cfg.Sentry.Dsn,
+			Environment:      cfg.Sentry.Environment,
+			Release:          cfg.Sentry.Release,
+			AttachStacktrace: true,
+			TracesSampleRate: cfg.Sentry.TracesSampleRate,
+			Debug:            cfg.Sentry.Debug,
+			// BeforeSend — скраббинг PII: удаляем Authorization header и cookies
+			// из events, чтобы JWT токены и session cookies не утекали в GlitchTip.
+			BeforeSend: func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
+				if event.Request != nil {
+					if event.Request.Headers != nil {
+						delete(event.Request.Headers, "Authorization")
+						delete(event.Request.Headers, "Cookie")
+					}
+					event.Request.Cookies = ""
+				}
+				return event
+			},
+		}); err != nil {
+			slog.Error("sentry.init failed", "error", err)
+			// Не падаем — backend должен работать даже без error tracking.
+		} else {
+			slog.Info("sentry.init", "environment", cfg.Sentry.Environment, "release", cfg.Sentry.Release, "traces_sample_rate", cfg.Sentry.TracesSampleRate)
+		}
+	}
+
 	db, err := postgres.Connect(cfg.Database, cfg.Server.IsDev())
 	if err != nil {
 		slog.Error("database connection failed", "error", err)
@@ -50,6 +82,13 @@ func main() {
 	application := app.New(cfg, db)
 
 	r := chi.NewRouter()
+	// Sentry middleware ПЕРВЫМ — ловит panics через Repanic:true и прокидывает
+	// их дальше в chimw.Recoverer, который возвращает 500. Порядок:
+	//   sentry (capture) → logger → Recoverer (respond 500) → RequestID → CORS
+	// No-op если sentry.Init не был вызван.
+	if cfg.Sentry.Enabled {
+		r.Use(sentrymw.Handler())
+	}
 	r.Use(loggermw.Middleware)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
@@ -101,6 +140,12 @@ func main() {
 	}
 
 	application.Shutdown(15 * time.Second)
+
+	// Flush отправляет все pending Sentry events перед exit. Если Sentry не
+	// был инициализирован — no-op.
+	if cfg.Sentry.Enabled {
+		sentry.Flush(2 * time.Second)
+	}
 
 	slog.Info("server stopped")
 }

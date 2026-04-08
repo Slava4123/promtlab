@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/getsentry/sentry-go"
+
 	"promptvault/internal/delivery/http/utils"
 )
 
@@ -60,5 +62,35 @@ func Respond(w http.ResponseWriter, err error) {
 	}
 
 	slog.Error("unhandled error", "error", err)
+	utils.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+}
+
+// RespondWithRequest — вариант Respond с доступом к *http.Request для
+// отправки ошибок в Sentry через per-request Hub. Используется там, где
+// важна атрибуция к user.id (protected endpoints с Sentry UserContext middleware).
+//
+// Захватываются только:
+//   - AppError с wrapped Err (5xx по своей природе — internal failures);
+//   - unhandled errors (не AppError — definite bug).
+//
+// 4xx AppError без Err не захватываются — это обычно user errors (validation,
+// not found), не имеет смысла алертить.
+func RespondWithRequest(w http.ResponseWriter, r *http.Request, err error) {
+	var appErr *AppError
+	if stderrors.As(err, &appErr) {
+		if appErr.Err != nil {
+			slog.Error("request error", "error", appErr.Err, "message", appErr.Message)
+			if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
+				hub.CaptureException(appErr.Err)
+			}
+		}
+		utils.WriteJSON(w, appErr.Code, map[string]string{"error": appErr.Message})
+		return
+	}
+
+	slog.Error("unhandled error", "error", err)
+	if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
+		hub.CaptureException(err)
+	}
 	utils.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 }

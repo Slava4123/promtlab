@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -11,12 +13,14 @@ import (
 	pgrepo "promptvault/internal/infrastructure/postgres/repository"
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/middleware/ratelimit"
+	sentrymw "promptvault/internal/middleware/sentry"
 
 	aihttp "promptvault/internal/delivery/http/ai"
 	authhttp "promptvault/internal/delivery/http/auth"
 	collhttp "promptvault/internal/delivery/http/collection"
 	prompthttp "promptvault/internal/delivery/http/prompt"
 	searchhttp "promptvault/internal/delivery/http/search"
+	starterhttp "promptvault/internal/delivery/http/starter"
 	taghttp "promptvault/internal/delivery/http/tag"
 	teamhttp "promptvault/internal/delivery/http/team"
 	userhttp "promptvault/internal/delivery/http/user"
@@ -26,6 +30,7 @@ import (
 	colluc "promptvault/internal/usecases/collection"
 	promptuc "promptvault/internal/usecases/prompt"
 	searchuc "promptvault/internal/usecases/search"
+	starteruc "promptvault/internal/usecases/starter"
 	taguc "promptvault/internal/usecases/tag"
 	teamuc "promptvault/internal/usecases/team"
 	useruc "promptvault/internal/usecases/user"
@@ -44,6 +49,7 @@ type App struct {
 	searchHandler     *searchhttp.Handler
 	teamHandler       *teamhttp.Handler
 	userHandler       *userhttp.Handler
+	starterHandler    *starterhttp.Handler
 }
 
 func New(cfg *config.Config, db *gorm.DB) *App {
@@ -56,6 +62,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	tagRepo := pgrepo.NewTagRepository(db)
 	collectionRepo := pgrepo.NewCollectionRepository(db)
 	versionRepo := pgrepo.NewVersionRepository(db)
+	starterRepo := pgrepo.NewStarterRepository(db)
 
 	authSvc := authuc.NewService(cfg, userRepo, linkedAccountRepo, verificationRepo, emailSvc)
 	oauthSvc := authuc.NewOAuthService(cfg, userRepo, linkedAccountRepo, authSvc)
@@ -75,6 +82,16 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	// Search
 	searchSvc := searchuc.NewService(promptRepo, collectionRepo, tagRepo)
 
+	// Starter templates (onboarding wizard)
+	starterSvc, err := starteruc.NewService(starterRepo, userRepo)
+	if err != nil {
+		// Fail-fast: catalog.json встроен в бинарник, ошибка парсинга = bug в
+		// коде или JSON. Логируем структурно (slog → Sentry/JSON output) перед
+		// паникой, чтобы alert-ы знали почему сервис не стартанул.
+		slog.Error("starter.catalog.load_failed", "error", err)
+		panic(fmt.Sprintf("starter catalog load failed: %v", err))
+	}
+
 	return &App{
 		cfg:               cfg,
 		authSvc:           authSvc,
@@ -88,6 +105,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		searchHandler:     searchhttp.NewHandler(searchSvc),
 		teamHandler:       teamhttp.NewHandler(teamSvc),
 		userHandler:       userhttp.NewHandler(useruc.NewService(userRepo)),
+		starterHandler:    starterhttp.NewHandler(starterSvc),
 	}
 }
 
@@ -123,6 +141,10 @@ func (a *App) MountRoutes(r chi.Router) {
 		// protected
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
+			// UserContext вешает sentry.User{ID} на Hub из JWT claims, чтобы
+			// ошибки внутри protected handlers атрибутировались к конкретному
+			// юзеру в GlitchTip UI. No-op если Sentry не инициализирован.
+			r.Use(sentrymw.UserContext)
 			r.Use(ratelimit.ByIP(60))
 			r.Get("/auth/me", a.authHandler.Me)
 			r.Post("/auth/set-password/initiate", a.authHandler.InitiateSetPassword)
@@ -199,6 +221,12 @@ func (a *App) MountRoutes(r chi.Router) {
 				r.Post("/{id}/use", a.promptHandler.IncrementUsage)
 				r.Get("/{id}/versions", a.promptHandler.ListVersions)
 				r.Post("/{id}/revert/{versionId}", a.promptHandler.RevertToVersion)
+			})
+
+			// Starter templates (onboarding wizard)
+			r.Route("/starter", func(r chi.Router) {
+				r.Get("/catalog", a.starterHandler.Catalog)
+				r.Post("/complete", a.starterHandler.Complete)
 			})
 		})
 	})

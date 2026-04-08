@@ -28,8 +28,18 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     env_file: .env.dev
+    environment:
+      # CHOKIDAR polling needed for reliable file watching on Windows/WSL bind mounts.
+      - CHOKIDAR_USEPOLLING=true
     ports:
       - "5173:5173"
+    volumes:
+      # Bind-mount the whole frontend directory so host edits trigger Vite HMR.
+      - ./frontend:/app
+      # Anonymous volume shields node_modules installed inside the image from
+      # being overwritten by the bind mount above (host may not have them, or
+      # may have platform-specific binaries for the host OS, not alpine).
+      - /app/node_modules
     depends_on:
       - api
 

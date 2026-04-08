@@ -3,14 +3,17 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, Search, ChevronDown, History } from "lucide-react"
+import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, Search, ChevronDown, History, Copy } from "lucide-react"
 import { toast } from "sonner"
 
-import { usePrompt, useCreatePrompt, useUpdatePrompt } from "@/hooks/use-prompts"
+import { usePrompt, useCreatePrompt, useUpdatePrompt, useIncrementUsage } from "@/hooks/use-prompts"
 import { useCollections } from "@/hooks/use-collections"
 import { useWorkspaceStore } from "@/stores/workspace-store"
 import { TagInput } from "@/components/tags/tag-input"
 import { AIPanel } from "@/components/ai/ai-panel"
+import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
+import { hasVariables } from "@/lib/template/parse"
+import type { Prompt } from "@/api/types"
 
 const promptSchema = z.object({
   title: z.string().min(1, "Введите название").max(300),
@@ -33,11 +36,13 @@ export default function PromptEditor() {
   const { data: collections } = useCollections(teamId)
   const createPrompt = useCreatePrompt()
   const updatePrompt = useUpdatePrompt()
+  const incrementUsage = useIncrementUsage()
   const [collectionIds, setCollectionIds] = useState<number[]>(preselectedCollectionId ? [preselectedCollectionId] : [])
   const [tagIds, setTagIds] = useState<number[]>([])
   const [collSearch, setCollSearch] = useState("")
   const [collExpanded, setCollExpanded] = useState(false)
   const [changeNote, setChangeNote] = useState("")
+  const [usePromptModal, setUsePromptModal] = useState<Prompt | null>(null)
 
   const {
     register,
@@ -319,11 +324,33 @@ export default function PromptEditor() {
           >
             Отмена
           </button>
+          {isEdit && existing && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (hasVariables(existing.content)) {
+                  setUsePromptModal(existing)
+                  return
+                }
+                try {
+                  await navigator.clipboard.writeText(existing.content)
+                  incrementUsage.mutate(existing.id)
+                  toast.success("Скопировано")
+                } catch {
+                  toast.error("Не удалось скопировать")
+                }
+              }}
+              className="ml-auto flex h-9 items-center gap-1.5 rounded-lg border border-violet-500/25 bg-violet-500/10 px-4 text-[0.8rem] font-medium text-violet-300 transition-all hover:bg-violet-500/15 hover:text-violet-200"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Использовать
+            </button>
+          )}
           {isEdit && (
             <button
               type="button"
               onClick={() => navigate(`/prompts/${promptId}/versions`)}
-              className="ml-auto flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-violet-400"
+              className={`flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-violet-400 ${existing ? "" : "ml-auto"}`}
             >
               <History className="h-3.5 w-3.5" />
               История версий
@@ -331,6 +358,14 @@ export default function PromptEditor() {
           )}
         </div>
       </form>
+
+      {usePromptModal && (
+        <UsePromptDialog
+          prompt={usePromptModal}
+          open
+          onOpenChange={(o) => !o && setUsePromptModal(null)}
+        />
+      )}
     </div>
   )
 }

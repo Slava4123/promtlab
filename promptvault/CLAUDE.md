@@ -13,6 +13,7 @@
 - **Логи**: slog (text в dev, JSON в prod)
 - **Профилирование**: net/http/pprof (только в dev)
 - **Валидация**: go-playground/validator/v10
+- **Error tracking**: sentry-go v0.44+ с GlitchTip self-hosted (Sentry-compatible API), через feature flag `SENTRY_ENABLED`
 
 ### Frontend
 - **React 19.2** + Vite 8 (Rolldown) + TypeScript
@@ -20,6 +21,7 @@
 - **State**: TanStack Query v5 (серверный) + Zustand v5 с devtools (клиентский)
 - **Forms**: React Hook Form + Zod
 - **Routing**: React Router 7.13
+- **Error tracking**: @sentry/react v10 (с GlitchTip backend), generic `browserTracingIntegration()` (v7 router-specific не используется), через `VITE_SENTRY_ENABLED` feature flag
 
 ### Deploy
 - Docker Compose: отдельные `docker-compose.dev.yml` и `docker-compose.prod.yml`
@@ -63,6 +65,7 @@ backend/internal/
 │   │   ├── jwt.go                          #   JWTConfig
 │   │   ├── oauth.go                        #   OAuthConfig + OAuthProvider
 │   │   ├── ai.go                           #   AIConfig + ModelConfig
+│   │   ├── sentry.go                       #   SentryConfig { Enabled, Dsn, Environment, Release, TracesSampleRate, Debug }
 │   │   └── loader.go                       #   Load() + defaults
 │   └── postgres/
 │       ├── postgres.go                     #   GORM connection (принимает DatabaseConfig)
@@ -97,8 +100,11 @@ backend/internal/
     │   └── constants.go                    #     UserIDKey, BearerScheme
     ├── cors/
     │   └── cors.go                         #   CORS middleware
-    └── ratelimit/
-        └── ratelimit.go                    #   Rate limiting по IP (sliding window)
+    ├── ratelimit/
+    │   └── ratelimit.go                    #   Rate limiting по IP (sliding window)
+    └── sentry/                             #   Sentry/GlitchTip error tracking
+        └── sentry.go                       #     Handler() — sentryhttp обёртка
+                                            #     UserContext — вешает sentry.User{ID} из JWT claims
 ```
 
 ## Правила разработки
@@ -108,6 +114,7 @@ backend/internal/
 - Никаких западных SaaS (без Clerk, без Vercel hosting) — self-hosted
 - AI-ключ серверный: один `OPENROUTER_API_KEY` в `.env`, пользователи НЕ вводят свои ключи
 - Все переменные окружения через `.env` → koanf, Docker-compose только `env_file: .env`
+- Error tracking: GlitchTip self-hosted (НЕ Sentry.io — заблокирован для РФ с сентября 2024), SDK совместим с Sentry (drop-in replacement через DSN swap при необходимости)
 
 ### Backend — Go
 - **Каждая фича = отдельный пакет** в usecases/, delivery/http/, middleware/
@@ -138,6 +145,7 @@ backend/internal/
 - Команды с ролями: owner / editor / viewer
 - Версионирование промптов: каждое изменение = новая PromptVersion
 - SSE streaming для AI-ответов
+- Error tracking: GlitchTip (Sentry-compatible) self-hosted в `docker-compose.prod.yml` (web+worker+valkey), external Postgres (отдельная БД `glitchtip` на том же managed инстансе), source maps upload через `sentry-cli` в GitHub Actions (НЕ `@sentry/vite-plugin` — Vite 8 slowdown), feature flag `SENTRY_ENABLED` для gradual rollout, `RespondWithRequest(w,r,err)` в `delivery/http/errors` для захвата 5xx с user.id из Sentry Hub
 - OAuth Account Linking: HMAC-подписанная cookie (oauth_link) + PKCE (S256) на всех провайдерах
 - Установка пароля: двухшаговая через email-код (OAuth-юзеры)
 - Смена пароля: через старый пароль + email-уведомление

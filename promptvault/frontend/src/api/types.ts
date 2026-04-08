@@ -7,6 +7,7 @@ export interface User {
   email_verified: boolean
   has_password: boolean
   default_model: string
+  onboarding_completed_at?: string | null
 }
 
 export interface Tag {
@@ -168,4 +169,38 @@ export interface UserSearchResult {
   username: string
   avatar_url?: string
   email: string
+}
+
+// Starter templates (onboarding wizard)
+
+export interface StarterCategory {
+  id: string
+  name: string
+  description: string
+  icon: string
+  use_cases: string[]
+}
+
+export interface StarterTemplate {
+  id: string
+  category: string
+  title: string
+  content: string
+  model: string
+}
+
+export interface StarterCatalog {
+  version: number
+  lang: string
+  categories: StarterCategory[]
+  templates: StarterTemplate[]
+}
+
+export interface CompleteOnboardingRequest {
+  install: string[]
+}
+
+export interface CompleteOnboardingResponse {
+  installed: Prompt[]
+  onboarding_completed_at: string
 }

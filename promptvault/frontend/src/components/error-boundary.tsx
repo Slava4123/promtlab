@@ -1,4 +1,5 @@
-import { Component, type ReactNode } from "react"
+import { Component, type ErrorInfo, type ReactNode } from "react"
+import { captureException } from "@/lib/sentry"
 
 interface Props {
   children: ReactNode
@@ -17,6 +18,18 @@ export class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error }
+  }
+
+  // Отправляет необработанную React ошибку в Sentry/GlitchTip с componentStack.
+  // Noop если Sentry не инициализирован (SDK проверяет клиента внутри).
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    captureException(error, {
+      contexts: {
+        react: {
+          componentStack: errorInfo.componentStack,
+        },
+      },
+    })
   }
 
   render() {

@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { devtools } from "zustand/middleware"
 import { api, apiVoid, setTokens, clearTokens, ensureFreshToken } from "@/api/client"
 import type { User, AuthResponse } from "@/api/types"
+import { setSentryUser, clearSentryUser } from "@/lib/sentry"
 
 interface AuthState {
   user: User | null
@@ -29,6 +30,11 @@ export const useAuthStore = create<AuthState>()(
         })
         setTokens(data.tokens)
         set({ user: data.user, isAuthenticated: true })
+        setSentryUser({
+          id: data.user.id,
+          email: data.user.email,
+          username: data.user.username,
+        })
       },
 
       register: async (email, password, name) => {
@@ -46,6 +52,7 @@ export const useAuthStore = create<AuthState>()(
           // ignore — cookie очистится на сервере
         }
         clearTokens()
+        clearSentryUser()
         set({ user: null, isAuthenticated: false })
       },
 
@@ -60,6 +67,11 @@ export const useAuthStore = create<AuthState>()(
           await ensureFreshToken()
           const user = await api<User>("/auth/me")
           set({ user, isAuthenticated: true, isLoading: false })
+          setSentryUser({
+            id: user.id,
+            email: user.email,
+            username: user.username,
+          })
         } catch (err) {
           const msg = err instanceof Error ? err.message : ""
           const isAuthError = msg.includes("Сессия истекла") || msg.includes("unauthorized") || msg.includes("refresh failed") || msg.includes("invalid") || msg.includes("expired")

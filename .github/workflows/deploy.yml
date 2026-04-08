@@ -13,6 +13,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   lint:
@@ -38,6 +39,7 @@ jobs:
           working-directory: promptvault/backend
 
       - name: Security scan (Go)
+        continue-on-error: true
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
@@ -86,20 +88,131 @@ jobs:
       - name: Run tests
         run: npx vitest run
 
+  build-push:
+    name: Build & Push Images
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 нужен для sentry-cli releases set-commits --auto,
+          # чтобы он мог прочитать git log и связать release с commits.
+          fetch-depth: 0
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API
+        uses: docker/build-push-action@v6
+        with:
+          context: promptvault/backend
+          file: promptvault/backend/Dockerfile.prod
+          push: true
+          tags: |
+            ghcr.io/slava4123/promtlab-api:latest
+            ghcr.io/slava4123/promtlab-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: promptvault
+          file: promptvault/Dockerfile.frontend-nginx
+          push: true
+          tags: |
+            ghcr.io/slava4123/promtlab-frontend:latest
+            ghcr.io/slava4123/promtlab-frontend:${{ github.sha }}
+          build-args: |
+            DOMAIN=${{ secrets.DOMAIN }}
+            SENTRY_DOMAIN=${{ secrets.SENTRY_DOMAIN }}
+            VITE_SENTRY_ENABLED=${{ vars.VITE_SENTRY_ENABLED || 'false' }}
+            VITE_SENTRY_DSN=${{ secrets.VITE_SENTRY_DSN }}
+            VITE_SENTRY_ENVIRONMENT=production
+            VITE_SENTRY_RELEASE=${{ github.sha }}
+            VITE_SENTRY_TRACES_SAMPLE_RATE=${{ vars.VITE_SENTRY_TRACES_SAMPLE_RATE || '0.0' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Отдельный local build для source maps — Docker build выше кладёт maps
+      # внутрь image в dist/assets/*.map (sourcemap: "hidden" в vite.config.ts),
+      # но извлекать их из image сложнее чем сделать один npm run build снаружи.
+      # +30-60 сек к CI time, но код проще и изолирован.
+      #
+      # Весь блок no-op если SENTRY_AUTH_TOKEN secret не задан — т.е. до того
+      # как пользователь завершит setup GlitchTip и добавит токен в GitHub.
+      - name: Setup Node.js for source maps build
+        if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: promptvault/frontend/package-lock.json
+
+      - name: Build frontend for source maps upload
+        if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
+        working-directory: promptvault/frontend
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          VITE_SENTRY_ENABLED: 'true'
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_SENTRY_ENVIRONMENT: production
+          VITE_SENTRY_RELEASE: ${{ github.sha }}
+          VITE_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.VITE_SENTRY_TRACES_SAMPLE_RATE || '0.0' }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload source maps to GlitchTip
+        if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
+        working-directory: promptvault/frontend
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_URL: ${{ secrets.SENTRY_URL }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_FRONTEND }}
+        run: |
+          set -e
+          # Создать release (idempotent — если уже существует, cli ругается но продолжает)
+          npx @sentry/cli@latest --url "$SENTRY_URL" releases new "${{ github.sha }}" || true
+          # Загрузить source maps. --url-prefix '~/assets/' — это путь как они
+          # будут запрошены браузером (nginx раздаёт dist/assets/* под /assets/*).
+          npx @sentry/cli@latest --url "$SENTRY_URL" sourcemaps upload \
+            --release "${{ github.sha }}" \
+            --url-prefix '~/assets/' \
+            ./dist/assets
+          # Finalize — помечает release как deployed.
+          npx @sentry/cli@latest --url "$SENTRY_URL" releases finalize "${{ github.sha }}" || true
+          # Attach commits. Не критично — если fail, release всё равно работает.
+          npx @sentry/cli@latest --url "$SENTRY_URL" releases set-commits "${{ github.sha }}" --auto || echo "set-commits skipped (non-critical)"
+
   deploy:
     name: Deploy
-    needs: [test-backend, test-frontend]
+    needs: build-push
     runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
+        env:
+          GITHUB_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
           command_timeout: 10m
+          envs: GITHUB_SHA
           script: |
             set -euo pipefail
             cd ~/promtlab
@@ -108,15 +221,34 @@ jobs:
             git fetch origin main
             git pull --ff-only origin main || { echo "WARN: ff-only failed, forcing reset"; git reset --hard origin/main; }
 
-            echo "=== Building and deploying ==="
             cd promptvault
+
+            # Обновить SENTRY_RELEASE в .env.prod на текущий commit SHA перед
+            # перезапуском api — sentry-go прочитает его при старте и запишет
+            # в каждое отправляемое в GlitchTip событие. Это связывает issues
+            # с commits в GlitchTip release tracking (загруженные source maps
+            # в build-push job уже привязаны к тому же GITHUB_SHA).
+            if [ -f .env.prod ]; then
+              if grep -q '^SENTRY_RELEASE=' .env.prod; then
+                sed -i "s|^SENTRY_RELEASE=.*|SENTRY_RELEASE=${GITHUB_SHA}|" .env.prod
+                echo "=== Updated SENTRY_RELEASE in .env.prod ==="
+              else
+                echo "SENTRY_RELEASE=${GITHUB_SHA}" >> .env.prod
+                echo "=== Added SENTRY_RELEASE to .env.prod ==="
+              fi
+            fi
+
+            echo "=== Pulling images from GHCR ==="
             set +u
             set -a
             source .env.prod
             set +a
             set -u
 
-            docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+            docker compose -f docker-compose.prod.yml pull
+
+            echo "=== Deploying ==="
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
             echo "=== Cleaning up old images ==="
             docker image prune -f

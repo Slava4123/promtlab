@@ -172,15 +172,17 @@ func (s *Service) InviteMember(ctx context.Context, slug string, userID uint, in
 		inv.Inviter = *inviter
 	}
 
-	// Отправляем email-уведомление о приглашении
+	// Отправляем email-уведомление о приглашении (fire-and-forget, допустимо для некритичного уведомления)
 	if s.email != nil && s.email.Configured() {
 		inviterName := "Пользователь"
 		if inviter != nil {
 			inviterName = inviter.Name
 		}
+		targetEmail := targetUser.Email
+		teamName := team.Name
 		go func() {
-			if err := s.email.SendTeamInvitation(targetUser.Email, team.Name, inviterName); err != nil {
-				slog.Error("team invitation email failed", "user_id", targetUser.ID, "team", team.Name, "error", err)
+			if err := s.email.SendTeamInvitation(targetEmail, teamName, inviterName); err != nil {
+				slog.Error("team invitation email failed", "error", err)
 			}
 		}()
 	}
