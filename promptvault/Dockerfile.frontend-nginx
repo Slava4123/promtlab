@@ -17,7 +17,7 @@ COPY frontend/ .
 # Vite читает env vars ТОЛЬКО из .env* файлов, не из Docker ENV / process.env.
 # Создаём .env.production явно — Vite автоматически загрузит при `vite build`
 # (mode=production) и заменит import.meta.env.VITE_SENTRY_* на литералы в bundle.
-# Без этого файла env vars из ARG/ENV игнорируются → Sentry init становится dead code.
+# DEBUG: выводим содержимое и хеш bundle для диагностики build issues.
 RUN printf 'VITE_SENTRY_ENABLED=%s\nVITE_SENTRY_DSN=%s\nVITE_SENTRY_ENVIRONMENT=%s\nVITE_SENTRY_RELEASE=%s\nVITE_SENTRY_TRACES_SAMPLE_RATE=%s\n' \
     "$VITE_SENTRY_ENABLED" \
     "$VITE_SENTRY_DSN" \
@@ -25,7 +25,14 @@ RUN printf 'VITE_SENTRY_ENABLED=%s\nVITE_SENTRY_DSN=%s\nVITE_SENTRY_ENVIRONMENT=
     "$VITE_SENTRY_RELEASE" \
     "$VITE_SENTRY_TRACES_SAMPLE_RATE" \
     > .env.production && \
-    npm run build
+    echo "=== DEBUG .env.production content ===" && \
+    cat .env.production && \
+    echo "=== DEBUG ls -la /app ===" && \
+    ls -la /app | head -20 && \
+    echo "=== DEBUG starting vite build ===" && \
+    npm run build 2>&1 && \
+    echo "=== DEBUG checking dist for DSN ===" && \
+    grep -lr "sentry.promtlabs.ru" dist/ 2>/dev/null | head -5 || echo "NO DSN FOUND IN DIST"
 
 FROM jonasal/nginx-certbot:5-alpine
 ARG DOMAIN
