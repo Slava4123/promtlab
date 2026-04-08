@@ -55,6 +55,7 @@ services:
 
   # GlitchTip: self-hosted Sentry-compatible error tracking.
   # Docs: https://glitchtip.com/documentation/install
+  # Auth Token + Source Maps upload: enabled via GitHub Actions workflow
 
   # One-shot migration runner — применяет Django миграции до старта web/worker.
   # Запускается при каждом docker compose up -d:
