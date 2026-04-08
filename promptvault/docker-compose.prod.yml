@@ -55,6 +55,29 @@ services:
 
   # GlitchTip: self-hosted Sentry-compatible error tracking.
   # Docs: https://glitchtip.com/documentation/install
+
+  # One-shot migration runner — применяет Django миграции до старта web/worker.
+  # Запускается при каждом docker compose up -d:
+  #   - Если миграции новые → применяет и exit 0
+  #   - Если уже применены → "No migrations to apply" и exit 0 (идемпотентно)
+  # web/worker ждут через depends_on.condition: service_completed_successfully.
+  glitchtip-migrate:
+    image: glitchtip/glitchtip:latest
+    command: ./manage.py migrate --no-input
+    env_file: .env.glitchtip
+    volumes:
+      - ./ca.crt:/app/ca.crt:ro
+    networks:
+      - app
+    restart: "no"
+    depends_on:
+      - glitchtip-valkey
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   glitchtip-web:
     image: glitchtip/glitchtip:latest
     env_file: .env.glitchtip
@@ -79,7 +102,10 @@ services:
         max-size: "10m"
         max-file: "3"
     depends_on:
-      - glitchtip-valkey
+      glitchtip-valkey:
+        condition: service_started
+      glitchtip-migrate:
+        condition: service_completed_successfully
 
   # GlitchTip worker совмещает celery worker + beat через run-celery-with-beat.sh
   glitchtip-worker:
@@ -102,7 +128,10 @@ services:
         max-size: "10m"
         max-file: "3"
     depends_on:
-      - glitchtip-valkey
+      glitchtip-valkey:
+        condition: service_started
+      glitchtip-migrate:
+        condition: service_completed_successfully
 
   # Valkey — Redis-compatible, lighter footprint (Valkey 8+ fork Redis 7.2)
   glitchtip-valkey:
