@@ -5,20 +5,27 @@ WORKDIR /app
 # VITE_SENTRY_DSN публичный по природе (так же как frontend API keys).
 # SENTRY_AUTH_TOKEN сюда НЕ передаём — source maps upload через @sentry/cli в CI отдельным шагом.
 ARG VITE_SENTRY_ENABLED=false
-ARG VITE_SENTRY_DSN
+ARG VITE_SENTRY_DSN=""
 ARG VITE_SENTRY_ENVIRONMENT=production
 ARG VITE_SENTRY_RELEASE=dev
 ARG VITE_SENTRY_TRACES_SAMPLE_RATE=0.0
-ENV VITE_SENTRY_ENABLED=$VITE_SENTRY_ENABLED
-ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
-ENV VITE_SENTRY_ENVIRONMENT=$VITE_SENTRY_ENVIRONMENT
-ENV VITE_SENTRY_RELEASE=$VITE_SENTRY_RELEASE
-ENV VITE_SENTRY_TRACES_SAMPLE_RATE=$VITE_SENTRY_TRACES_SAMPLE_RATE
 
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ .
-RUN npm run build
+
+# Vite читает env vars ТОЛЬКО из .env* файлов, не из Docker ENV / process.env.
+# Создаём .env.production явно — Vite автоматически загрузит при `vite build`
+# (mode=production) и заменит import.meta.env.VITE_SENTRY_* на литералы в bundle.
+# Без этого файла env vars из ARG/ENV игнорируются → Sentry init становится dead code.
+RUN printf 'VITE_SENTRY_ENABLED=%s\nVITE_SENTRY_DSN=%s\nVITE_SENTRY_ENVIRONMENT=%s\nVITE_SENTRY_RELEASE=%s\nVITE_SENTRY_TRACES_SAMPLE_RATE=%s\n' \
+    "$VITE_SENTRY_ENABLED" \
+    "$VITE_SENTRY_DSN" \
+    "$VITE_SENTRY_ENVIRONMENT" \
+    "$VITE_SENTRY_RELEASE" \
+    "$VITE_SENTRY_TRACES_SAMPLE_RATE" \
+    > .env.production && \
+    npm run build
 
 FROM jonasal/nginx-certbot:5-alpine
 ARG DOMAIN
