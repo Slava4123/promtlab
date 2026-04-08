@@ -139,8 +139,12 @@ jobs:
             VITE_SENTRY_ENVIRONMENT=production
             VITE_SENTRY_RELEASE=${{ github.sha }}
             VITE_SENTRY_TRACES_SAMPLE_RATE=${{ vars.VITE_SENTRY_TRACES_SAMPLE_RATE || '0.0' }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # cache-from намеренно отключён: BuildKit GHA cache не инвалидирует
+          # cache при изменении build-args (известная проблема), из-за чего
+          # VITE_SENTRY_* литералы не попадают в bundle (Vite tree-shaking
+          # вырезает Sentry init как dead code если env vars пустые).
+          # +2 мин на build, зато гарантированно свежий bundle при каждом deploy.
+          no-cache: true
 
       # Отдельный local build для source maps — Docker build выше кладёт maps
       # внутрь image в dist/assets/*.map (sourcemap: "hidden" в vite.config.ts),
