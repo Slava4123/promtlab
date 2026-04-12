@@ -182,6 +182,7 @@
     }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
     }
 
   /* Custom scrollbar */
@@ -290,6 +291,28 @@
 @keyframes toast-progress {
   from { transform: scaleX(1); }
   to { transform: scaleX(0); }
+}
+
+/* Landing page animations */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.05; }
+  50% { opacity: 0.15; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes progress-bar {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes streak-flame {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
 }
 
 @view-transition {
