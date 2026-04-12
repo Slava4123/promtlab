@@ -1,0 +1,22 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude Code
+.claude/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Screenshots (QA artifacts)
+*.png
+
+# SSL certificates
+ca.crt
+
+# OS
+.DS_Store
+Thumbs.db

@@ -88,9 +88,69 @@ jobs:
       - name: Run tests
         run: npx vitest run
 
+  test-extension:
+    name: Test & Build Extension
+    needs: lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: promptvault/extension
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: promptvault/extension/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript strict check
+        run: npx tsc --noEmit
+
+      - name: Run unit tests
+        run: npx vitest run
+
+      - name: Build extension (Chrome MV3)
+        run: npx wxt build
+
+      - name: Zip extension for CWS
+        run: npx wxt zip
+
+      - name: Check bundle size (< 5 MB unpacked)
+        run: |
+          SIZE=$(du -sb .output/chrome-mv3 | cut -f1)
+          echo "Unpacked size: $SIZE bytes"
+          if [ "$SIZE" -gt 5242880 ]; then
+            echo "::error::Extension unpacked size $SIZE exceeds 5 MB"
+            exit 1
+          fi
+
+      - name: Check zip size (< 15 MB CWS limit)
+        run: |
+          ZIP=$(find .output -name "*.zip" -type f | head -1)
+          [ -z "$ZIP" ] && { echo "::error::No zip produced"; exit 1; }
+          SIZE=$(stat -c%s "$ZIP")
+          echo "Zip size: $SIZE bytes ($ZIP)"
+          if [ "$SIZE" -gt 15728640 ]; then
+            echo "::error::Extension zip size $SIZE exceeds CWS 15 MB limit"
+            exit 1
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: promptvault-extension-chrome-${{ github.sha }}
+          path: promptvault/extension/.output/*.zip
+          retention-days: 30
+
   build-push:
     name: Build & Push Images
-    needs: [test-backend, test-frontend]
+    needs: [test-backend, test-frontend, test-extension]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -249,36 +309,37 @@ jobs:
             set +a
             set -u
 
+            # Сохраняем текущие images как :prev для отката
+            docker tag ghcr.io/slava4123/promtlab-api:latest ghcr.io/slava4123/promtlab-api:prev 2>/dev/null || true
+            docker tag ghcr.io/slava4123/promtlab-frontend:latest ghcr.io/slava4123/promtlab-frontend:prev 2>/dev/null || true
+
             docker compose -f docker-compose.prod.yml pull
 
             echo "=== Deploying ==="
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-            echo "=== Cleaning up old images ==="
-            docker image prune -f
-
-      - name: Health check
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-          command_timeout: 2m
-          script: |
-            set -euo pipefail
-            echo "=== Waiting for services to start ==="
+            echo "=== Health check ==="
             sleep 15
-
+            OK=false
             for i in 1 2 3 4 5; do
-              HEALTH=$(docker compose -f ~/promtlab/promptvault/docker-compose.prod.yml exec -T api wget -qO- http://localhost:8080/api/health 2>&1 || true)
+              HEALTH=$(docker compose -f docker-compose.prod.yml exec -T api wget -qO- http://localhost:8080/api/health 2>&1 || true)
               if echo "$HEALTH" | grep -q '"ok"'; then
                 echo "Health check PASSED (attempt $i): $HEALTH"
-                exit 0
+                OK=true
+                break
               fi
               echo "Attempt $i failed, retrying in 10s..."
               sleep 10
             done
 
-            echo "ERROR: Health check failed after 5 attempts"
-            exit 1
+            if [ "$OK" = true ]; then
+              echo "=== Deploy successful, cleaning up ==="
+              docker image prune -f
+            else
+              echo "=== Health check FAILED, rolling back to :prev ==="
+              docker tag ghcr.io/slava4123/promtlab-api:prev ghcr.io/slava4123/promtlab-api:latest
+              docker tag ghcr.io/slava4123/promtlab-frontend:prev ghcr.io/slava4123/promtlab-frontend:latest
+              docker compose -f docker-compose.prod.yml up -d --remove-orphans
+              echo "=== Rolled back to previous version ==="
+              exit 1
+            fi
