@@ -56,6 +56,10 @@ func (m *mockCollectionRepo) SearchByQuery(ctx context.Context, userID uint, tea
 	}
 	return args.Get(0).([]models.Collection), args.Error(1)
 }
+func (m *mockCollectionRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
+}
 
 // --- TeamRepository mock ---
 
@@ -161,7 +165,7 @@ func (m *mockTeamRepo) AcceptInvitationTx(ctx context.Context, invID uint, membe
 func newTestService() (*Service, *mockCollectionRepo, *mockTeamRepo) {
 	cr := new(mockCollectionRepo)
 	tr := new(mockTeamRepo)
-	svc := NewService(cr, tr)
+	svc := NewService(cr, tr, nil)
 	return svc, cr, tr
 }
 
@@ -175,7 +179,7 @@ func TestCreate_PersonalSuccess(t *testing.T) {
 
 	cr.On("Create", ctx, mock.AnythingOfType("*models.Collection")).Return(nil)
 
-	c, err := svc.Create(ctx, 10, "Моя коллекция", "Описание", "#ff0000", "📝", nil)
+	c, _, err := svc.Create(ctx, 10, "Моя коллекция", "Описание", "#ff0000", "📝", nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "Моя коллекция", c.Name)
@@ -191,7 +195,7 @@ func TestCreate_DefaultColor(t *testing.T) {
 
 	cr.On("Create", ctx, mock.AnythingOfType("*models.Collection")).Return(nil)
 
-	c, err := svc.Create(ctx, 10, "Тест", "", "", "", nil)
+	c, _, err := svc.Create(ctx, 10, "Тест", "", "", "", nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "#8b5cf6", c.Color)
@@ -206,7 +210,7 @@ func TestCreate_TeamEditorSuccess(t *testing.T) {
 		Return(&models.TeamMember{Role: models.RoleEditor}, nil)
 	cr.On("Create", ctx, mock.AnythingOfType("*models.Collection")).Return(nil)
 
-	c, err := svc.Create(ctx, 10, "Командная", "Описание", "", "", teamID)
+	c, _, err := svc.Create(ctx, 10, "Командная", "Описание", "", "", teamID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, teamID, c.TeamID)
@@ -221,7 +225,7 @@ func TestCreate_TeamViewerForbidden(t *testing.T) {
 	tr.On("GetMember", ctx, uint(5), uint(10)).
 		Return(&models.TeamMember{Role: models.RoleViewer}, nil)
 
-	_, err := svc.Create(ctx, 10, "Командная", "", "", "", teamID)
+	_, _, err := svc.Create(ctx, 10, "Командная", "", "", "", teamID)
 
 	assert.ErrorIs(t, err, ErrViewerReadOnly)
 }
@@ -234,7 +238,7 @@ func TestCreate_TeamNotMember(t *testing.T) {
 	tr.On("GetMember", ctx, uint(5), uint(10)).
 		Return(nil, repo.ErrNotFound)
 
-	_, err := svc.Create(ctx, 10, "Командная", "", "", "", teamID)
+	_, _, err := svc.Create(ctx, 10, "Командная", "", "", "", teamID)
 
 	assert.ErrorIs(t, err, ErrForbidden)
 }

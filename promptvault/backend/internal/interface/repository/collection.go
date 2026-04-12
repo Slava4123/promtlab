@@ -15,4 +15,5 @@ type CollectionRepository interface {
 	GetByIDs(ctx context.Context, ids []uint) ([]models.Collection, error)
 	ListWithCounts(ctx context.Context, userID uint, teamIDs []uint) ([]models.CollectionWithCount, error)
 	SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Collection, error)
+	SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error)
 }

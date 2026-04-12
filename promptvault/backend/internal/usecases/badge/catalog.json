@@ -1,0 +1,103 @@
+{
+  "badges": [
+    {
+      "id": "first_prompt",
+      "title": "Первопроходец",
+      "description": "Создай первый личный промпт",
+      "icon": "🎯",
+      "category": "personal",
+      "triggers": ["prompt_created"],
+      "condition": { "type": "solo_prompt_count", "threshold": 1 }
+    },
+    {
+      "id": "architect",
+      "title": "Архитектор",
+      "description": "Создай 10 личных промптов",
+      "icon": "🏗️",
+      "category": "personal",
+      "triggers": ["prompt_created"],
+      "condition": { "type": "solo_prompt_count", "threshold": 10 }
+    },
+    {
+      "id": "team_player",
+      "title": "Командный игрок",
+      "description": "Создай первый командный промпт",
+      "icon": "🤝",
+      "category": "team",
+      "triggers": ["prompt_created"],
+      "condition": { "type": "team_prompt_count", "threshold": 1 }
+    },
+    {
+      "id": "team_lead",
+      "title": "Тимлид",
+      "description": "Создай 10 командных промптов",
+      "icon": "👥",
+      "category": "team",
+      "triggers": ["prompt_created"],
+      "condition": { "type": "team_prompt_count", "threshold": 10 }
+    },
+    {
+      "id": "prompt_master",
+      "title": "Мастер промптов",
+      "description": "Создай 25 промптов всего",
+      "icon": "💯",
+      "category": "milestone",
+      "triggers": ["prompt_created"],
+      "condition": { "type": "total_prompt_count", "threshold": 25 }
+    },
+    {
+      "id": "collector",
+      "title": "Коллекционер",
+      "description": "Создай 5 личных коллекций",
+      "icon": "📚",
+      "category": "personal",
+      "triggers": ["collection_created"],
+      "condition": { "type": "solo_collection_count", "threshold": 5 }
+    },
+    {
+      "id": "team_librarian",
+      "title": "Библиотекарь команды",
+      "description": "Создай 5 командных коллекций",
+      "icon": "🗂️",
+      "category": "team",
+      "triggers": ["collection_created"],
+      "condition": { "type": "team_collection_count", "threshold": 5 }
+    },
+    {
+      "id": "advanced",
+      "title": "Продвинутый",
+      "description": "Используй промпты 50 раз",
+      "icon": "⚡",
+      "category": "milestone",
+      "triggers": ["prompt_used"],
+      "condition": { "type": "total_usage", "threshold": 50 }
+    },
+    {
+      "id": "refactorer",
+      "title": "Переработчик",
+      "description": "5 промптов с 3+ версиями",
+      "icon": "🔂",
+      "category": "milestone",
+      "triggers": ["prompt_updated"],
+      "condition": { "type": "versioned_prompt_count", "threshold": 5, "min_versions": 3 }
+    },
+    {
+      "id": "on_fire",
+      "title": "На огне",
+      "description": "7 дней подряд",
+      "icon": "🔥",
+      "category": "streak",
+      "triggers": ["prompt_created", "prompt_used"],
+      "condition": { "type": "current_streak", "threshold": 7 }
+    },
+    {
+      "id": "expert",
+      "title": "Эксперт",
+      "description": "30 дней подряд",
+      "icon": "🏆",
+      "category": "streak",
+      "triggers": ["prompt_created", "prompt_used"],
+      "condition": { "type": "current_streak", "threshold": 30 }
+    }
+  ]
+}

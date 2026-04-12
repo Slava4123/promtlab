@@ -18,6 +18,8 @@ func respondError(w http.ResponseWriter, err error) {
 		httperr.Respond(w, httperr.Forbidden(err.Error()))
 	case errors.Is(err, promptuc.ErrViewerReadOnly):
 		httperr.Respond(w, httperr.Forbidden(err.Error()))
+	case errors.Is(err, promptuc.ErrPinForbidden):
+		httperr.Respond(w, httperr.Forbidden(err.Error()))
 	case errors.Is(err, promptuc.ErrWorkspaceMismatch):
 		httperr.Respond(w, httperr.BadRequest(err.Error()))
 	default:

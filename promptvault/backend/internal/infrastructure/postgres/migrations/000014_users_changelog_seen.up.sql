@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_changelog_seen_at TIMESTAMPTZ NULL;

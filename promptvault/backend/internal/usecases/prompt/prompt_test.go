@@ -16,7 +16,7 @@ func newTestService() (*Service, *mockPromptRepo, *mockVersionRepo, *mockTagRepo
 	vr := new(mockVersionRepo)
 	tr := new(mockTagRepo)
 	cr := new(mockCollectionRepo)
-	svc := NewService(pr, tr, cr, vr, nil)
+	svc := NewService(pr, tr, cr, vr, nil, nil, nil, nil)
 	return svc, pr, vr, tr, cr
 }
 
@@ -55,7 +55,7 @@ func TestUpdate_CreatesVersionSnapshot(t *testing.T) {
 
 	newTitle := "Новое название"
 	newContent := "Новый контент"
-	result, err := svc.Update(ctx, 1, 10, UpdateInput{
+	result, _, err := svc.Update(ctx, 1, 10, UpdateInput{
 		Title:      &newTitle,
 		Content:    &newContent,
 		ChangeNote: "Обновил контент",
@@ -74,7 +74,7 @@ func TestUpdate_ForbiddenForOtherUser(t *testing.T) {
 	pr.On("GetByID", ctx, uint(1)).Return(p, nil)
 
 	newTitle := "Хак"
-	_, err := svc.Update(ctx, 1, 999, UpdateInput{Title: &newTitle}) // userID = 999 ≠ 10
+	_, _, err := svc.Update(ctx, 1, 999, UpdateInput{Title: &newTitle}) // userID = 999 ≠ 10
 
 	assert.ErrorIs(t, err, ErrForbidden)
 }
@@ -86,7 +86,7 @@ func TestUpdate_PromptNotFound(t *testing.T) {
 	pr.On("GetByID", ctx, uint(99)).Return(nil, repo.ErrNotFound)
 
 	newTitle := "Тест"
-	_, err := svc.Update(ctx, 99, 10, UpdateInput{Title: &newTitle})
+	_, _, err := svc.Update(ctx, 99, 10, UpdateInput{Title: &newTitle})
 
 	assert.ErrorIs(t, err, ErrNotFound)
 }
@@ -100,7 +100,7 @@ func TestUpdate_VersionCreateFails_ReturnsError(t *testing.T) {
 	vr.On("CreateWithNextVersion", ctx, mock.Anything).Return(assert.AnError)
 
 	newTitle := "Тест"
-	_, err := svc.Update(ctx, 1, 10, UpdateInput{Title: &newTitle})
+	_, _, err := svc.Update(ctx, 1, 10, UpdateInput{Title: &newTitle})
 
 	assert.Error(t, err)
 	pr.AssertNotCalled(t, "Update", mock.Anything, mock.Anything) // промпт НЕ обновлён
@@ -180,7 +180,7 @@ func TestRevertToVersion_Success(t *testing.T) {
 	revertedPrompt := &models.Prompt{ID: 1, UserID: 10, Title: "Оригинал", Content: "Оригинальный контент", Model: "claude-sonnet"}
 	pr.On("GetByID", ctx, uint(1)).Return(revertedPrompt, nil)
 
-	result, err := svc.RevertToVersion(ctx, 1, 10, 1)
+	result, _, err := svc.RevertToVersion(ctx, 1, 10, 1)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "Оригинал", result.Title)
@@ -193,7 +193,7 @@ func TestRevertToVersion_VersionNotFound(t *testing.T) {
 
 	vr.On("GetByIDForPrompt", ctx, uint(99), uint(1)).Return(nil, repo.ErrNotFound)
 
-	_, err := svc.RevertToVersion(ctx, 1, 10, 99)
+	_, _, err := svc.RevertToVersion(ctx, 1, 10, 99)
 
 	assert.ErrorIs(t, err, ErrVersionNotFound)
 }
@@ -207,7 +207,7 @@ func TestRevertToVersion_ForbiddenUser(t *testing.T) {
 	vr.On("GetByIDForPrompt", ctx, uint(1), uint(1)).Return(oldVersion, nil)
 	pr.On("GetByID", ctx, uint(1)).Return(p, nil)
 
-	_, err := svc.RevertToVersion(ctx, 1, 999, 1) // userID = 999
+	_, _, err := svc.RevertToVersion(ctx, 1, 999, 1) // userID = 999
 
 	assert.ErrorIs(t, err, ErrForbidden)
 }
@@ -231,7 +231,7 @@ func TestRevertToVersion_CreatesSnapshotBeforeRevert(t *testing.T) {
 	revertedPrompt := &models.Prompt{ID: 1, UserID: 10, Title: "Оригинал", Content: "Оригинальный контент"}
 	pr.On("GetByID", ctx, uint(1)).Return(revertedPrompt, nil)
 
-	_, err := svc.RevertToVersion(ctx, 1, 10, 1)
+	_, _, err := svc.RevertToVersion(ctx, 1, 10, 1)
 
 	assert.NoError(t, err)
 	vr.AssertCalled(t, "CreateWithNextVersion", ctx, mock.MatchedBy(func(v *models.PromptVersion) bool {

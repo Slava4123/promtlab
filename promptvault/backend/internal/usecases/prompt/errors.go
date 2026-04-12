@@ -8,4 +8,5 @@ var (
 	ErrViewerReadOnly     = errors.New("Читатель не может редактировать промпты")
 	ErrVersionNotFound    = errors.New("Версия не найдена")
 	ErrWorkspaceMismatch  = errors.New("Коллекции и теги должны принадлежать тому же пространству, что и промпт")
+	ErrPinForbidden       = errors.New("Читатель не может ставить командное закрепление")
 )

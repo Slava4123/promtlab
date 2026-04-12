@@ -50,3 +50,10 @@ type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" validate:"required"`
 	NewPassword string `json:"new_password" validate:"required,min=8,max=128"`
 }
+
+// VerifyTOTPRequest — POST /api/auth/verify-totp.
+// Code — либо 6-значный TOTP из Authenticator, либо backup code формата xxxxx-xxxxx.
+type VerifyTOTPRequest struct {
+	PreAuthToken string `json:"pre_auth_token" validate:"required"`
+	Code         string `json:"code" validate:"required,min=6,max=20"`
+}

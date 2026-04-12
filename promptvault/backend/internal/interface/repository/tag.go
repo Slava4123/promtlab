@@ -12,5 +12,7 @@ type TagRepository interface {
 	GetByID(ctx context.Context, id uint) (*models.Tag, error)
 	GetByIDs(ctx context.Context, ids []uint) ([]models.Tag, error)
 	Delete(ctx context.Context, id uint) error
+	DeleteOrphans(ctx context.Context, userID uint, teamID *uint) error
 	SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Tag, error)
+	SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error)
 }

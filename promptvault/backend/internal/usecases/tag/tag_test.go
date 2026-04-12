@@ -46,12 +46,19 @@ func (m *mockTagRepo) GetByIDs(ctx context.Context, ids []uint) ([]models.Tag, e
 func (m *mockTagRepo) Delete(ctx context.Context, id uint) error {
 	return m.Called(ctx, id).Error(0)
 }
+func (m *mockTagRepo) DeleteOrphans(ctx context.Context, userID uint, teamID *uint) error {
+	return m.Called(ctx, userID, teamID).Error(0)
+}
 func (m *mockTagRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Tag, error) {
 	args := m.Called(ctx, userID, teamID, query, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]models.Tag), args.Error(1)
+}
+func (m *mockTagRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
 }
 
 // --- TeamRepository mock ---

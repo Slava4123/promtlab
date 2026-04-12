@@ -60,6 +60,11 @@ func Load() (*Config, error) {
 			if origin == "*" {
 				return nil, fmt.Errorf("wildcard CORS origin (*) is not allowed in production")
 			}
+			// chrome-extension:// origins разрешены и в prod: расширение
+			// аутентифицируется API-ключом, CORS здесь — формальный preflight.
+			if strings.HasPrefix(origin, "chrome-extension://") {
+				continue
+			}
 			if !strings.HasPrefix(origin, "https://") {
 				return nil, fmt.Errorf("CORS origin %q must use HTTPS in production", origin)
 			}
@@ -119,6 +124,10 @@ func defaults() map[string]any {
 			"release":            "",
 			"traces_sample_rate": 0.0,
 			"debug":              false,
+		},
+		"mcp": map[string]any{
+			"enabled":          false,
+			"max_keys_per_user": 5,
 		},
 	}
 }

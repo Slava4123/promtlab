@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -38,12 +39,7 @@ func (r *collectionRepo) Update(ctx context.Context, c *models.Collection) error
 }
 
 func (r *collectionRepo) Delete(ctx context.Context, id uint) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("DELETE FROM prompt_collections WHERE collection_id = ?", id).Error; err != nil {
-			return err
-		}
-		return tx.Where("id = ?", id).Delete(&models.Collection{}).Error
-	})
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Collection{}).Error
 }
 
 func (r *collectionRepo) CountPrompts(ctx context.Context, collectionID uint) (int64, error) {
@@ -57,7 +53,8 @@ func (r *collectionRepo) ListWithCounts(ctx context.Context, userID uint, teamID
 	q := r.db.WithContext(ctx).
 		Table("collections").
 		Select("collections.*, COALESCE(pc.cnt, 0) as prompt_count").
-		Joins("LEFT JOIN (SELECT collection_id, COUNT(*) as cnt FROM prompt_collections GROUP BY collection_id) pc ON pc.collection_id = collections.id")
+		Joins("LEFT JOIN (SELECT pc.collection_id, COUNT(*) as cnt FROM prompt_collections pc JOIN prompts p ON p.id = pc.prompt_id AND p.deleted_at IS NULL GROUP BY pc.collection_id) pc ON pc.collection_id = collections.id").
+		Where("collections.deleted_at IS NULL")
 
 	if len(teamIDs) > 0 {
 		q = q.Where("collections.team_id IN ?", teamIDs)
@@ -82,6 +79,19 @@ func (r *collectionRepo) SearchByQuery(ctx context.Context, userID uint, teamID 
 		Limit(limit).
 		Find(&collections).Error
 	return collections, err
+}
+
+func (r *collectionRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	pattern := strings.ToLower(prefix) + "%"
+	var names []string
+	q := r.db.WithContext(ctx).Model(&models.Collection{}).Select("DISTINCT name")
+	if teamID != nil {
+		q = q.Where("team_id = ? AND lower(name) LIKE ?", *teamID, pattern)
+	} else {
+		q = q.Where("user_id = ? AND team_id IS NULL AND lower(name) LIKE ?", userID, pattern)
+	}
+	err := q.Order("name").Limit(limit).Pluck("name", &names).Error
+	return names, err
 }
 
 func (r *collectionRepo) GetByIDs(ctx context.Context, ids []uint) ([]models.Collection, error) {

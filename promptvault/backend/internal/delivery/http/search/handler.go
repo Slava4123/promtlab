@@ -42,3 +42,28 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteOK(w, result)
 }
+
+// GET /api/search/suggest?q=&team_id=
+func (h *Handler) Suggest(w http.ResponseWriter, r *http.Request) {
+	userID := authmw.GetUserID(r.Context())
+	prefix := r.URL.Query().Get("q")
+
+	var teamID *uint
+	if tid := r.URL.Query().Get("team_id"); tid != "" {
+		id, err := strconv.ParseUint(tid, 10, 32)
+		if err != nil {
+			httperr.Respond(w, httperr.BadRequest("Неверный team_id"))
+			return
+		}
+		v := uint(id)
+		teamID = &v
+	}
+
+	result, err := h.svc.Suggest(r.Context(), userID, teamID, prefix)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	utils.WriteOK(w, result)
+}

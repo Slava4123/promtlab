@@ -47,6 +47,24 @@ func (m *mPromptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *ui
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Prompt), args.Error(1)
 }
+func (m *mPromptRepo) UpdateLastUsed(ctx context.Context, id uint) error {
+	return m.Called(ctx, id).Error(0)
+}
+func (m *mPromptRepo) ListRecent(ctx context.Context, userID uint, teamID *uint, limit int) ([]models.Prompt, error) {
+	args := m.Called(ctx, userID, teamID, limit)
+	return args.Get(0).([]models.Prompt), args.Error(1)
+}
+func (m *mPromptRepo) LogUsage(ctx context.Context, userID, promptID uint) error {
+	return m.Called(ctx, userID, promptID).Error(0)
+}
+func (m *mPromptRepo) ListUsageHistory(ctx context.Context, userID uint, teamID *uint, page, pageSize int) ([]models.PromptUsageLog, int64, error) {
+	args := m.Called(ctx, userID, teamID, page, pageSize)
+	return args.Get(0).([]models.PromptUsageLog), args.Get(1).(int64), args.Error(2)
+}
+func (m *mPromptRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
+}
 
 type mCollRepo struct{ mock.Mock }
 
@@ -79,6 +97,10 @@ func (m *mCollRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Collection), args.Error(1)
 }
+func (m *mCollRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
+}
 
 type mTagRepo struct{ mock.Mock }
 
@@ -97,6 +119,9 @@ func (m *mTagRepo) GetByIDs(ctx context.Context, ids []uint) ([]models.Tag, erro
 func (m *mTagRepo) Delete(ctx context.Context, id uint) error {
 	return m.Called(ctx, id).Error(0)
 }
+func (m *mTagRepo) DeleteOrphans(ctx context.Context, userID uint, teamID *uint) error {
+	return m.Called(ctx, userID, teamID).Error(0)
+}
 func (m *mTagRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Tag, error) {
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Tag), args.Error(1)
@@ -107,6 +132,10 @@ func (m *mTagRepo) GetByID(ctx context.Context, id uint) (*models.Tag, error) {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Tag), args.Error(1)
+}
+func (m *mTagRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
 }
 
 // --- helpers ---

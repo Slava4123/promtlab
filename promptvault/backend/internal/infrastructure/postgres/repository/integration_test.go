@@ -630,3 +630,361 @@ func TestLinkedAccountRepo_GetByProviderID_NotFound(t *testing.T) {
 	_, err := laRepo.GetByProviderID(ctx, "github", "nonexistent")
 	assert.ErrorIs(t, err, repo.ErrNotFound)
 }
+
+// ─── Trash Repo ────────────────────────────────────────────────────────────
+
+func TestTrashRepo_PromptFlow(t *testing.T) {
+	db := setupTestDB(t)
+	userRepo := NewUserRepository(db)
+	promptRepo := NewPromptRepository(db)
+	trashRepo := NewTrashRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "trash-user@test.com", Name: "Trash User"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	prompt := &models.Prompt{UserID: user.ID, Title: "Trashable", Content: "hello"}
+	require.NoError(t, promptRepo.Create(ctx, prompt))
+
+	// Soft-delete
+	require.NoError(t, promptRepo.SoftDelete(ctx, prompt.ID))
+
+	// Should appear in trash
+	deleted, total, err := trashRepo.ListDeletedPrompts(ctx, user.ID, nil, 1, 20)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	assert.Len(t, deleted, 1)
+	assert.Equal(t, "Trashable", deleted[0].Title)
+
+	// Count
+	counts, err := trashRepo.CountDeleted(ctx, user.ID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), counts.Prompts)
+
+	// Get deleted by ID
+	got, err := trashRepo.GetDeletedPrompt(ctx, prompt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Trashable", got.Title)
+
+	// Restore
+	require.NoError(t, trashRepo.RestorePrompt(ctx, prompt.ID))
+
+	// Should be visible again
+	restored, err := promptRepo.GetByID(ctx, prompt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Trashable", restored.Title)
+
+	// Should not be in trash
+	counts2, err := trashRepo.CountDeleted(ctx, user.ID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), counts2.Prompts)
+}
+
+func TestTrashRepo_HardDelete(t *testing.T) {
+	db := setupTestDB(t)
+	userRepo := NewUserRepository(db)
+	promptRepo := NewPromptRepository(db)
+	trashRepo := NewTrashRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "hard-del@test.com", Name: "Hard Del"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	prompt := &models.Prompt{UserID: user.ID, Title: "Gone Forever", Content: "bye"}
+	require.NoError(t, promptRepo.Create(ctx, prompt))
+	require.NoError(t, promptRepo.SoftDelete(ctx, prompt.ID))
+
+	// Hard delete
+	require.NoError(t, trashRepo.HardDeletePrompt(ctx, prompt.ID))
+
+	// Not in trash
+	_, err := trashRepo.GetDeletedPrompt(ctx, prompt.ID)
+	assert.ErrorIs(t, err, repo.ErrNotFound)
+
+	// Not in normal queries (unscoped)
+	_, err = promptRepo.GetByID(ctx, prompt.ID)
+	assert.ErrorIs(t, err, repo.ErrNotFound)
+}
+
+func TestTrashRepo_CollectionSoftDelete(t *testing.T) {
+	db := setupTestDB(t)
+	userRepo := NewUserRepository(db)
+	collRepo := NewCollectionRepository(db)
+	trashRepo := NewTrashRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "trash-coll@test.com", Name: "Trash Coll"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	coll := &models.Collection{UserID: user.ID, Name: "My Coll"}
+	require.NoError(t, collRepo.Create(ctx, coll))
+
+	// Soft delete (now uses GORM soft delete)
+	require.NoError(t, collRepo.Delete(ctx, coll.ID))
+
+	// Not visible in normal queries
+	_, err := collRepo.GetByID(ctx, coll.ID)
+	assert.ErrorIs(t, err, repo.ErrNotFound)
+
+	// Visible in trash
+	deleted, err := trashRepo.ListDeletedCollections(ctx, user.ID, nil)
+	require.NoError(t, err)
+	assert.Len(t, deleted, 1)
+	assert.Equal(t, "My Coll", deleted[0].Name)
+
+	// Restore
+	require.NoError(t, trashRepo.RestoreCollection(ctx, coll.ID))
+
+	got, err := collRepo.GetByID(ctx, coll.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "My Coll", got.Name)
+}
+
+func TestTrashRepo_TagHardDelete(t *testing.T) {
+	db := setupTestDB(t)
+	userRepo := NewUserRepository(db)
+	tagRepo := NewTagRepository(db)
+	promptRepo := NewPromptRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "trash-tag@test.com", Name: "Trash Tag"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	tag, err := tagRepo.GetOrCreate(ctx, "deletable", "#ff0000", user.ID, nil)
+	require.NoError(t, err)
+
+	// Assign tag to a prompt
+	prompt := &models.Prompt{UserID: user.ID, Title: "Tagged", Content: "c", Tags: []models.Tag{*tag}}
+	require.NoError(t, promptRepo.Create(ctx, prompt))
+
+	// Hard delete tag
+	require.NoError(t, tagRepo.Delete(ctx, tag.ID))
+
+	// Tag gone
+	_, err = tagRepo.GetByID(ctx, tag.ID)
+	assert.ErrorIs(t, err, repo.ErrNotFound)
+
+	// Prompt still exists but without tag
+	got, err := promptRepo.GetByID(ctx, prompt.ID)
+	require.NoError(t, err)
+	assert.Len(t, got.Tags, 0)
+}
+
+func TestTrashRepo_PurgeExpired(t *testing.T) {
+	db := setupTestDB(t)
+	userRepo := NewUserRepository(db)
+	promptRepo := NewPromptRepository(db)
+	trashRepo := NewTrashRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "purge@test.com", Name: "Purge User"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	// Create and soft-delete a prompt
+	prompt := &models.Prompt{UserID: user.ID, Title: "Old Prompt", Content: "old"}
+	require.NoError(t, promptRepo.Create(ctx, prompt))
+	require.NoError(t, promptRepo.SoftDelete(ctx, prompt.ID))
+
+	// Manually backdate deleted_at to 31 days ago
+	db.Exec("UPDATE prompts SET deleted_at = NOW() - INTERVAL '31 days' WHERE id = ?", prompt.ID)
+
+	// Create another recent soft-deleted prompt
+	prompt2 := &models.Prompt{UserID: user.ID, Title: "Recent Prompt", Content: "recent"}
+	require.NoError(t, promptRepo.Create(ctx, prompt2))
+	require.NoError(t, promptRepo.SoftDelete(ctx, prompt2.ID))
+
+	// Purge with 30-day retention
+	deleted, err := trashRepo.PurgeExpired(ctx, 30)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deleted)
+
+	// Old prompt should be gone
+	_, err = trashRepo.GetDeletedPrompt(ctx, prompt.ID)
+	assert.ErrorIs(t, err, repo.ErrNotFound)
+
+	// Recent prompt should still be in trash
+	_, err = trashRepo.GetDeletedPrompt(ctx, prompt2.ID)
+	require.NoError(t, err)
+}
+
+func TestTrashRepo_EmptyTrash(t *testing.T) {
+	db := setupTestDB(t)
+	userRepo := NewUserRepository(db)
+	promptRepo := NewPromptRepository(db)
+	collRepo := NewCollectionRepository(db)
+	trashRepo := NewTrashRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "empty-trash@test.com", Name: "Empty Trash"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	p := &models.Prompt{UserID: user.ID, Title: "P1", Content: "c1"}
+	require.NoError(t, promptRepo.Create(ctx, p))
+	require.NoError(t, promptRepo.SoftDelete(ctx, p.ID))
+
+	c := &models.Collection{UserID: user.ID, Name: "C1"}
+	require.NoError(t, collRepo.Create(ctx, c))
+	require.NoError(t, collRepo.Delete(ctx, c.ID))
+
+	counts, err := trashRepo.CountDeleted(ctx, user.ID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), counts.Prompts)
+	assert.Equal(t, int64(1), counts.Collections)
+
+	deleted, err := trashRepo.EmptyTrash(ctx, user.ID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), deleted)
+
+	counts2, err := trashRepo.CountDeleted(ctx, user.ID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), counts2.Prompts)
+	assert.Equal(t, int64(0), counts2.Collections)
+}
+
+// ─── API Key Repo ──────────────────────────────────────────────────────────
+
+func TestAPIKeyRepo_CreateAndGetByHash(t *testing.T) {
+	db := setupTestDB(t)
+	keyRepo := NewAPIKeyRepository(db)
+	userRepo := NewUserRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "apikey@test.com", Name: "API User"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	key := &models.APIKey{
+		UserID:    user.ID,
+		Name:      "Test Key",
+		KeyPrefix: "pvlt_aB3x",
+		KeyHash:   "abc123def456abc123def456abc123def456abc123def456abc123def456abcd",
+	}
+	require.NoError(t, keyRepo.Create(ctx, key))
+	assert.NotZero(t, key.ID)
+
+	got, err := keyRepo.GetByHash(ctx, key.KeyHash)
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, got.UserID)
+	assert.Equal(t, "Test Key", got.Name)
+	assert.Equal(t, "pvlt_aB3x", got.KeyPrefix)
+}
+
+func TestAPIKeyRepo_GetByHash_NotFound(t *testing.T) {
+	db := setupTestDB(t)
+	keyRepo := NewAPIKeyRepository(db)
+	ctx := context.Background()
+
+	_, err := keyRepo.GetByHash(ctx, "nonexistent_hash_value_0000000000000000000000000000000000")
+	assert.ErrorIs(t, err, repo.ErrNotFound)
+}
+
+func TestAPIKeyRepo_RevokeCycle(t *testing.T) {
+	db := setupTestDB(t)
+	keyRepo := NewAPIKeyRepository(db)
+	userRepo := NewUserRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "revoke@test.com", Name: "Revoke User"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	key := &models.APIKey{
+		UserID:    user.ID,
+		Name:      "To Revoke",
+		KeyPrefix: "pvlt_xY9z",
+		KeyHash:   "revokehash000000000000000000000000000000000000000000000000000000",
+	}
+	require.NoError(t, keyRepo.Create(ctx, key))
+
+	// verify key exists
+	got, err := keyRepo.GetByHash(ctx, key.KeyHash)
+	require.NoError(t, err)
+	assert.Equal(t, key.ID, got.ID)
+
+	// revoke
+	require.NoError(t, keyRepo.Delete(ctx, key.ID, user.ID))
+
+	// verify key gone
+	_, err = keyRepo.GetByHash(ctx, key.KeyHash)
+	assert.ErrorIs(t, err, repo.ErrNotFound)
+}
+
+func TestAPIKeyRepo_DeleteWrongUser(t *testing.T) {
+	db := setupTestDB(t)
+	keyRepo := NewAPIKeyRepository(db)
+	userRepo := NewUserRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "owner@test.com", Name: "Owner"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	key := &models.APIKey{
+		UserID:    user.ID,
+		Name:      "Owner Key",
+		KeyPrefix: "pvlt_own1",
+		KeyHash:   "ownerhash000000000000000000000000000000000000000000000000000000",
+	}
+	require.NoError(t, keyRepo.Create(ctx, key))
+
+	// try to delete with wrong user ID
+	err := keyRepo.Delete(ctx, key.ID, 99999)
+	assert.ErrorIs(t, err, repo.ErrNotFound)
+
+	// key still exists
+	got, err := keyRepo.GetByHash(ctx, key.KeyHash)
+	require.NoError(t, err)
+	assert.Equal(t, key.ID, got.ID)
+}
+
+func TestAPIKeyRepo_CountAndList(t *testing.T) {
+	db := setupTestDB(t)
+	keyRepo := NewAPIKeyRepository(db)
+	userRepo := NewUserRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "counter@test.com", Name: "Counter"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	for i := 0; i < 3; i++ {
+		require.NoError(t, keyRepo.Create(ctx, &models.APIKey{
+			UserID:    user.ID,
+			Name:      fmt.Sprintf("Key %d", i),
+			KeyPrefix: fmt.Sprintf("pvlt_%04d", i),
+			KeyHash:   fmt.Sprintf("hash%060d", i),
+		}))
+	}
+
+	count, err := keyRepo.CountByUserID(ctx, user.ID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), count)
+
+	keys, err := keyRepo.ListByUserID(ctx, user.ID)
+	require.NoError(t, err)
+	assert.Len(t, keys, 3)
+	// newest first
+	assert.Equal(t, "Key 2", keys[0].Name)
+}
+
+func TestAPIKeyRepo_UpdateLastUsed(t *testing.T) {
+	db := setupTestDB(t)
+	keyRepo := NewAPIKeyRepository(db)
+	userRepo := NewUserRepository(db)
+	ctx := context.Background()
+
+	user := &models.User{Email: "lastused@test.com", Name: "LastUsed"}
+	require.NoError(t, userRepo.Create(ctx, user))
+
+	key := &models.APIKey{
+		UserID:    user.ID,
+		Name:      "Usage Key",
+		KeyPrefix: "pvlt_use1",
+		KeyHash:   "usagehash000000000000000000000000000000000000000000000000000000",
+	}
+	require.NoError(t, keyRepo.Create(ctx, key))
+	assert.Nil(t, key.LastUsedAt)
+
+	require.NoError(t, keyRepo.UpdateLastUsed(ctx, key.ID))
+
+	got, err := keyRepo.GetByHash(ctx, key.KeyHash)
+	require.NoError(t, err)
+	assert.NotNil(t, got.LastUsedAt)
+	assert.WithinDuration(t, time.Now(), *got.LastUsedAt, 5*time.Second)
+}

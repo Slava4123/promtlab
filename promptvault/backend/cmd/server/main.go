@@ -108,6 +108,7 @@ func main() {
 	})
 
 	application.MountRoutes(r)
+	application.StartBackground()
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Server.Port,

@@ -15,6 +15,7 @@ type Prompt struct {
 	Model       string         `gorm:"size:100" json:"model,omitempty"`
 	Favorite    bool           `gorm:"default:false" json:"favorite"`
 	UsageCount  int            `gorm:"default:0" json:"usage_count"`
+	LastUsedAt  *time.Time     `gorm:"" json:"last_used_at,omitempty"`
 	User        User           `gorm:"foreignKey:UserID" json:"-"`
 	Tags        []Tag            `gorm:"many2many:prompt_tags" json:"tags,omitempty"`
 	Collections []Collection     `gorm:"many2many:prompt_collections" json:"collections,omitempty"`

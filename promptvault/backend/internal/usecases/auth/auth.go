@@ -315,6 +315,56 @@ func (s *Service) issueTokens(ctx context.Context, user *models.User) (*TokenPai
 	return s.generateTokenPair(user.ID, user.TokenNonce)
 }
 
+// IssueTokens — экспортированная обёртка над issueTokens. Используется из
+// handler после успешной проверки TOTP для admin юзера (обменять pre_auth token
+// на полный JWT pair). Также используется в /auth/verify-totp endpoint.
+func (s *Service) IssueTokens(ctx context.Context, user *models.User) (*TokenPair, error) {
+	return s.issueTokens(ctx, user)
+}
+
+// AuthenticatePassword проверяет credentials и возвращает user без issue tokens.
+// Отличается от Login тем, что не создаёт новый nonce и не выдаёт refresh_token.
+// Используется в login handler для admin flow: сначала проверить password,
+// потом, если user=admin AND confirmed TOTP — вернуть pre_auth_token, и только
+// после /verify-totp issue полные tokens.
+func (s *Service) AuthenticatePassword(ctx context.Context, userEmail, password string) (*models.User, error) {
+	user, err := s.users.GetByEmail(ctx, userEmail)
+	if err != nil {
+		if errors.Is(err, repo.ErrNotFound) {
+			return nil, ErrInvalidCredentials
+		}
+		return nil, err
+	}
+	if !user.HasPassword() {
+		return nil, ErrInvalidCredentials
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return nil, ErrInvalidCredentials
+	}
+	if !user.EmailVerified {
+		return nil, ErrEmailNotVerified
+	}
+	return user, nil
+}
+
+// IssuePreAuthToken выдаёт short-lived (5 минут) токен с userID,
+// используемый как «промежуточный билет» в admin login flow. НЕ является
+// access token — не даёт доступа ни к одному protected endpoint, кроме
+// POST /api/auth/verify-totp (где он обменивается на полный pair).
+func (s *Service) IssuePreAuthToken(userID uint) (string, error) {
+	return s.generateToken(userID, TokenTypePreAuth, "", time.Now(), PreAuthTokenDuration)
+}
+
+// ValidatePreAuthToken проверяет подпись и срок pre_auth токена, возвращает
+// userID. Type в claims должен быть "pre_auth", иначе ErrInvalidToken.
+func (s *Service) ValidatePreAuthToken(tokenStr string) (uint, error) {
+	claims, err := s.ValidateToken(tokenStr, TokenTypePreAuth)
+	if err != nil {
+		return 0, err
+	}
+	return claims.UserID, nil
+}
+
 func (s *Service) Login(ctx context.Context, userEmail, password string) (*models.User, *TokenPair, error) {
 	user, err := s.users.GetByEmail(ctx, userEmail)
 	if err != nil {
@@ -510,6 +560,28 @@ func (s *Service) sendResetCode(ctx context.Context, user *models.User) error {
 		return err
 	}
 	return s.email.SendPasswordResetCode(user.Email, code)
+}
+
+// AdminResetUserPassword инициирует сброс пароля для юзера от имени админа.
+// В отличие от ForgotPassword:
+//   - не применяет per-email rate limit (админ сам решает когда сбрасывать),
+//   - не скрывает несуществующих юзеров (caller уже проверил существование),
+//   - не запускает фоновую горутину — отправка email синхронная, чтобы админ
+//     видел реальный результат операции и мог повторить при ошибке SMTP,
+//   - инвалидирует все refresh tokens юзера — после сброса старые сессии
+//     перестают работать (юзер должен залогиниться заново с новым паролем).
+//
+// Сам password на этом этапе НЕ меняется. Юзер получает email с кодом и
+// использует обычный flow /reset-password на frontend, чтобы установить новый
+// пароль. Это безопаснее, чем temp-password: admin не видит новый пароль.
+func (s *Service) AdminResetUserPassword(ctx context.Context, user *models.User) error {
+	if s.email == nil || !s.email.Configured() {
+		return errors.New("email service not configured")
+	}
+	if err := s.sendResetCode(ctx, user); err != nil {
+		return err
+	}
+	return s.InvalidateTokens(ctx, user.ID)
 }
 
 func (s *Service) GetLinkedAccounts(ctx context.Context, userID uint) ([]models.LinkedAccount, error) {

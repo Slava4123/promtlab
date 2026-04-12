@@ -9,6 +9,10 @@ type CreatePromptRequest struct {
 	TagIDs        []uint `json:"tag_ids"`
 }
 
+type PinRequest struct {
+	TeamWide bool `json:"team_wide"`
+}
+
 type UpdatePromptRequest struct {
 	Title         *string `json:"title" validate:"omitempty,min=1,max=300"`
 	Content       *string `json:"content" validate:"omitempty,max=10000"`

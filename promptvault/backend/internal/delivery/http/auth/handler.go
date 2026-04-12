@@ -12,18 +12,26 @@ import (
 	httperr "promptvault/internal/delivery/http/errors"
 	"promptvault/internal/delivery/http/utils"
 	authmw "promptvault/internal/middleware/auth"
+	adminauthuc "promptvault/internal/usecases/adminauth"
 	authuc "promptvault/internal/usecases/auth"
+	changeloguc "promptvault/internal/usecases/changelog"
 )
 
 type Handler struct {
 	auth          *authuc.Service
+	adminauth     *adminauthuc.Service
+	changelog     *changeloguc.Service
 	validate      *validator.Validate
 	secureCookies bool
 }
 
-func NewHandler(authSvc *authuc.Service, secureCookies bool) *Handler {
+// NewHandler — adminauthSvc может быть nil для тестов без admin flow;
+// в production всегда передаётся из app.New.
+func NewHandler(authSvc *authuc.Service, adminauthSvc *adminauthuc.Service, changelogSvc *changeloguc.Service, secureCookies bool) *Handler {
 	return &Handler{
 		auth:          authSvc,
+		adminauth:     adminauthSvc,
+		changelog:     changelogSvc,
 		validate:      validator.New(),
 		secureCookies: secureCookies,
 	}
@@ -107,6 +115,13 @@ func (h *Handler) ResendCode(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/auth/login
+// Flow:
+//  1. Проверка credentials через AuthenticatePassword (не issue tokens).
+//  2. Если user — обычный, issue tokens и вернуть как раньше.
+//  3. Если user — admin с confirmed TOTP: вернуть pre_auth_token + totp_required=true.
+//     НЕ issue полный JWT — клиент должен пройти /api/auth/verify-totp.
+//  4. Если user — admin без TOTP (первый заход как admin): issue tokens +
+//     totp_enrollment_required=true (клиент покажет /admin/totp enroll wizard).
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	req, err := utils.DecodeAndValidate[LoginRequest](r, h.validate)
 	if err != nil {
@@ -114,14 +129,120 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, tokens, err := h.auth.Login(r.Context(), req.Email, req.Password)
+	user, err := h.auth.AuthenticatePassword(r.Context(), req.Email, req.Password)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
+	// Admin flow: проверить confirmed TOTP и либо требовать verify, либо
+	// пропустить в enrollment wizard. Если adminauth service не wired —
+	// degrade gracefully: admin логинится как обычный user (с предупреждением в логах).
+	if user.IsAdmin() && h.adminauth != nil {
+		confirmed, err := h.adminauth.IsConfirmed(r.Context(), user.ID)
+		if err != nil {
+			slog.Error("auth.login.totp_status_failed", "user_id", user.ID, "error", err)
+			// Fail-safe: не разрешаем admin login без явного TOTP-check.
+			httperr.Respond(w, httperr.Internal(err))
+			return
+		}
+		if confirmed {
+			// Confirmed TOTP — требуется verify step.
+			preAuth, err := h.auth.IssuePreAuthToken(user.ID)
+			if err != nil {
+				httperr.Respond(w, httperr.Internal(err))
+				return
+			}
+			utils.WriteOK(w, AdminLoginStepResponse{
+				TOTPRequired: true,
+				PreAuthToken: preAuth,
+				User:         NewUserResponse(*user),
+			})
+			return
+		}
+		// Не confirmed — первый заход как admin, должен enroll.
+		// Issue полные tokens + hint для UI.
+		tokens, err := h.auth.IssueTokens(r.Context(), user)
+		if err != nil {
+			httperr.Respond(w, httperr.Internal(err))
+			return
+		}
+		h.setRefreshCookie(w, tokens.RefreshToken, 7*24*3600)
+		utils.WriteOK(w, AdminLoginStepResponse{
+			TOTPEnrollmentRequired: true,
+			AccessToken:            tokens.AccessToken,
+			ExpiresIn:              tokens.ExpiresIn,
+			User:                   NewUserResponse(*user),
+		})
+		return
+	}
+
+	// Обычный user — стандартный flow как раньше.
+	tokens, err := h.auth.IssueTokens(r.Context(), user)
+	if err != nil {
+		httperr.Respond(w, httperr.Internal(err))
+		return
+	}
 	h.setRefreshCookie(w, tokens.RefreshToken, 7*24*3600)
 	utils.WriteOK(w, NewAuthResponse(*user, tokens))
+}
+
+// POST /api/auth/verify-totp
+// Обменивает pre_auth_token + code на полный JWT pair. code может быть либо
+// 6-значным TOTP кодом из Authenticator, либо recovery backup code.
+func (h *Handler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
+	req, err := utils.DecodeAndValidate[VerifyTOTPRequest](r, h.validate)
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest(err.Error()))
+		return
+	}
+
+	if h.adminauth == nil {
+		httperr.Respond(w, httperr.Internal(nil))
+		return
+	}
+
+	userID, err := h.auth.ValidatePreAuthToken(req.PreAuthToken)
+	if err != nil {
+		httperr.Respond(w, httperr.Unauthorized("pre_auth_token недействителен или истёк"))
+		return
+	}
+
+	result, err := h.adminauth.Verify(r.Context(), userID, req.Code)
+	if err != nil {
+		// Маппим adminauth errors в HTTP через отдельный adminauth handler, но
+		// здесь локальный respondError подходит — проверим только ErrInvalidCode.
+		switch err {
+		case adminauthuc.ErrInvalidCode:
+			httperr.Respond(w, httperr.Unauthorized("неверный код"))
+		case adminauthuc.ErrTOTPNotEnrolled:
+			httperr.Respond(w, httperr.Conflict("TOTP не настроен"))
+		default:
+			httperr.Respond(w, httperr.Internal(err))
+		}
+		return
+	}
+
+	user, err := h.auth.Me(r.Context(), userID)
+	if err != nil {
+		httperr.Respond(w, httperr.Internal(err))
+		return
+	}
+
+	tokens, err := h.auth.IssueTokens(r.Context(), user)
+	if err != nil {
+		httperr.Respond(w, httperr.Internal(err))
+		return
+	}
+
+	h.setRefreshCookie(w, tokens.RefreshToken, 7*24*3600)
+	utils.WriteOK(w, VerifyTOTPResponse{
+		AccessToken:          tokens.AccessToken,
+		ExpiresIn:            tokens.ExpiresIn,
+		User:                 NewUserResponse(*user),
+		UsedBackupCode:       result.UsedBackupCode,
+		RemainingBackupCodes: result.RemainingBackupCodes,
+	})
 }
 
 // POST /api/auth/refresh
@@ -165,7 +286,13 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteOK(w, NewUserResponse(*user))
+	resp := NewUserResponse(*user)
+	if h.changelog != nil {
+		if unread, err := h.changelog.HasUnread(r.Context(), userID); err == nil {
+			resp.HasUnreadChangelog = unread
+		}
+	}
+	utils.WriteOK(w, resp)
 }
 
 // POST /api/auth/set-password/initiate — отправить код на email

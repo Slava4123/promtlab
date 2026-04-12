@@ -119,6 +119,31 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
+// ByUserID ограничивает по ID аутентифицированного пользователя (из context).
+// Должен применяться ПОСЛЕ auth middleware, который помещает userID в context.
+func ByUserID(rpm int, getUserID func(r *http.Request) uint) func(http.Handler) http.Handler {
+	rl := NewLimiter[uint](rpm)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID := getUserID(r)
+			if userID == 0 {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if !rl.Allow(userID) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Retry-After", "60")
+				w.WriteHeader(http.StatusTooManyRequests)
+				if _, err := w.Write([]byte(`{"error":"Слишком много запросов. Попробуйте через минуту"}`)); err != nil {
+					slog.Error("failed to write rate limit response", "error", err)
+				}
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // ByIP ограничивает по IP. rpm — макс запросов в минуту.
 func ByIP(rpm int) func(http.Handler) http.Handler {
 	rl := NewLimiter[string](rpm)

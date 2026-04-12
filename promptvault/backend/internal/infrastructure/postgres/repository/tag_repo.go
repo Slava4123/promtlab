@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -28,12 +30,14 @@ func (r *tagRepo) GetOrCreate(ctx context.Context, name, color string, userID ui
 	}
 
 	// Attempt insert; silently ignored if the unique constraint fires.
-	r.db.WithContext(ctx).Exec(
+	if err := r.db.WithContext(ctx).Exec(
 		`INSERT INTO tags (name, color, user_id, team_id, created_at, updated_at)
 		 VALUES (?, ?, ?, NULLIF(?, 0), NOW(), NOW())
 		 ON CONFLICT (name, user_id, COALESCE(team_id, 0)) DO NOTHING`,
 		name, color, userID, coalescedTeamID,
-	)
+	).Error; err != nil {
+		slog.Warn("tag insert failed, falling back to SELECT", "error", err, "tag_name", name)
+	}
 
 	// Always SELECT to return the existing (or just-inserted) row.
 	var tag models.Tag
@@ -93,11 +97,34 @@ func (r *tagRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint, 
 	return tags, err
 }
 
+func (r *tagRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	pattern := strings.ToLower(prefix) + "%"
+	var names []string
+	q := r.db.WithContext(ctx).Model(&models.Tag{}).Select("DISTINCT name")
+	if teamID != nil {
+		q = q.Where("team_id = ? AND lower(name) LIKE ?", *teamID, pattern)
+	} else {
+		q = q.Where("user_id = ? AND team_id IS NULL AND lower(name) LIKE ?", userID, pattern)
+	}
+	err := q.Order("name").Limit(limit).Pluck("name", &names).Error
+	return names, err
+}
+
+func (r *tagRepo) DeleteOrphans(ctx context.Context, userID uint, teamID *uint) error {
+	q := `DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM prompt_tags)`
+	if teamID != nil {
+		q += ` AND team_id = ?`
+		return r.db.WithContext(ctx).Exec(q, *teamID).Error
+	}
+	q += ` AND user_id = ? AND team_id IS NULL`
+	return r.db.WithContext(ctx).Exec(q, userID).Error
+}
+
 func (r *tagRepo) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("DELETE FROM prompt_tags WHERE tag_id = ?", id).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&models.Tag{}, id).Error
+		return tx.Unscoped().Delete(&models.Tag{}, id).Error
 	})
 }

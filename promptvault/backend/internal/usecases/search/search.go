@@ -12,6 +12,11 @@ const (
 	maxCollections = 3
 	maxTags        = 3
 	maxDescription = 120
+
+	suggestPrompts     = 4
+	suggestCollections = 2
+	suggestTags        = 1
+	maxSuggestions     = 7
 )
 
 type Service struct {
@@ -90,6 +95,56 @@ func (s *Service) Search(ctx context.Context, userID uint, teamID *uint, query s
 			Title: t.Name,
 			Color: t.Color,
 		})
+	}
+
+	return out, nil
+}
+
+func (s *Service) Suggest(ctx context.Context, userID uint, teamID *uint, prefix string) (*SuggestOutput, error) {
+	prefix = strings.TrimSpace(prefix)
+
+	out := &SuggestOutput{Suggestions: []Suggestion{}}
+	if prefix == "" {
+		return out, nil
+	}
+
+	promptTitles, err := s.prompts.SuggestByPrefix(ctx, userID, teamID, prefix, suggestPrompts)
+	if err != nil {
+		return nil, err
+	}
+
+	collNames, err := s.collections.SuggestByPrefix(ctx, userID, teamID, prefix, suggestCollections)
+	if err != nil {
+		return nil, err
+	}
+
+	tagNames, err := s.tags.SuggestByPrefix(ctx, userID, teamID, prefix, suggestTags)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{})
+	add := func(text, typ string) {
+		key := strings.ToLower(text)
+		if _, dup := seen[key]; dup {
+			return
+		}
+		seen[key] = struct{}{}
+		out.Suggestions = append(out.Suggestions, Suggestion{Text: text, Type: typ})
+	}
+
+	for _, t := range promptTitles {
+		add(t, "prompt")
+	}
+	for _, n := range collNames {
+		add(n, "collection")
+	}
+	for _, n := range tagNames {
+		add(n, "tag")
+	}
+
+	if len(out.Suggestions) > maxSuggestions {
+		out.Suggestions = out.Suggestions[:maxSuggestions]
 	}
 
 	return out, nil

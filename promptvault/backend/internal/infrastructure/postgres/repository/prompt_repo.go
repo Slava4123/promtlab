@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -123,6 +124,19 @@ func (r *promptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uin
 	return prompts, err
 }
 
+func (r *promptRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	pattern := strings.ToLower(prefix) + "%"
+	var titles []string
+	q := r.db.WithContext(ctx).Model(&models.Prompt{}).Select("DISTINCT title")
+	if teamID != nil {
+		q = q.Where("team_id = ? AND lower(title) LIKE ?", *teamID, pattern)
+	} else {
+		q = q.Where("user_id = ? AND team_id IS NULL AND lower(title) LIKE ?", userID, pattern)
+	}
+	err := q.Order("title").Limit(limit).Pluck("title", &titles).Error
+	return titles, err
+}
+
 func (r *promptRepo) SetFavorite(ctx context.Context, id uint, favorite bool) error {
 	return r.db.WithContext(ctx).
 		Model(&models.Prompt{}).
@@ -134,5 +148,73 @@ func (r *promptRepo) IncrementUsage(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).
 		Model(&models.Prompt{}).
 		Where("id = ?", id).
-		UpdateColumn("usage_count", gorm.Expr("usage_count + 1")).Error
+		Updates(map[string]interface{}{
+			"usage_count": gorm.Expr("usage_count + 1"),
+			"last_used_at": gorm.Expr("NOW()"),
+		}).Error
+}
+
+func (r *promptRepo) UpdateLastUsed(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).
+		Model(&models.Prompt{}).
+		Where("id = ?", id).
+		Update("last_used_at", gorm.Expr("NOW()")).Error
+}
+
+func (r *promptRepo) ListRecent(ctx context.Context, userID uint, teamID *uint, limit int) ([]models.Prompt, error) {
+	q := r.db.WithContext(ctx).
+		Where("last_used_at IS NOT NULL").
+		Preload("Tags").Preload("Collections")
+
+	if teamID != nil {
+		q = q.Where("team_id = ?", *teamID)
+	} else {
+		q = q.Where("user_id = ? AND team_id IS NULL", userID)
+	}
+
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	var prompts []models.Prompt
+	err := q.Order("last_used_at DESC").Limit(limit).Find(&prompts).Error
+	return prompts, err
+}
+
+func (r *promptRepo) LogUsage(ctx context.Context, userID, promptID uint) error {
+	log := &models.PromptUsageLog{UserID: userID, PromptID: promptID}
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *promptRepo) ListUsageHistory(ctx context.Context, userID uint, teamID *uint, page, pageSize int) ([]models.PromptUsageLog, int64, error) {
+	q := r.db.WithContext(ctx).Model(&models.PromptUsageLog{}).
+		Joins("JOIN prompts ON prompts.id = prompt_usage_log.prompt_id AND prompts.deleted_at IS NULL").
+		Where("prompt_usage_log.user_id = ?", userID)
+
+	if teamID != nil {
+		q = q.Where("prompts.team_id = ?", *teamID)
+	} else {
+		q = q.Where("prompts.team_id IS NULL")
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	var logs []models.PromptUsageLog
+	err := q.Preload("Prompt").Preload("Prompt.Tags").Preload("Prompt.Collections").
+		Order("prompt_usage_log.used_at DESC").
+		Limit(pageSize).Offset(offset).
+		Find(&logs).Error
+
+	return logs, total, err
 }

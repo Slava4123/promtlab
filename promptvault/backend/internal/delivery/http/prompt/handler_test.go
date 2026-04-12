@@ -52,6 +52,48 @@ func (m *mPromptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *ui
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Prompt), args.Error(1)
 }
+func (m *mPromptRepo) UpdateLastUsed(ctx context.Context, id uint) error {
+	return m.Called(ctx, id).Error(0)
+}
+func (m *mPromptRepo) ListRecent(ctx context.Context, userID uint, teamID *uint, limit int) ([]models.Prompt, error) {
+	args := m.Called(ctx, userID, teamID, limit)
+	return args.Get(0).([]models.Prompt), args.Error(1)
+}
+func (m *mPromptRepo) LogUsage(ctx context.Context, userID, promptID uint) error {
+	return m.Called(ctx, userID, promptID).Error(0)
+}
+func (m *mPromptRepo) ListUsageHistory(ctx context.Context, userID uint, teamID *uint, page, pageSize int) ([]models.PromptUsageLog, int64, error) {
+	args := m.Called(ctx, userID, teamID, page, pageSize)
+	return args.Get(0).([]models.PromptUsageLog), args.Get(1).(int64), args.Error(2)
+}
+func (m *mPromptRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
+}
+
+type mPinRepo struct{ mock.Mock }
+
+func (m *mPinRepo) Create(ctx context.Context, pin *models.PromptPin) error {
+	return m.Called(ctx, pin).Error(0)
+}
+func (m *mPinRepo) Delete(ctx context.Context, promptID, userID uint, teamWide bool) error {
+	return m.Called(ctx, promptID, userID, teamWide).Error(0)
+}
+func (m *mPinRepo) Get(ctx context.Context, promptID, userID uint, teamWide bool) (*models.PromptPin, error) {
+	args := m.Called(ctx, promptID, userID, teamWide)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.PromptPin), args.Error(1)
+}
+func (m *mPinRepo) GetStatuses(ctx context.Context, promptIDs []uint, userID uint) (map[uint]repo.PinStatus, error) {
+	args := m.Called(ctx, promptIDs, userID)
+	return args.Get(0).(map[uint]repo.PinStatus), args.Error(1)
+}
+func (m *mPinRepo) ListPinned(ctx context.Context, userID uint, teamID *uint, limit int) ([]models.Prompt, error) {
+	args := m.Called(ctx, userID, teamID, limit)
+	return args.Get(0).([]models.Prompt), args.Error(1)
+}
 
 type mVersionRepo struct{ mock.Mock }
 
@@ -87,6 +129,9 @@ func (m *mTagRepo) GetByIDs(ctx context.Context, ids []uint) ([]models.Tag, erro
 func (m *mTagRepo) Delete(ctx context.Context, id uint) error {
 	return m.Called(ctx, id).Error(0)
 }
+func (m *mTagRepo) DeleteOrphans(ctx context.Context, userID uint, teamID *uint) error {
+	return m.Called(ctx, userID, teamID).Error(0)
+}
 func (m *mTagRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Tag, error) {
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Tag), args.Error(1)
@@ -97,6 +142,10 @@ func (m *mTagRepo) GetByID(ctx context.Context, id uint) (*models.Tag, error) {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Tag), args.Error(1)
+}
+func (m *mTagRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
 }
 
 type mCollRepo struct{ mock.Mock }
@@ -130,16 +179,23 @@ func (m *mCollRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Collection), args.Error(1)
 }
+func (m *mCollRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
+}
 
 // --- helpers ---
 
-func setupHandler() (*Handler, *mPromptRepo, *mVersionRepo) {
+func setupHandler() (*Handler, *mPromptRepo, *mVersionRepo, *mPinRepo) {
 	pr := new(mPromptRepo)
 	vr := new(mVersionRepo)
 	tr := new(mTagRepo)
 	cr := new(mCollRepo)
-	svc := promptuc.NewService(pr, tr, cr, vr, nil)
-	return NewHandler(svc), pr, vr
+	pinr := new(mPinRepo)
+	// Default: GetStatuses returns empty map (no pins)
+	pinr.On("GetStatuses", mock.Anything, mock.Anything, mock.Anything).Return(make(map[uint]repo.PinStatus), nil)
+	svc := promptuc.NewService(pr, tr, cr, vr, nil, pinr, nil, nil)
+	return NewHandler(svc), pr, vr, pinr
 }
 
 func makeReq(method, url string, userID uint, params map[string]string) (*http.Request, *httptest.ResponseRecorder) {
@@ -156,7 +212,7 @@ func makeReq(method, url string, userID uint, params map[string]string) (*http.R
 // ===== ListVersions handler =====
 
 func TestHandler_ListVersions_Success(t *testing.T) {
-	h, pr, vr := setupHandler()
+	h, pr, vr, _ := setupHandler()
 
 	prompt := &models.Prompt{ID: 1, UserID: 10, Title: "Test"}
 	pr.On("GetByID", mock.Anything, uint(1)).Return(prompt, nil)
@@ -182,7 +238,7 @@ func TestHandler_ListVersions_Success(t *testing.T) {
 }
 
 func TestHandler_ListVersions_DefaultPagination(t *testing.T) {
-	h, pr, vr := setupHandler()
+	h, pr, vr, _ := setupHandler()
 
 	pr.On("GetByID", mock.Anything, uint(1)).Return(&models.Prompt{ID: 1, UserID: 10}, nil)
 	vr.On("ListByPromptID", mock.Anything, uint(1), 1, 20).Return([]models.PromptVersion{}, int64(0), nil)
@@ -195,7 +251,7 @@ func TestHandler_ListVersions_DefaultPagination(t *testing.T) {
 }
 
 func TestHandler_ListVersions_HasMore(t *testing.T) {
-	h, pr, vr := setupHandler()
+	h, pr, vr, _ := setupHandler()
 
 	pr.On("GetByID", mock.Anything, uint(1)).Return(&models.Prompt{ID: 1, UserID: 10}, nil)
 	// 25 total, page_size=10 → has_more = true
@@ -213,7 +269,7 @@ func TestHandler_ListVersions_HasMore(t *testing.T) {
 }
 
 func TestHandler_ListVersions_InvalidID(t *testing.T) {
-	h, _, _ := setupHandler()
+	h, _, _, _ := setupHandler()
 
 	req, w := makeReq("GET", "/api/prompts/abc/versions", 10, map[string]string{"id": "abc"})
 	h.ListVersions(w, req)
@@ -222,7 +278,7 @@ func TestHandler_ListVersions_InvalidID(t *testing.T) {
 }
 
 func TestHandler_ListVersions_Forbidden(t *testing.T) {
-	h, pr, _ := setupHandler()
+	h, pr, _, _ := setupHandler()
 
 	pr.On("GetByID", mock.Anything, uint(1)).Return(&models.Prompt{ID: 1, UserID: 10}, nil)
 
@@ -235,7 +291,7 @@ func TestHandler_ListVersions_Forbidden(t *testing.T) {
 // ===== RevertToVersion handler =====
 
 func TestHandler_RevertToVersion_Success(t *testing.T) {
-	h, pr, vr := setupHandler()
+	h, pr, vr, _ := setupHandler()
 
 	oldVer := &models.PromptVersion{
 		ID: 5, PromptID: 1, VersionNumber: 1,
@@ -262,7 +318,7 @@ func TestHandler_RevertToVersion_Success(t *testing.T) {
 }
 
 func TestHandler_RevertToVersion_InvalidPromptID(t *testing.T) {
-	h, _, _ := setupHandler()
+	h, _, _, _ := setupHandler()
 
 	req, w := makeReq("POST", "/api/prompts/abc/revert/1", 10, map[string]string{"id": "abc", "versionId": "1"})
 	h.RevertToVersion(w, req)
@@ -271,7 +327,7 @@ func TestHandler_RevertToVersion_InvalidPromptID(t *testing.T) {
 }
 
 func TestHandler_RevertToVersion_InvalidVersionID(t *testing.T) {
-	h, _, _ := setupHandler()
+	h, _, _, _ := setupHandler()
 
 	req, w := makeReq("POST", "/api/prompts/1/revert/abc", 10, map[string]string{"id": "1", "versionId": "abc"})
 	h.RevertToVersion(w, req)
@@ -280,7 +336,7 @@ func TestHandler_RevertToVersion_InvalidVersionID(t *testing.T) {
 }
 
 func TestHandler_RevertToVersion_VersionNotFound(t *testing.T) {
-	h, _, vr := setupHandler()
+	h, _, vr, _ := setupHandler()
 
 	vr.On("GetByIDForPrompt", mock.Anything, uint(99), uint(1)).Return(nil, repo.ErrNotFound)
 
@@ -291,7 +347,7 @@ func TestHandler_RevertToVersion_VersionNotFound(t *testing.T) {
 }
 
 func TestHandler_RevertToVersion_Forbidden(t *testing.T) {
-	h, pr, vr := setupHandler()
+	h, pr, vr, _ := setupHandler()
 
 	oldVer := &models.PromptVersion{ID: 5, PromptID: 1, VersionNumber: 1, Title: "T", Content: "C", Model: "M"}
 	vr.On("GetByIDForPrompt", mock.Anything, uint(5), uint(1)).Return(oldVer, nil)

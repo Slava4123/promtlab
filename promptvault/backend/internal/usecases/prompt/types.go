@@ -18,3 +18,14 @@ type UpdateInput struct {
 	CollectionIDs []uint
 	TagIDs        []uint
 }
+
+type PinInput struct {
+	PromptID uint
+	UserID   uint
+	TeamWide bool
+}
+
+type PinResult struct {
+	Pinned   bool `json:"pinned"`
+	TeamWide bool `json:"team_wide"`
+}

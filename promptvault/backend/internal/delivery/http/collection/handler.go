@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 
+	badgehttp "promptvault/internal/delivery/http/badge"
 	httperr "promptvault/internal/delivery/http/errors"
 	"promptvault/internal/delivery/http/utils"
 	authmw "promptvault/internal/middleware/auth"
@@ -88,13 +89,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, err := h.svc.Create(r.Context(), userID, utils.SanitizeString(req.Name), utils.SanitizeString(req.Description), req.Color, req.Icon, req.TeamID)
+	c, newBadges, err := h.svc.Create(r.Context(), userID, utils.SanitizeString(req.Name), utils.SanitizeString(req.Description), req.Color, req.Icon, req.TeamID)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	utils.WriteCreated(w, c)
+	utils.WriteCreated(w, NewCollectionResponse(*c, badgehttp.NewBadgeSummaries(newBadges)))
 }
 
 // PUT /api/collections/{id}

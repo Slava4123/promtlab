@@ -43,6 +43,24 @@ func (m *mockPromptRepo) SearchByQuery(ctx context.Context, userID uint, teamID 
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Prompt), args.Error(1)
 }
+func (m *mockPromptRepo) UpdateLastUsed(ctx context.Context, id uint) error {
+	return m.Called(ctx, id).Error(0)
+}
+func (m *mockPromptRepo) ListRecent(ctx context.Context, userID uint, teamID *uint, limit int) ([]models.Prompt, error) {
+	args := m.Called(ctx, userID, teamID, limit)
+	return args.Get(0).([]models.Prompt), args.Error(1)
+}
+func (m *mockPromptRepo) LogUsage(ctx context.Context, userID, promptID uint) error {
+	return m.Called(ctx, userID, promptID).Error(0)
+}
+func (m *mockPromptRepo) ListUsageHistory(ctx context.Context, userID uint, teamID *uint, page, pageSize int) ([]models.PromptUsageLog, int64, error) {
+	args := m.Called(ctx, userID, teamID, page, pageSize)
+	return args.Get(0).([]models.PromptUsageLog), args.Get(1).(int64), args.Error(2)
+}
+func (m *mockPromptRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
+}
 
 // --- VersionRepository mock ---
 
@@ -87,6 +105,9 @@ func (m *mockTagRepo) GetByIDs(ctx context.Context, ids []uint) ([]models.Tag, e
 func (m *mockTagRepo) Delete(ctx context.Context, id uint) error {
 	return m.Called(ctx, id).Error(0)
 }
+func (m *mockTagRepo) DeleteOrphans(ctx context.Context, userID uint, teamID *uint) error {
+	return m.Called(ctx, userID, teamID).Error(0)
+}
 func (m *mockTagRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Tag, error) {
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Tag), args.Error(1)
@@ -97,6 +118,10 @@ func (m *mockTagRepo) GetByID(ctx context.Context, id uint) (*models.Tag, error)
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Tag), args.Error(1)
+}
+func (m *mockTagRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
 }
 
 // --- CollectionRepository mock ---
@@ -131,4 +156,8 @@ func (m *mockCollectionRepo) ListWithCounts(ctx context.Context, userID uint, te
 func (m *mockCollectionRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Collection, error) {
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Collection), args.Error(1)
+}
+func (m *mockCollectionRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
 }

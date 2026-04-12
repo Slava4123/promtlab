@@ -26,4 +26,9 @@ type PromptRepository interface {
 	SetFavorite(ctx context.Context, id uint, favorite bool) error
 	IncrementUsage(ctx context.Context, id uint) error
 	SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Prompt, error)
+	UpdateLastUsed(ctx context.Context, id uint) error
+	ListRecent(ctx context.Context, userID uint, teamID *uint, limit int) ([]models.Prompt, error)
+	LogUsage(ctx context.Context, userID, promptID uint) error
+	ListUsageHistory(ctx context.Context, userID uint, teamID *uint, page, pageSize int) ([]models.PromptUsageLog, int64, error)
+	SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error)
 }

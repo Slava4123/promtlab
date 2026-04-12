@@ -7,6 +7,7 @@ import (
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	badgeuc "promptvault/internal/usecases/badge"
 	"promptvault/internal/usecases/teamcheck"
 )
 
@@ -15,25 +16,26 @@ var validHexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 type Service struct {
 	collections repo.CollectionRepository
 	teams       repo.TeamRepository
+	badges      *badgeuc.Service
 }
 
-func NewService(collections repo.CollectionRepository, teams repo.TeamRepository) *Service {
-	return &Service{collections: collections, teams: teams}
+func NewService(collections repo.CollectionRepository, teams repo.TeamRepository, badges *badgeuc.Service) *Service {
+	return &Service{collections: collections, teams: teams, badges: badges}
 }
 
-func (s *Service) Create(ctx context.Context, userID uint, name, description, color, icon string, teamID *uint) (*models.Collection, error) {
+func (s *Service) Create(ctx context.Context, userID uint, name, description, color, icon string, teamID *uint) (*models.Collection, []badgeuc.Badge, error) {
 	// Проверка роли для командной коллекции
 	if err := teamcheck.RequireEditor(ctx, s.teams, teamID, userID); err != nil {
-		return nil, mapTeamError(err)
+		return nil, nil, mapTeamError(err)
 	}
 
 	if color == "" {
 		color = "#8b5cf6"
 	} else if !validHexColor.MatchString(color) {
-		return nil, ErrInvalidColor
+		return nil, nil, ErrInvalidColor
 	}
 	if len(icon) > 30 {
-		return nil, ErrInvalidIcon
+		return nil, nil, ErrInvalidIcon
 	}
 	c := &models.Collection{
 		UserID:      userID,
@@ -44,9 +46,18 @@ func (s *Service) Create(ctx context.Context, userID uint, name, description, co
 		Icon:        icon,
 	}
 	if err := s.collections.Create(ctx, c); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return c, nil
+
+	// Badges evaluate — best-effort, триггерит Collector/TeamLibrarian.
+	var newBadges []badgeuc.Badge
+	if s.badges != nil {
+		newBadges = s.badges.Evaluate(ctx, userID, badgeuc.Event{
+			Type:   badgeuc.EventCollectionCreated,
+			TeamID: teamID,
+		})
+	}
+	return c, newBadges, nil
 }
 
 func (s *Service) GetByID(ctx context.Context, id, userID uint) (*models.Collection, error) {

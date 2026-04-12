@@ -43,6 +43,24 @@ func (m *mPromptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *ui
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Prompt), args.Error(1)
 }
+func (m *mPromptRepo) UpdateLastUsed(ctx context.Context, id uint) error {
+	return m.Called(ctx, id).Error(0)
+}
+func (m *mPromptRepo) ListRecent(ctx context.Context, userID uint, teamID *uint, limit int) ([]models.Prompt, error) {
+	args := m.Called(ctx, userID, teamID, limit)
+	return args.Get(0).([]models.Prompt), args.Error(1)
+}
+func (m *mPromptRepo) LogUsage(ctx context.Context, userID, promptID uint) error {
+	return m.Called(ctx, userID, promptID).Error(0)
+}
+func (m *mPromptRepo) ListUsageHistory(ctx context.Context, userID uint, teamID *uint, page, pageSize int) ([]models.PromptUsageLog, int64, error) {
+	args := m.Called(ctx, userID, teamID, page, pageSize)
+	return args.Get(0).([]models.PromptUsageLog), args.Get(1).(int64), args.Error(2)
+}
+func (m *mPromptRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
+}
 
 type mCollRepo struct{ mock.Mock }
 
@@ -75,6 +93,10 @@ func (m *mCollRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Collection), args.Error(1)
 }
+func (m *mCollRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
+}
 
 type mTagRepo struct{ mock.Mock }
 
@@ -93,6 +115,9 @@ func (m *mTagRepo) GetByIDs(ctx context.Context, ids []uint) ([]models.Tag, erro
 func (m *mTagRepo) Delete(ctx context.Context, id uint) error {
 	return m.Called(ctx, id).Error(0)
 }
+func (m *mTagRepo) DeleteOrphans(ctx context.Context, userID uint, teamID *uint) error {
+	return m.Called(ctx, userID, teamID).Error(0)
+}
 func (m *mTagRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Tag, error) {
 	args := m.Called(ctx, userID, teamID, query, limit)
 	return args.Get(0).([]models.Tag), args.Error(1)
@@ -103,6 +128,10 @@ func (m *mTagRepo) GetByID(ctx context.Context, id uint) (*models.Tag, error) {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Tag), args.Error(1)
+}
+func (m *mTagRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
+	args := m.Called(ctx, userID, teamID, prefix, limit)
+	return args.Get(0).([]string), args.Error(1)
 }
 
 // --- tests ---
@@ -215,4 +244,78 @@ func TestSearch_EmptyResults(t *testing.T) {
 	assert.Empty(t, out.Prompts)
 	assert.Empty(t, out.Collections)
 	assert.Empty(t, out.Tags)
+}
+
+// --- Suggest tests ---
+
+func TestSuggest_EmptyPrefix(t *testing.T) {
+	svc := NewService(new(mPromptRepo), new(mCollRepo), new(mTagRepo))
+
+	out, err := svc.Suggest(context.Background(), 1, nil, "")
+	assert.NoError(t, err)
+	assert.Empty(t, out.Suggestions)
+}
+
+func TestSuggest_MixedResults(t *testing.T) {
+	pr := new(mPromptRepo)
+	cr := new(mCollRepo)
+	tr := new(mTagRepo)
+
+	pr.On("SuggestByPrefix", mock.Anything, uint(1), (*uint)(nil), "cod", suggestPrompts).
+		Return([]string{"Code Review", "Coding Standards"}, nil)
+	cr.On("SuggestByPrefix", mock.Anything, uint(1), (*uint)(nil), "cod", suggestCollections).
+		Return([]string{"Code Templates"}, nil)
+	tr.On("SuggestByPrefix", mock.Anything, uint(1), (*uint)(nil), "cod", suggestTags).
+		Return([]string{"coding"}, nil)
+
+	svc := NewService(pr, cr, tr)
+	out, err := svc.Suggest(context.Background(), 1, nil, "cod")
+
+	assert.NoError(t, err)
+	assert.Len(t, out.Suggestions, 4)
+	assert.Equal(t, "Code Review", out.Suggestions[0].Text)
+	assert.Equal(t, "prompt", out.Suggestions[0].Type)
+	assert.Equal(t, "Code Templates", out.Suggestions[2].Text)
+	assert.Equal(t, "collection", out.Suggestions[2].Type)
+	assert.Equal(t, "coding", out.Suggestions[3].Text)
+	assert.Equal(t, "tag", out.Suggestions[3].Type)
+}
+
+func TestSuggest_Deduplication(t *testing.T) {
+	pr := new(mPromptRepo)
+	cr := new(mCollRepo)
+	tr := new(mTagRepo)
+
+	pr.On("SuggestByPrefix", mock.Anything, uint(1), (*uint)(nil), "test", suggestPrompts).
+		Return([]string{"Test Prompt"}, nil)
+	cr.On("SuggestByPrefix", mock.Anything, uint(1), (*uint)(nil), "test", suggestCollections).
+		Return([]string{"test prompt"}, nil)
+	tr.On("SuggestByPrefix", mock.Anything, uint(1), (*uint)(nil), "test", suggestTags).
+		Return([]string{}, nil)
+
+	svc := NewService(pr, cr, tr)
+	out, err := svc.Suggest(context.Background(), 1, nil, "test")
+
+	assert.NoError(t, err)
+	assert.Len(t, out.Suggestions, 1)
+	assert.Equal(t, "Test Prompt", out.Suggestions[0].Text)
+}
+
+func TestSuggest_LimitCapping(t *testing.T) {
+	pr := new(mPromptRepo)
+	cr := new(mCollRepo)
+	tr := new(mTagRepo)
+
+	pr.On("SuggestByPrefix", mock.Anything, uint(1), (*uint)(nil), "a", suggestPrompts).
+		Return([]string{"A1", "A2", "A3", "A4"}, nil)
+	cr.On("SuggestByPrefix", mock.Anything, uint(1), (*uint)(nil), "a", suggestCollections).
+		Return([]string{"AC1", "AC2"}, nil)
+	tr.On("SuggestByPrefix", mock.Anything, uint(1), (*uint)(nil), "a", suggestTags).
+		Return([]string{"AT1"}, nil)
+
+	svc := NewService(pr, cr, tr)
+	out, err := svc.Suggest(context.Background(), 1, nil, "a")
+
+	assert.NoError(t, err)
+	assert.Len(t, out.Suggestions, 7)
 }

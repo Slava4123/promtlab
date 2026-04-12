@@ -70,6 +70,11 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.EmailVerification{},
 		&models.LinkedAccount{},
 		&models.TeamInvitation{},
+		&models.APIKey{},
+		&models.UserBadge{},
+		&models.UserTOTP{},
+		&models.UserTOTPBackupCode{},
+		&models.AuditLog{},
 	)
 	if err != nil {
 		t.Fatalf("failed to run migrations: %v", err)

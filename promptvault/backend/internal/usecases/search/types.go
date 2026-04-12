@@ -14,3 +14,12 @@ type SearchOutput struct {
 	Collections []SearchResult `json:"collections"`
 	Tags        []SearchResult `json:"tags"`
 }
+
+type Suggestion struct {
+	Text string `json:"text"`
+	Type string `json:"type"`
+}
+
+type SuggestOutput struct {
+	Suggestions []Suggestion `json:"suggestions"`
+}

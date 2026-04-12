@@ -8,4 +8,5 @@ type Config struct {
 	SMTP     SMTPConfig     `koanf:"smtp"`
 	AI       AIConfig       `koanf:"ai"`
 	Sentry   SentryConfig   `koanf:"sentry"`
+	MCP      MCPConfig      `koanf:"mcp"`
 }
