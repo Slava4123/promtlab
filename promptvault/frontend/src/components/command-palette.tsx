@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
-import { FileText, FolderOpen, Settings, Plus, Tag } from "lucide-react"
+import { FileText, FolderOpen, Settings, Plus, Tag, Sparkles } from "lucide-react"
 
 import {
   CommandDialog,
@@ -13,6 +13,8 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import { useSearch } from "@/hooks/use-search"
+import { useSuggest } from "@/hooks/use-suggest"
+import { HighlightMatch } from "@/lib/highlight"
 import { useWorkspaceStore } from "@/stores/workspace-store"
 
 export function CommandPalette() {
@@ -41,6 +43,7 @@ export function CommandPalette() {
   }, [])
 
   const { data } = useSearch(debouncedQuery, teamId)
+  const { data: suggestData } = useSuggest(debouncedQuery, teamId)
 
   const runAction = useCallback(
     (cb: () => void) => {
@@ -72,6 +75,26 @@ export function CommandPalette() {
             {debouncedQuery.length >= 2 ? "Ничего не найдено" : "Начните вводить для поиска..."}
           </CommandEmpty>
 
+          {/* Подсказки */}
+          {suggestData && suggestData.suggestions.length > 0 && (
+            <CommandGroup heading="Подсказки">
+              {suggestData.suggestions.map((s, i) => (
+                <CommandItem
+                  key={`sg-${i}`}
+                  onSelect={() => setQuery(s.text)}
+                >
+                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">
+                    <HighlightMatch text={s.text} query={debouncedQuery} />
+                  </span>
+                  <span className="ml-auto text-[0.65rem] text-muted-foreground">
+                    {s.type === "prompt" ? "промпт" : s.type === "collection" ? "коллекция" : "тег"}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
           {/* Результаты поиска */}
           {hasResults && (
             <>
@@ -84,10 +107,12 @@ export function CommandPalette() {
                     >
                       <FileText className="text-violet-400" />
                       <div className="flex flex-col gap-0.5 overflow-hidden">
-                        <span className="truncate">{item.title}</span>
+                        <span className="truncate">
+                          <HighlightMatch text={item.title} query={debouncedQuery} />
+                        </span>
                         {item.description && (
                           <span className="truncate text-xs text-muted-foreground">
-                            {item.description}
+                            <HighlightMatch text={item.description} query={debouncedQuery} />
                           </span>
                         )}
                       </div>
@@ -107,7 +132,9 @@ export function CommandPalette() {
                         className="inline-block h-3 w-3 shrink-0 rounded-full"
                         style={{ backgroundColor: item.color || "#6366f1" }}
                       />
-                      <span className="truncate">{item.title}</span>
+                      <span className="truncate">
+                        <HighlightMatch text={item.title} query={debouncedQuery} />
+                      </span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -121,7 +148,9 @@ export function CommandPalette() {
                       onSelect={() => runAction(() => navigate(`/?tag_ids=${item.id}`))}
                     >
                       <Tag className="shrink-0" style={{ color: item.color || "#6366f1" }} />
-                      <span className="truncate">{item.title}</span>
+                      <span className="truncate">
+                        <HighlightMatch text={item.title} query={debouncedQuery} />
+                      </span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

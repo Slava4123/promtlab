@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api, apiVoid } from "@/api/client"
-import type { Collection } from "@/api/types"
+import type { Collection, CollectionResponse } from "@/api/types"
+import { useBadgeUnlocks } from "./use-badge-toast"
 
 export function useCollection(id: number) {
   return useQuery({
@@ -22,10 +23,14 @@ export function useCollections(teamId?: number | null) {
 
 export function useCreateCollection() {
   const qc = useQueryClient()
+  const handleBadges = useBadgeUnlocks()
   return useMutation({
     mutationFn: (data: { name: string; description?: string; color?: string; icon?: string; team_id?: number | null }) =>
-      api<Collection>("/collections", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["collections"] }),
+      api<CollectionResponse>("/collections", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["collections"] })
+      handleBadges(data.newly_unlocked_badges)
+    },
   })
 }
 
@@ -48,6 +53,8 @@ export function useDeleteCollection() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["collections"] })
       qc.invalidateQueries({ queryKey: ["prompts"] })
+      qc.invalidateQueries({ queryKey: ["trash"] })
+      qc.invalidateQueries({ queryKey: ["trash-count"] })
     },
   })
 }

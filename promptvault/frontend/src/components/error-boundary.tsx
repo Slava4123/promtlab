@@ -45,13 +45,13 @@ export class ErrorBoundary extends Component<Props, State> {
               Произошла непредвиденная ошибка. Попробуйте перезагрузить страницу.
             </p>
             {this.state.error && (
-              <pre className="mt-4 max-h-32 overflow-auto rounded-lg bg-white/[0.03] p-3 text-left text-[0.7rem] text-red-400">
+              <pre className="mt-4 max-h-32 overflow-auto rounded-lg bg-foreground/[0.04] p-3 text-left text-[0.7rem] text-red-400">
                 {this.state.error.message}
               </pre>
             )}
             <button
               onClick={() => window.location.reload()}
-              className="mt-5 rounded-lg bg-violet-600 px-5 py-2 text-sm font-medium text-white transition-all hover:bg-violet-500"
+              className="mt-5 rounded-lg bg-violet-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500"
             >
               Перезагрузить
             </button>

@@ -18,6 +18,7 @@ import OAuthCallback from "@/pages/oauth-callback"
 import VerifyEmail from "@/pages/verify-email"
 import ForgotPassword from "@/pages/forgot-password"
 import Landing from "@/pages/landing"
+import SharedPrompt from "@/pages/shared-prompt"
 
 // Lazy-loaded (protected, heavier)
 const Dashboard = lazy(() => import("@/pages/dashboard"))
@@ -29,7 +30,20 @@ const SettingsPage = lazy(() => import("@/pages/settings"))
 const Teams = lazy(() => import("@/pages/teams"))
 const TeamView = lazy(() => import("@/pages/team-view"))
 const Pricing = lazy(() => import("@/pages/pricing"))
+const Trash = lazy(() => import("@/pages/trash"))
+const History = lazy(() => import("@/pages/history"))
 const Welcome = lazy(() => import("@/pages/welcome"))
+const Changelog = lazy(() => import("@/pages/changelog"))
+const Badges = lazy(() => import("@/pages/badges"))
+
+// Admin pages
+const AdminLayout = lazy(() => import("@/pages/admin/layout"))
+const AdminUsers = lazy(() => import("@/pages/admin/users"))
+const AdminUserDetail = lazy(() => import("@/pages/admin/user-detail"))
+const AdminAuditLog = lazy(() => import("@/pages/admin/audit-log"))
+const AdminHealth = lazy(() => import("@/pages/admin/health"))
+const AdminTOTPEnroll = lazy(() => import("@/pages/admin/totp-enroll"))
+const ExtensionPrivacy = lazy(() => import("@/pages/legal/extension-privacy"))
 
 function PageFallback() {
   return (
@@ -82,6 +96,8 @@ function AppRoutes() {
       <Route path="/oauth/callback" element={<OAuthCallback />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/s/:token" element={<SharedPrompt />} />
+      <Route path="/legal/extension-privacy" element={<Suspense fallback={<PageFallback />}><ExtensionPrivacy /></Suspense>} />
 
       {/* protected — with layout */}
       <Route element={<ProtectedRoute />}>
@@ -98,7 +114,21 @@ function AppRoutes() {
           <Route path="/teams" element={<Suspense fallback={<PageFallback />}><Teams /></Suspense>} />
           <Route path="/teams/:slug" element={<Suspense fallback={<PageFallback />}><TeamView /></Suspense>} />
           <Route path="/settings" element={<Suspense fallback={<PageFallback />}><SettingsPage /></Suspense>} />
+          <Route path="/history" element={<Suspense fallback={<PageFallback />}><History /></Suspense>} />
+          <Route path="/trash" element={<Suspense fallback={<PageFallback />}><Trash /></Suspense>} />
           <Route path="/pricing" element={<Suspense fallback={<PageFallback />}><Pricing /></Suspense>} />
+          <Route path="/changelog" element={<Suspense fallback={<PageFallback />}><Changelog /></Suspense>} />
+          <Route path="/badges" element={<Suspense fallback={<PageFallback />}><Badges /></Suspense>} />
+
+          {/* Admin routes — гвардятся useAdminGuard внутри AdminLayout */}
+          <Route path="/admin" element={<Suspense fallback={<PageFallback />}><AdminLayout /></Suspense>}>
+            <Route index element={<Suspense fallback={<PageFallback />}><AdminUsers /></Suspense>} />
+            <Route path="users" element={<Suspense fallback={<PageFallback />}><AdminUsers /></Suspense>} />
+            <Route path="users/:id" element={<Suspense fallback={<PageFallback />}><AdminUserDetail /></Suspense>} />
+            <Route path="audit" element={<Suspense fallback={<PageFallback />}><AdminAuditLog /></Suspense>} />
+            <Route path="health" element={<Suspense fallback={<PageFallback />}><AdminHealth /></Suspense>} />
+            <Route path="totp" element={<Suspense fallback={<PageFallback />}><AdminTOTPEnroll /></Suspense>} />
+          </Route>
         </Route>
       </Route>
     </Routes>

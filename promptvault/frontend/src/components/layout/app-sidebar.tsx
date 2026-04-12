@@ -11,6 +11,11 @@ import {
   User,
   Check,
   CreditCard,
+  Trash2,
+  Clock,
+  Sparkles,
+  Trophy,
+  Shield,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
@@ -23,8 +28,11 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { UserMenu } from "@/components/layout/user-menu"
+import { FeedbackDialog } from "@/components/feedback/feedback-dialog"
+import { useAuthStore } from "@/stores/auth-store"
 import { useCollections } from "@/hooks/use-collections"
 import { useTeams } from "@/hooks/use-teams"
+import { useTrashCount } from "@/hooks/use-trash"
 import { useWorkspaceStore } from "@/stores/workspace-store"
 
 interface NavItem {
@@ -37,12 +45,21 @@ const mainNav: NavItem[] = [
   { title: "Промпты", icon: FileText, path: "/dashboard" },
   { title: "Коллекции", icon: FolderOpen, path: "/collections" },
   { title: "Команды", icon: Users, path: "/teams" },
+  { title: "История", icon: Clock, path: "/history" },
+  { title: "Достижения", icon: Trophy, path: "/badges" },
+]
+
+const secondaryNav: NavItem[] = [
+  { title: "Корзина", icon: Trash2, path: "/trash" },
 ]
 
 const bottomNav: NavItem[] = [
   { title: "Тарифы", icon: CreditCard, path: "/pricing" },
+  { title: "Что нового", icon: Sparkles, path: "/changelog" },
   { title: "Настройки", icon: Settings, path: "/settings" },
 ]
+
+const adminNavItem: NavItem = { title: "Админ", icon: Shield, path: "/admin/users" }
 
 function NavLink({ item, isActive, onClick }: { item: NavItem; isActive: boolean; onClick: () => void }) {
   const Icon = item.icon
@@ -74,6 +91,10 @@ export function AppSidebar() {
   const qc = useQueryClient()
   const { data: collections } = useCollections(teamId)
   const { data: teams } = useTeams()
+  const { data: trashCounts } = useTrashCount(teamId)
+  const hasUnreadChangelog = useAuthStore((s) => s.user?.has_unread_changelog)
+  const isAdmin = useAuthStore((s) => s.user?.role === "admin")
+  const trashTotal = (trashCounts?.prompts ?? 0) + (trashCounts?.collections ?? 0) + (trashCounts?.tags ?? 0)
   const [collectionsOpen, setCollectionsOpen] = useState(true)
   const [collectionSearch, setCollectionSearch] = useState("")
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -249,19 +270,56 @@ export function AppSidebar() {
           )}
 
           <div className="!mt-3 border-t border-border pt-3">
+            {secondaryNav.map((item) => {
+              const isTrash = item.path === "/trash"
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => go(item.path)}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-[7px] text-[0.8rem] transition-colors ${
+                    location.pathname === item.path
+                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  }`}
+                >
+                  <item.icon className={`h-[15px] w-[15px] shrink-0 ${location.pathname === item.path ? "text-violet-400" : ""}`} />
+                  <span>{item.title}</span>
+                  {isTrash && trashTotal > 0 && (
+                    <span className="ml-auto rounded-full bg-muted/50 px-1.5 py-px text-[0.6rem] tabular-nums text-muted-foreground">
+                      {trashTotal}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="!mt-3 border-t border-border pt-3">
             {bottomNav.map((item) => (
-              <NavLink
-                key={item.path}
-                item={item}
-                isActive={location.pathname === item.path}
-                onClick={() => go(item.path)}
-              />
+              <div key={item.path} className="relative">
+                <NavLink
+                  item={item}
+                  isActive={location.pathname === item.path}
+                  onClick={() => go(item.path)}
+                />
+                {item.path === "/changelog" && hasUnreadChangelog && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-violet-500" />
+                )}
+              </div>
             ))}
+            {isAdmin && (
+              <NavLink
+                item={adminNavItem}
+                isActive={location.pathname.startsWith("/admin")}
+                onClick={() => go(adminNavItem.path)}
+              />
+            )}
           </div>
         </div>
       </SidebarContent>
 
       <SidebarFooter className="p-3">
+        <FeedbackDialog />
         <UserMenu />
       </SidebarFooter>
     </Sidebar>

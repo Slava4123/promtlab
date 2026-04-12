@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,11 +18,21 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>
 
+// Шаг TOTP — показывается после успешной проверки password для admin'ов.
+interface TOTPStep {
+  preAuthToken: string
+  email: string
+}
+
 export default function SignIn() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
+  const verifyTOTP = useAuthStore((s) => s.verifyTOTP)
   const [error, setError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [totpStep, setTotpStep] = useState<TOTPStep | null>(null)
+  const [totpCode, setTotpCode] = useState("")
+  const [totpSubmitting, setTotpSubmitting] = useState(false)
 
   const {
     register,
@@ -35,8 +45,18 @@ export default function SignIn() {
   const onSubmit = async (data: LoginForm) => {
     setError("")
     try {
-      await login(data.email, data.password)
-      navigate("/dashboard")
+      const result = await login(data.email, data.password)
+      switch (result.kind) {
+        case "ok":
+          navigate("/dashboard")
+          return
+        case "totp_required":
+          setTotpStep({ preAuthToken: result.preAuthToken, email: result.email })
+          return
+        case "totp_enrollment_required":
+          navigate("/admin/totp")
+          return
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ошибка входа"
       if (msg === "Email не подтверждён") {
@@ -45,6 +65,83 @@ export default function SignIn() {
       }
       setError(msg)
     }
+  }
+
+  const onTOTPSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!totpStep || !totpCode) return
+    setError("")
+    setTotpSubmitting(true)
+    try {
+      const result = await verifyTOTP(totpStep.preAuthToken, totpCode)
+      if (result.used_backup_code) {
+        // Опционально можно показать toast; для MVP — tihий redirect.
+      }
+      navigate("/admin/users")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Неверный код")
+    } finally {
+      setTotpSubmitting(false)
+    }
+  }
+
+  if (totpStep) {
+    return (
+      <AuthLayout>
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/15">
+            <ShieldCheck className="h-6 w-6 text-violet-400" />
+          </div>
+          <h1 className="text-xl font-semibold text-foreground">Двухфакторная проверка</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Введите 6-значный код из приложения Authenticator или один из backup-кодов
+          </p>
+        </div>
+        <form onSubmit={onTOTPSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="totp_code" className="text-foreground">Код</Label>
+            <Input
+              id="totp_code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="000000"
+              autoFocus
+              value={totpCode}
+              onChange={(e) => {
+                setTotpCode(e.target.value)
+                if (error) setError("")
+              }}
+              className="border-foreground/[0.08] bg-foreground/[0.06] text-center text-lg tracking-widest focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+            />
+          </div>
+          <Button
+            type="submit"
+            className="w-full bg-violet-600 text-white hover:bg-violet-500 active:bg-violet-700"
+            disabled={totpSubmitting || !totpCode}
+          >
+            {totpSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {totpSubmitting ? "Проверка..." : "Войти"}
+          </Button>
+          <button
+            type="button"
+            className="w-full text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              setTotpStep(null)
+              setTotpCode("")
+              setError("")
+            }}
+          >
+            Вернуться к входу
+          </button>
+        </form>
+      </AuthLayout>
+    )
   }
 
   return (
@@ -119,7 +216,7 @@ export default function SignIn() {
             id="email"
             type="email"
             placeholder="you@example.com"
-            className="border-white/[0.08] bg-white/[0.04] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+            className="border-foreground/[0.08] bg-foreground/[0.06] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             {...register("email")}
           />
           {errors.email && (
@@ -139,7 +236,7 @@ export default function SignIn() {
               id="password"
               type={showPassword ? "text" : "password"}
               placeholder="••••••••"
-              className="border-white/[0.08] bg-white/[0.04] pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="border-foreground/[0.08] bg-foreground/[0.06] pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
               {...register("password")}
             />
             <button

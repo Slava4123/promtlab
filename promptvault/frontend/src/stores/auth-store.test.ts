@@ -50,6 +50,7 @@ describe("auth-store", () => {
   describe("login", () => {
     it("sets user and tokens on success", async () => {
       mockedApi.mockResolvedValueOnce(testAuthResponse)
+      mockedApi.mockResolvedValueOnce(testUser) // fetchMe after login
 
       await useAuthStore.getState().login("test@example.com", "password123")
 

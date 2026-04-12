@@ -93,7 +93,7 @@ export function TagInput({ selectedTagIds, onChange }: TagInputProps) {
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); removeTag(tag.id) }}
-              className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-white/10"
+              className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-foreground/10"
             >
               <X className="h-2.5 w-2.5" />
             </button>

@@ -3,6 +3,8 @@ import { Loader2, UserPlus } from "lucide-react"
 import { toast } from "sonner"
 import type { TeamRole } from "@/api/types"
 import { useSearchUsers } from "@/hooks/use-teams"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 interface InviteDialogProps {
   open: boolean
@@ -27,8 +29,6 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
 
   const showDropdown = inputFocused && !!searchResults && searchResults.length > 0 && query.length >= 2
 
-  if (!open) return null
-
   const handleSubmit = async () => {
     if (!query.trim()) return
     try {
@@ -48,17 +48,16 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="w-full max-w-md rounded-2xl p-6 space-y-4 border border-border bg-card"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-500/10">
-            <UserPlus className="h-5 w-5 text-violet-400" />
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-muted">
+              <UserPlus className="h-5 w-5 text-brand-muted-foreground" />
+            </div>
+            <DialogTitle>Пригласить участника</DialogTitle>
           </div>
-          <h2 className="text-lg font-semibold text-foreground">Пригласить участника</h2>
-        </div>
+        </DialogHeader>
 
         <div className="space-y-2 relative">
           <label className="text-[0.8rem] font-medium text-foreground">Email или @username</label>
@@ -69,20 +68,16 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
             onChange={(e) => setQuery(e.target.value)}
             placeholder="user@example.com или @username"
             autoFocus
-            className="flex h-10 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
+            className="flex h-10 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-brand/40 focus:ring-3 focus:ring-brand/10"
             onFocus={() => setInputFocused(true)}
             onBlur={() => {
-              // Delay hiding so click on dropdown registers
               setTimeout(() => setInputFocused(false), 200)
             }}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           />
 
-          {/* Search dropdown */}
           {showDropdown && searchResults && searchResults.length > 0 && (
-            <div
-              className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg py-1 border border-border bg-popover"
-            >
+            <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg py-1 border border-border bg-popover">
               {searchResults.map((u) => (
                 <button
                   key={u.id}
@@ -94,14 +89,14 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
                   {u.avatar_url ? (
                     <img src={u.avatar_url} alt={u.name} className="h-7 w-7 rounded-full object-cover" />
                   ) : (
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-[0.65rem] font-semibold text-violet-300">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-muted text-[0.65rem] font-semibold text-brand-muted-foreground">
                       {u.name.charAt(0).toUpperCase()}
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[0.8rem] font-medium text-foreground">{u.name}</p>
                     <p className="truncate text-[0.7rem] text-muted-foreground">
-                      {u.username && <span className="text-violet-400">@{u.username}</span>}
+                      {u.username && <span className="text-brand-muted-foreground">@{u.username}</span>}
                       {u.username && " \u00B7 "}
                       {u.email}
                     </p>
@@ -119,9 +114,9 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
               <button
                 key={r}
                 onClick={() => setRole(r)}
-                className={`flex-1 rounded-lg px-3 py-2 text-[0.8rem] font-medium transition-all ${
+                className={`flex-1 rounded-lg px-3 py-2 text-[0.8rem] font-medium transition-colors ${
                   role === r
-                    ? "bg-violet-600/20 text-violet-300 ring-1 ring-violet-500/30"
+                    ? "bg-brand/20 text-brand-muted-foreground ring-1 ring-brand/30"
                     : "text-muted-foreground hover:text-foreground border border-border bg-muted/20"
                 }`}
               >
@@ -134,24 +129,16 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
           </p>
         </div>
 
-        <div className="flex justify-end gap-2 pt-1">
-          <button
-            onClick={onClose}
-            className="flex h-9 items-center rounded-lg px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-foreground border border-border bg-muted/20"
-          >
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>
             Отмена
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!query.trim() || isPending}
-            className="flex h-9 items-center gap-2 rounded-lg px-5 text-[0.8rem] font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)", boxShadow: "0 4px 16px -2px rgba(124,58,237,0.25)" }}
-          >
+          </Button>
+          <Button variant="brand" size="sm" onClick={handleSubmit} disabled={!query.trim() || isPending}>
             {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Пригласить
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

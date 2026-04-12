@@ -38,11 +38,11 @@ export default function AppLayout() {
     <TooltipProvider>
       <SidebarProvider>
         <div className="flex min-h-screen w-full overflow-x-hidden">
-          <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:text-foreground focus:shadow-lg focus:ring-2 focus:ring-violet-500">
+          <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:text-foreground focus:shadow-lg focus:ring-2 focus:ring-brand">
             Перейти к содержимому
           </a>
           <AppSidebar />
-          <div className="flex flex-1 flex-col">
+          <div className="flex min-w-0 flex-1 flex-col">
             <header role="banner" className="flex h-14 items-center justify-between px-4">
               <div className="lg:hidden">
                 <SidebarTrigger />
@@ -57,7 +57,7 @@ export default function AppLayout() {
                   >
                     <Bell className="h-4 w-4" />
                     {pendingCount > 0 && (
-                      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-500 px-1 text-[9px] font-bold text-white">
+                      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[9px] font-bold text-brand-foreground">
                         {pendingCount}
                       </span>
                     )}
@@ -84,7 +84,7 @@ export default function AppLayout() {
                             {invitations?.map((inv) => (
                               <div key={inv.id} className="border-b border-border px-4 py-3 last:border-0">
                                 <div className="flex items-center gap-2 mb-1.5">
-                                  <Users className="h-3.5 w-3.5 text-violet-400/60" />
+                                  <Users className="h-3.5 w-3.5 text-brand-muted-foreground/60" />
                                   <p className="text-[0.78rem] font-medium text-foreground truncate">{inv.team_name}</p>
                                 </div>
                                 <p className="text-[0.7rem] text-muted-foreground mb-2">
@@ -94,8 +94,7 @@ export default function AppLayout() {
                                   <button
                                     onClick={() => handleAccept(inv.id)}
                                     disabled={acceptInvitation.isPending}
-                                    className="flex h-7 flex-1 items-center justify-center gap-1 rounded-lg text-[0.75rem] font-medium text-white transition-all active:scale-[0.97]"
-                                    style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)" }}
+                                    className="flex h-7 flex-1 items-center justify-center gap-1 rounded-lg text-[0.75rem] font-medium text-brand-foreground [background:var(--brand-gradient)] transition-colors active:scale-[0.97]"
                                   >
                                     <Check className="h-3 w-3" />
                                     Принять
@@ -103,7 +102,7 @@ export default function AppLayout() {
                                   <button
                                     onClick={() => handleDecline(inv.id)}
                                     disabled={declineInvitation.isPending}
-                                    className="flex h-7 flex-1 items-center justify-center gap-1 rounded-lg border border-border text-[0.75rem] text-muted-foreground transition-all hover:text-foreground"
+                                    className="flex h-7 flex-1 items-center justify-center gap-1 rounded-lg border border-border text-[0.75rem] text-muted-foreground transition-colors hover:text-foreground"
                                   >
                                     <X className="h-3 w-3" />
                                     Отклонить
@@ -142,7 +141,16 @@ export default function AppLayout() {
           </div>
         </div>
         <CommandPalette />
-        <Toaster richColors position="bottom-center" />
+        <Toaster
+          theme="dark"
+          richColors
+          position="bottom-center"
+          closeButton
+          duration={4000}
+          toastOptions={{
+            className: "relative overflow-hidden",
+          }}
+        />
       </SidebarProvider>
     </TooltipProvider>
   )

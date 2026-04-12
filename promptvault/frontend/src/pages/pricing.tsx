@@ -1,4 +1,5 @@
 import { Check, Sparkles, Zap, Crown } from "lucide-react"
+import { PageLayout } from "@/components/layout/page-layout"
 
 const plans = [
   {
@@ -62,15 +63,10 @@ const plans = [
 
 export default function Pricing() {
   return (
-    <div className="mx-auto max-w-[64rem] space-y-8">
-      {/* Header */}
-      <div className="text-center">
-        <h1 className="text-2xl font-bold tracking-tight">Тарифы</h1>
-        <p className="mt-1.5 text-[0.85rem] text-muted-foreground">
-          Выберите план, который подходит вам
-        </p>
-      </div>
-
+    <PageLayout
+      title="Тарифы"
+      description="Выберите план, который подходит вам"
+    >
       {/* Plans grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {plans.map((plan) => {
@@ -78,7 +74,7 @@ export default function Pricing() {
           return (
             <div
               key={plan.name}
-              className={`relative flex flex-col rounded-2xl border p-6 transition-all ${
+              className={`relative flex flex-col rounded-2xl border p-6 transition-colors ${
                 plan.popular
                   ? "border-violet-500/30 shadow-lg shadow-violet-500/5"
                   : "border-border"
@@ -134,7 +130,7 @@ export default function Pricing() {
               {/* Button */}
               <button
                 disabled
-                className={`flex h-11 w-full items-center justify-center rounded-lg text-[0.85rem] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`flex h-11 w-full items-center justify-center rounded-lg text-[0.85rem] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                   plan.current
                     ? "border border-border bg-muted/30 text-muted-foreground"
                     : plan.popular
@@ -143,7 +139,7 @@ export default function Pricing() {
                 }`}
                 style={
                   !plan.current && plan.popular
-                    ? { background: "linear-gradient(135deg, #7c3aed, #6d28d9)" }
+                    ? { background: "var(--brand-gradient)" }
                     : undefined
                 }
               >
@@ -160,6 +156,6 @@ export default function Pricing() {
           Оплата через ЮKassa. Подписку можно отменить в любой момент.
         </p>
       </div>
-    </div>
+    </PageLayout>
   )
 }

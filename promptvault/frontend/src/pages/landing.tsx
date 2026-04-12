@@ -32,11 +32,11 @@ export default function Landing() {
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 sm:px-10">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand">
             <FileText className="h-4 w-4" />
           </div>
           <span className="text-lg font-semibold">ПромтЛаб</span>
@@ -44,13 +44,13 @@ export default function Landing() {
         <div className="flex items-center gap-2">
           <Link
             to="/sign-in"
-            className="rounded-lg px-4 py-3 text-sm text-zinc-400 transition-colors hover:text-white"
+            className="rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             Войти
           </Link>
           <Link
             to="/sign-up"
-            className="rounded-lg bg-violet-600 px-4 py-3 text-sm font-medium transition-colors hover:bg-violet-500"
+            className="rounded-lg bg-brand px-4 py-3 text-sm font-medium transition-colors hover:bg-brand/90"
           >
             Регистрация
           </Link>
@@ -62,22 +62,22 @@ export default function Landing() {
         <div className="mx-auto max-w-2xl">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
             Управляйте AI-промптами
-            <span className="block text-violet-400">как профессионал</span>
+            <span className="block text-brand-muted-foreground">как профессионал</span>
           </h1>
-          <p className="mt-4 text-lg text-zinc-400 sm:text-xl">
+          <p className="mt-4 text-lg text-muted-foreground sm:text-xl">
             Сохраняйте, улучшайте и организуйте промпты.
             Встроенный AI-ассистент, версионирование и коллекции.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link
               to="/sign-up"
-              className="w-full rounded-lg bg-violet-600 px-6 py-3 text-sm font-medium transition-colors hover:bg-violet-500 sm:w-auto"
+              className="w-full rounded-lg bg-brand px-6 py-3 text-sm font-medium transition-colors hover:bg-brand/90 sm:w-auto"
             >
               Начать бесплатно
             </Link>
             <Link
               to="/sign-in"
-              className="w-full rounded-lg border border-white/10 px-6 py-3 text-sm text-zinc-400 transition-colors hover:bg-white/5 hover:text-white sm:w-auto"
+              className="w-full rounded-lg border border-border px-6 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground sm:w-auto"
             >
               У меня есть аккаунт
             </Link>
@@ -89,18 +89,18 @@ export default function Landing() {
           {features.map((f) => (
             <div
               key={f.title}
-              className="rounded-xl border border-white/5 bg-white/[0.02] p-6 text-left transition-colors hover:border-violet-500/20 hover:bg-white/[0.04]"
+              className="rounded-xl border border-border bg-card p-6 text-left transition-colors hover:border-violet-500/20 hover:bg-card"
             >
-              <f.icon className="mb-3 h-6 w-6 text-violet-400" />
+              <f.icon className="mb-3 h-6 w-6 text-brand-muted-foreground" />
               <h2 className="text-sm font-semibold">{f.title}</h2>
-              <p className="mt-1 text-sm text-zinc-500">{f.desc}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{f.desc}</p>
             </div>
           ))}
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="py-6 text-center text-xs text-zinc-600">
+      <footer className="py-6 text-center text-xs text-muted-foreground/60">
         ПромтЛаб &copy; {new Date().getFullYear()}
       </footer>
     </div>

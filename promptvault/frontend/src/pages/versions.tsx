@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, History, RotateCcw, Loader2, FileText } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "sonner"
 
 import { usePrompt } from "@/hooks/use-prompts"
@@ -90,15 +91,11 @@ export default function Versions() {
       </div>
 
       {versions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted ring-1 ring-border">
-            <FileText className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <p className="mt-4 text-sm text-muted-foreground">Нет сохранённых версий</p>
-          <p className="mt-1 text-[0.75rem] text-muted-foreground">
-            Версии создаются автоматически при каждом обновлении промпта
-          </p>
-        </div>
+        <EmptyState
+          icon={<FileText className="h-7 w-7 text-muted-foreground/40" />}
+          title="Нет сохранённых версий"
+          description="Версии создаются автоматически при каждом обновлении промпта"
+        />
       ) : (
         <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[280px_1fr]">
           {/* Timeline */}
@@ -111,10 +108,10 @@ export default function Versions() {
                 <button
                   key={v.id}
                   onClick={() => setSelected(v)}
-                  className={`flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-all ${
+                  className={`flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors ${
                     selected?.id === v.id
                       ? "bg-violet-500/[0.08] ring-1 ring-violet-500/15"
-                      : "hover:bg-white/[0.03]"
+                      : "hover:bg-foreground/[0.04]"
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -161,7 +158,7 @@ export default function Versions() {
                   <button
                     onClick={() => handleRevert(selected)}
                     disabled={revertVersion.isPending}
-                    className="flex h-8 w-fit items-center gap-1.5 rounded-lg px-3.5 text-[0.78rem] font-medium text-amber-400 transition-all hover:bg-amber-500/10 disabled:opacity-50"
+                    className="flex h-8 w-fit items-center gap-1.5 rounded-lg px-3.5 text-[0.78rem] font-medium text-amber-400 transition-colors hover:bg-amber-500/10 disabled:opacity-50"
                     style={{ border: "1px solid rgba(245,158,11,0.15)" }}
                   >
                     {revertVersion.isPending ? (

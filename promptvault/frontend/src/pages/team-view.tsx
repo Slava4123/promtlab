@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, Pencil, Trash2, UserPlus, Users, Loader2, AlertTriangle } from "lucide-react"
+import { ArrowLeft, Pencil, Trash2, UserPlus, Users, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { useTeam, useUpdateTeam, useDeleteTeam, useInviteMember, useTeamInvitations, useCancelInvitation, useUpdateMemberRole, useRemoveMember } from "@/hooks/use-teams"
@@ -10,6 +10,9 @@ import { RoleBadge } from "@/components/teams/role-badge"
 import { MemberList } from "@/components/teams/member-list"
 import { InviteDialog } from "@/components/teams/invite-dialog"
 import type { TeamRole } from "@/api/types"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 export default function TeamView() {
   const { slug = "" } = useParams()
@@ -118,7 +121,7 @@ export default function TeamView() {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <p className="text-base font-medium text-muted-foreground">Команда не найдена</p>
-        <button onClick={() => navigate("/teams")} className="mt-4 text-sm text-violet-400 hover:text-violet-300">
+        <button onClick={() => navigate("/teams")} className="mt-4 text-sm text-brand-muted-foreground hover:text-brand">
           Вернуться к командам
         </button>
       </div>
@@ -151,14 +154,14 @@ export default function TeamView() {
           <div className="flex gap-2">
             <button
               onClick={openEdit}
-              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-muted-foreground transition-all hover:text-foreground border border-border bg-card"
+              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-muted-foreground transition-colors hover:text-foreground border border-border bg-card"
             >
               <Pencil className="h-3.5 w-3.5" />
               Редактировать
             </button>
             <button
               onClick={() => setDeleteOpen(true)}
-              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-red-400/70 transition-all hover:bg-red-500/10 hover:text-red-400"
+              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-red-400/70 transition-colors hover:bg-red-500/10 hover:text-red-400"
               style={{ border: "1px solid rgba(239,68,68,0.1)" }}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -179,13 +182,10 @@ export default function TeamView() {
             <span className="text-[0.75rem] text-muted-foreground">{team.members.length}</span>
           </div>
           {isOwner && (
-            <button
-              onClick={() => setInviteOpen(true)}
-              className="flex h-7 items-center gap-1.5 rounded-lg bg-violet-600 px-3 text-[0.75rem] font-medium text-white transition-all hover:bg-violet-500 active:scale-[0.97]"
-            >
+            <Button variant="brand" size="xs" onClick={() => setInviteOpen(true)}>
               <UserPlus className="h-3 w-3" />
               Пригласить
-            </button>
+            </Button>
           )}
         </div>
 
@@ -225,6 +225,7 @@ export default function TeamView() {
                   onClick={() => handleCancelInvitation(inv.id)}
                   className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-400"
                   title="Отменить приглашение"
+                  aria-label="Отменить приглашение"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -242,91 +243,53 @@ export default function TeamView() {
       />
 
       {/* Edit Dialog */}
-      {editOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setEditOpen(false)}>
-          <div
-            className="w-full max-w-md rounded-2xl p-6 space-y-4 border border-border bg-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-semibold text-foreground">Редактировать команду</h2>
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Редактировать команду</DialogTitle>
+          </DialogHeader>
 
-            <div className="space-y-2">
-              <label className="text-[0.8rem] font-medium text-foreground">Название</label>
-              <input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                autoFocus
-                className="flex h-10 w-full rounded-lg px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground border border-border bg-background focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
-                onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[0.8rem] font-medium text-foreground">Описание</label>
-              <textarea
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                rows={2}
-                className="flex w-full resize-none rounded-lg px-3.5 py-2.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground border border-border bg-background focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                onClick={() => setEditOpen(false)}
-                className="flex h-9 items-center rounded-lg px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-foreground border border-border bg-card"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleUpdate}
-                disabled={!editName.trim()}
-                className="flex h-9 items-center gap-2 rounded-lg px-5 text-[0.8rem] font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)", boxShadow: "0 4px 16px -2px rgba(124,58,237,0.25)" }}
-              >
-                {updateTeam.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Сохранить
-              </button>
-            </div>
+          <div className="space-y-2">
+            <label className="text-[0.8rem] font-medium text-foreground">Название</label>
+            <input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              autoFocus
+              className="flex h-10 w-full rounded-lg px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground border border-border bg-background focus:border-brand/40 focus:ring-3 focus:ring-brand/10"
+              onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
+            />
           </div>
-        </div>
-      )}
 
-      {/* Delete Confirmation */}
-      {deleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDeleteOpen(false)}>
-          <div
-            className="w-full max-w-sm rounded-2xl p-6 space-y-4 border border-red-500/15 bg-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
-                <AlertTriangle className="h-5 w-5 text-red-400" />
-              </div>
-              <div>
-                <h3 className="text-[0.9rem] font-semibold text-foreground">Удалить команду?</h3>
-                <p className="text-[0.75rem] text-muted-foreground">Все участники будут удалены, коллекции станут личными</p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                onClick={() => setDeleteOpen(false)}
-                className="flex h-9 items-center rounded-lg px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-foreground border border-border bg-card"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex h-9 items-center gap-2 rounded-lg px-4 text-[0.8rem] font-medium text-white transition-all active:scale-[0.97]"
-                style={{ background: "linear-gradient(135deg, #dc2626, #b91c1c)", boxShadow: "0 4px 16px -2px rgba(220,38,38,0.25)" }}
-              >
-                {deleteTeam.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Удалить
-              </button>
-            </div>
+          <div className="space-y-2">
+            <label className="text-[0.8rem] font-medium text-foreground">Описание</label>
+            <textarea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              rows={2}
+              className="flex w-full resize-none rounded-lg px-3.5 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground border border-border bg-background focus:border-brand/40 focus:ring-3 focus:ring-brand/10"
+            />
           </div>
-        </div>
-      )}
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Отмена</Button>
+            <Button variant="brand" size="sm" onClick={handleUpdate} disabled={!editName.trim()}>
+              {updateTeam.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Удалить команду?"
+        description="Все участники будут удалены, коллекции станут личными"
+        variant="destructive"
+        confirmLabel="Удалить"
+        onConfirm={handleDelete}
+        isPending={deleteTeam.isPending}
+      />
     </div>
   )
 }

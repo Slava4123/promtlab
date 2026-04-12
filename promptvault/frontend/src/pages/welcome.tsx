@@ -135,7 +135,7 @@ export default function WelcomePage() {
                   key={cat.id}
                   type="button"
                   onClick={() => handleCategorySelect(cat)}
-                  className="group relative flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-violet-500/40 hover:bg-violet-500/[0.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
+                  className="group relative flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-5 text-left transition-colors hover:border-violet-500/40 hover:bg-violet-500/[0.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{cat.icon}</span>

@@ -1,15 +1,50 @@
 import { create } from "zustand"
 import { devtools } from "zustand/middleware"
-import { api, apiVoid, setTokens, clearTokens, ensureFreshToken } from "@/api/client"
-import type { User, AuthResponse } from "@/api/types"
+import { api, apiVoid, setTokens, setAccessToken, clearTokens, ensureFreshToken } from "@/api/client"
+import type { User, AuthResponse, AdminLoginStepResponse, VerifyTOTPResponse } from "@/api/types"
 import { setSentryUser, clearSentryUser } from "@/lib/sentry"
+
+// SESSION_HINT_KEY — флаг localStorage указывающий что у юзера (вероятно)
+// есть валидный refresh cookie. Ставится при login, снимается при logout.
+// Используется restoreSession чтобы НЕ делать заведомо провальный refresh
+// запрос для новых посетителей landing page — это избавляет от лишнего
+// 401 в browser console (Chrome DevTools всегда логирует failed requests,
+// и это нельзя подавить программно).
+//
+// Флаг не считается источником истины — это лишь UX optimization.
+// Фактическая валидность session проверяется backend через cookie.
+const SESSION_HINT_KEY = "pv_has_session"
+
+function markSessionHint() {
+  try { localStorage.setItem(SESSION_HINT_KEY, "1") } catch { /* quota/disabled — ignore */ }
+}
+function clearSessionHint() {
+  try { localStorage.removeItem(SESSION_HINT_KEY) } catch { /* ignore */ }
+}
+function hasSessionHint(): boolean {
+  try { return localStorage.getItem(SESSION_HINT_KEY) === "1" } catch { return false }
+}
+
+/**
+ * LoginResult — возможные результаты login().
+ * - "ok" — обычный юзер залогинился успешно.
+ * - "totp_required" — admin с TOTP, UI должен показать TOTP step.
+ *   Поле preAuthToken используется для последующего verify-totp вызова.
+ * - "totp_enrollment_required" — admin без enrollment; залогинен, но должен
+ *   пройти enroll wizard на /admin/totp.
+ */
+export type LoginResult =
+  | { kind: "ok" }
+  | { kind: "totp_required"; preAuthToken: string; email: string }
+  | { kind: "totp_enrollment_required" }
 
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
 
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<LoginResult>
+  verifyTOTP: (preAuthToken: string, code: string) => Promise<VerifyTOTPResponse>
   register: (email: string, password: string, name: string) => Promise<void>
   logout: () => void
   fetchMe: () => Promise<void>
@@ -24,17 +59,72 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
 
       login: async (email, password) => {
-        const data = await api<AuthResponse>("/auth/login", {
+        // Backend может вернуть два разных JSON'а: обычный AuthResponse
+        // или AdminLoginStepResponse. Различаем по наличию tokens vs
+        // totp_required/totp_enrollment_required флагов.
+        const data = await api<AuthResponse | AdminLoginStepResponse>("/auth/login", {
           method: "POST",
           body: JSON.stringify({ email, password }),
         })
-        setTokens(data.tokens)
+
+        // Admin flow 1: TOTP required → ничего не сохраняем, возвращаем токен в UI.
+        if ("totp_required" in data && data.totp_required) {
+          return {
+            kind: "totp_required",
+            preAuthToken: data.pre_auth_token ?? "",
+            email,
+          }
+        }
+
+        // Admin flow 2: первый login admin без enrollment → логинимся как
+        // обычно, но сообщаем UI что нужно пройти enroll wizard.
+        if ("totp_enrollment_required" in data && data.totp_enrollment_required) {
+          const accessToken = data.access_token ?? ""
+          setAccessToken(accessToken)
+          markSessionHint()
+          set({ user: data.user, isAuthenticated: true })
+          setSentryUser({
+            id: data.user.id,
+            email: data.user.email,
+            username: data.user.username,
+          })
+          return { kind: "totp_enrollment_required" }
+        }
+
+        // Обычный юзер — стандартный flow.
+        const authData = data as AuthResponse
+        setTokens(authData.tokens)
+        markSessionHint()
+        set({ user: authData.user, isAuthenticated: true })
+        setSentryUser({
+          id: authData.user.id,
+          email: authData.user.email,
+          username: authData.user.username,
+        })
+        // Refresh user data to get has_unread_changelog (not in login response)
+        try {
+          const user = await api<User>("/auth/me")
+          set({ user })
+        } catch {
+          // Non-critical — badge will appear on next page load
+        }
+        return { kind: "ok" }
+      },
+
+      verifyTOTP: async (preAuthToken, code) => {
+        const data = await api<VerifyTOTPResponse>("/auth/verify-totp", {
+          method: "POST",
+          body: JSON.stringify({ pre_auth_token: preAuthToken, code }),
+        })
+        setAccessToken(data.access_token)
+        markSessionHint()
         set({ user: data.user, isAuthenticated: true })
         setSentryUser({
           id: data.user.id,
           email: data.user.email,
           username: data.user.username,
         })
+        return data
       },
 
       register: async (email, password, name) => {
@@ -52,6 +142,7 @@ export const useAuthStore = create<AuthState>()(
           // ignore — cookie очистится на сервере
         }
         clearTokens()
+        clearSessionHint()
         clearSentryUser()
         set({ user: null, isAuthenticated: false })
       },
@@ -62,6 +153,13 @@ export const useAuthStore = create<AuthState>()(
       },
 
       restoreSession: async () => {
+        // Optimization: если нет session hint в localStorage, значит юзер
+        // никогда не логинился или уже вышел — не делаем заведомо провальный
+        // refresh запрос (избавляет от 401 noise в browser console на landing).
+        if (!hasSessionHint()) {
+          set({ user: null, isAuthenticated: false, isLoading: false })
+          return
+        }
         // Пробуем refresh через HttpOnly cookie
         try {
           await ensureFreshToken()
@@ -77,6 +175,7 @@ export const useAuthStore = create<AuthState>()(
           const isAuthError = msg.includes("Сессия истекла") || msg.includes("unauthorized") || msg.includes("refresh failed") || msg.includes("invalid") || msg.includes("expired")
           if (isAuthError) {
             clearTokens()
+            clearSessionHint()
             set({ user: null, isAuthenticated: false, isLoading: false })
           } else {
             // Transient error — retry on next navigation

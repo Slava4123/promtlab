@@ -9,6 +9,7 @@ import { useAuthStore } from "@/stores/auth-store"
 import { useThemeStore } from "@/stores/theme-store"
 import { useQueryClient } from "@tanstack/react-query"
 import { api } from "@/api/client"
+import { Button } from "@/components/ui/button"
 import {
   useLinkedAccounts,
   useUpdateProfile,
@@ -17,6 +18,8 @@ import {
   useChangePassword,
   useUnlinkProvider,
 } from "@/hooks/use-settings"
+import { APIKeysSection } from "@/components/settings/api-keys-section"
+import { ExtensionPromoSection } from "@/components/settings/extension-promo-section"
 
 // --- Schemas ---
 
@@ -62,7 +65,7 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
       <div className="flex items-center gap-3">
-        <Settings className="h-5 w-5 text-violet-400" />
+        <Settings className="h-5 w-5 text-brand-muted-foreground" />
         <div>
           <h1 className="text-xl font-semibold text-foreground">Настройки</h1>
           <p className="text-sm text-muted-foreground">Управление профилем и безопасностью</p>
@@ -72,6 +75,8 @@ export default function SettingsPage() {
       <ProfileSection user={user} onUpdate={fetchMe} />
       <PasswordSection key={user.has_password ? "change" : "set"} hasPassword={user.has_password} onUpdate={fetchMe} />
       <LinkedAccountsSection />
+      <ExtensionPromoSection />
+      <APIKeysSection />
       <ThemeSection />
     </div>
   )
@@ -110,8 +115,7 @@ function ProfileSection({ user, onUpdate }: { user: { name: string; email: strin
         {user.avatar_url ? (
           <img src={user.avatar_url} alt={user.name} className="h-14 w-14 rounded-full object-cover" />
         ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-full text-lg font-semibold text-white"
-            style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)" }}>
+          <div className="flex h-14 w-14 items-center justify-center rounded-full text-lg font-semibold text-brand-foreground [background:var(--brand-gradient)]">
             {initials}
           </div>
         )}
@@ -126,7 +130,7 @@ function ProfileSection({ user, onUpdate }: { user: { name: string; email: strin
           <label className="text-[0.75rem] text-muted-foreground">Имя</label>
           <input
             {...register("name")}
-            className="mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-violet-500"
+            className="mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-brand/40 focus:ring-3 focus:ring-brand/10"
           />
           {errors.name && <p className="mt-1 text-xs text-red-400">{errors.name.message}</p>}
         </div>
@@ -138,7 +142,7 @@ function ProfileSection({ user, onUpdate }: { user: { name: string; email: strin
             <input
               {...register("username")}
               placeholder="username"
-              className="h-11 w-full rounded-lg border border-border bg-background pl-7 pr-3 text-sm text-foreground outline-none focus:border-violet-500"
+              className="h-11 w-full rounded-lg border border-border bg-background pl-7 pr-3 text-sm text-foreground outline-none transition-colors focus:border-brand/40 focus:ring-3 focus:ring-brand/10"
             />
           </div>
           {errors.username && <p className="mt-1 text-xs text-red-400">{errors.username.message}</p>}
@@ -153,15 +157,10 @@ function ProfileSection({ user, onUpdate }: { user: { name: string; email: strin
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={updateProfile.isPending}
-          className="flex h-11 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
-          style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)" }}
-        >
+        <Button type="submit" variant="brand" disabled={updateProfile.isPending}>
           {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           Сохранить
-        </button>
+        </Button>
       </form>
     </Section>
   )
@@ -223,16 +222,10 @@ function SetPasswordForm({ showPasswords, toggleShow, onUpdate }: { showPassword
         <p className="text-sm text-muted-foreground">
           Для установки пароля нужно подтвердить email. Мы отправим код на вашу почту.
         </p>
-        <button
-          type="button"
-          onClick={handleSendCode}
-          disabled={initiateMut.isPending}
-          className="flex h-11 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
-          style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)" }}
-        >
+        <Button type="button" variant="brand" onClick={handleSendCode} disabled={initiateMut.isPending}>
           {initiateMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
           Отправить код
-        </button>
+        </Button>
       </div>
     )
   }
@@ -245,7 +238,7 @@ function SetPasswordForm({ showPasswords, toggleShow, onUpdate }: { showPassword
           value={code}
           onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
           placeholder="6-значный код"
-          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-violet-500 tracking-widest"
+          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-brand/40 focus:ring-3 focus:ring-brand/10 tracking-widest"
           inputMode="numeric"
           maxLength={6}
         />
@@ -316,10 +309,10 @@ function PasswordField({ label, placeholder, show, toggleShow, ToggleIcon, regis
           type={show ? "text" : "password"}
           placeholder={placeholder}
           {...register}
-          className="h-11 w-full rounded-lg border border-border bg-background px-3 pr-12 text-sm text-foreground outline-none focus:border-violet-500"
+          className="h-11 w-full rounded-lg border border-border bg-background px-3 pr-12 text-sm text-foreground outline-none transition-colors focus:border-brand/40 focus:ring-3 focus:ring-brand/10"
         />
         <button type="button" onClick={toggleShow}
-          className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+          className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]"
           aria-label={show ? "Скрыть пароль" : "Показать пароль"}>
           <ToggleIcon className="h-4 w-4" />
         </button>
@@ -331,15 +324,10 @@ function PasswordField({ label, placeholder, show, toggleShow, ToggleIcon, regis
 
 function SubmitButton({ isPending, label }: { isPending: boolean; label: string }) {
   return (
-    <button
-      type="submit"
-      disabled={isPending}
-      className="flex h-11 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
-      style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)" }}
-    >
+    <Button type="submit" variant="brand" disabled={isPending}>
       {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
       {label}
-    </button>
+    </Button>
   )
 }
 
@@ -443,7 +431,7 @@ function LinkedAccountsSection() {
                   ) : (
                     <button
                       onClick={() => handleLink(key)}
-                      className="rounded-lg px-3 py-2 text-[0.78rem] text-violet-400 hover:text-violet-300 hover:bg-violet-500/10 min-h-[44px]"
+                      className="rounded-lg px-3 py-2 text-[0.78rem] text-brand-muted-foreground hover:text-brand hover:bg-brand-muted min-h-[44px]"
                     >
                       Привязать
                     </button>
@@ -490,18 +478,18 @@ function ThemeSection() {
 
   return (
     <Section icon={Palette} title="Оформление">
-      <div className="flex gap-2">
-        {(["dark", "light"] as const).map((t) => (
+      <div className="flex flex-wrap gap-2">
+        {(["dark", "light", "system"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTheme(t)}
-            className={`rounded-lg border px-4 h-11 text-sm font-medium transition-all ${
+            className={`rounded-lg border px-4 h-11 text-sm font-medium transition-colors ${
               theme === t
-                ? "border-violet-500/40 bg-violet-500/10 text-violet-400"
+                ? "border-brand/40 bg-brand-muted text-brand-muted-foreground"
                 : "border-border bg-background text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "dark" ? "Тёмная" : "Светлая"}
+            {t === "dark" ? "Тёмная" : t === "light" ? "Светлая" : "Системная"}
           </button>
         ))}
       </div>
@@ -515,7 +503,7 @@ function Section({ icon: Icon, title, children }: { icon: typeof Settings; title
   return (
     <div className="rounded-xl border border-border bg-card p-5 overflow-hidden">
       <div className="mb-4 flex items-center gap-2">
-        <Icon className="h-4 w-4 text-violet-400" />
+        <Icon className="h-4 w-4 text-brand-muted-foreground" />
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
       </div>
       {children}

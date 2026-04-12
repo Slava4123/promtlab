@@ -4,6 +4,8 @@ import { Plus, ArrowLeft, FileText, FolderOpen, PackagePlus, Check, Loader2, Sea
 import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
 
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { PromptCard, PromptCardSkeleton } from "@/components/prompts/prompt-card"
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
 import { useCollection } from "@/hooks/use-collections"
@@ -142,8 +144,8 @@ export default function CollectionView() {
       </div>
 
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3.5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3.5">
           <div
             className="flex h-11 w-11 items-center justify-center rounded-xl ring-1"
             style={{
@@ -163,24 +165,21 @@ export default function CollectionView() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setSelected(new Set()); setAddDialogOpen(true) }}
-            className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] font-medium text-muted-foreground transition-all hover:text-foreground active:scale-[0.97] border border-border bg-card"
+            className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] font-medium text-muted-foreground transition-[transform,box-shadow,border-color] hover:text-foreground active:scale-[0.97] border border-border bg-card"
           >
             <PackagePlus className="h-3.5 w-3.5" />
             Из списка
           </button>
-          <button
-            onClick={() => navigate(`/prompts/new?collection_id=${collectionId}`)}
-            className="flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 text-[0.8rem] font-medium text-white shadow-lg shadow-violet-600/10 transition-all hover:bg-violet-500 hover:shadow-violet-500/20 active:scale-[0.97]"
-          >
+          <Button variant="brand" size="sm" onClick={() => navigate(`/prompts/new?collection_id=${collectionId}`)}>
             <Plus className="h-3.5 w-3.5" />
             Новый промпт
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Промпты */}
       {loadingPrompts ? (
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 3 }).map((_, i) => (
             <PromptCardSkeleton key={i} />
           ))}
@@ -198,16 +197,13 @@ export default function CollectionView() {
           </div>
           <p className="text-base font-medium text-muted-foreground">Коллекция пока пуста</p>
           <p className="mt-1 text-sm text-muted-foreground">Добавьте первый промпт в эту коллекцию</p>
-          <button
-            onClick={() => navigate(`/prompts/new?collection_id=${collectionId}`)}
-            className="mt-5 flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-4 text-[0.8rem] font-medium text-white shadow-lg shadow-violet-600/10 transition-all hover:bg-violet-500 active:scale-[0.97]"
-          >
+          <Button variant="brand" size="sm" className="mt-5" onClick={() => navigate(`/prompts/new?collection_id=${collectionId}`)}>
             <Plus className="h-3.5 w-3.5" />
             Добавить промпт
-          </button>
+          </Button>
         </div>
       ) : (
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {prompts.map((prompt) => (
             <PromptCard
               key={prompt.id}
@@ -229,93 +225,78 @@ export default function CollectionView() {
       )}
 
       {/* Модалка "Добавить из списка" */}
-      {addDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { setAddDialogOpen(false); setAddSearch("") }}>
-          <div
-            className="w-full max-w-lg max-h-[80vh] flex flex-col rounded-2xl border border-border bg-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-3">
+      <Dialog open={addDialogOpen} onOpenChange={(open) => { if (!open) { setAddDialogOpen(false); setAddSearch("") } }}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col" showCloseButton={false}>
+          <DialogHeader>
+            <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">Добавить в коллекцию</h2>
+                <DialogTitle>Добавить в коллекцию</DialogTitle>
                 <p className="mt-0.5 text-[0.75rem] text-muted-foreground">Выберите промпты для добавления в "{collection.name}"</p>
               </div>
               {selected.size > 0 && (
-                <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-medium text-violet-300">
+                <span className="rounded-full bg-brand/15 px-2.5 py-0.5 text-xs font-medium text-brand-muted-foreground">
                   {selected.size} выбрано
                 </span>
               )}
             </div>
+          </DialogHeader>
 
-            {/* Search */}
-            <div className="relative px-6 pb-2">
-              <Search className="absolute left-8.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={addSearch}
-                onChange={(e) => setAddSearch(e.target.value)}
-                placeholder="Поиск по названию..."
-                className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-[0.8rem] text-foreground outline-none placeholder:text-muted-foreground focus:border-violet-500/25 focus:ring-1 focus:ring-violet-500/10"
-              />
-            </div>
-
-            {/* List */}
-            <div className="flex-1 overflow-auto px-6 py-2 space-y-1.5">
-              {availablePrompts.filter(p => !addSearch || p.title.toLowerCase().includes(addSearch.toLowerCase())).length === 0 ? (
-                <div className="py-10 text-center">
-                  <p className="text-sm text-muted-foreground">{addSearch ? "Ничего не найдено" : "Все промпты уже в коллекциях"}</p>
-                </div>
-              ) : (
-                availablePrompts.filter(p => !addSearch || p.title.toLowerCase().includes(addSearch.toLowerCase())).map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => toggleSelect(p.id)}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all ${
-                      selected.has(p.id)
-                        ? "bg-violet-500/10 ring-1 ring-violet-500/20"
-                        : "hover:bg-muted"
-                    }`}
-                  >
-                    <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-all ${
-                      selected.has(p.id)
-                        ? "bg-violet-500 text-white"
-                        : "border border-border bg-muted/30"
-                    }`}>
-                      {selected.has(p.id) && <Check className="h-3 w-3" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[0.82rem] font-medium text-foreground">{p.title}</p>
-                      <p className="mt-0.5 truncate text-[0.72rem] text-muted-foreground">{p.content}</p>
-                    </div>
-                    {p.model && (
-                      <span className="shrink-0 text-[0.65rem] text-muted-foreground">{p.model}</span>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
-              <button
-                onClick={() => { setAddDialogOpen(false); setAddSearch("") }}
-                className="flex h-9 items-center rounded-lg px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-foreground border border-border bg-card"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleAddSelected}
-                disabled={selected.size === 0 || adding}
-                className="flex h-9 items-center gap-2 rounded-lg px-5 text-[0.8rem] font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)", boxShadow: "0 4px 16px -2px rgba(124,58,237,0.25)" }}
-              >
-                {adding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Добавить{selected.size > 0 ? ` (${selected.size})` : ""}
-              </button>
-            </div>
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={addSearch}
+              onChange={(e) => setAddSearch(e.target.value)}
+              placeholder="Поиск по названию..."
+              className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-[0.8rem] text-foreground outline-none placeholder:text-muted-foreground focus:border-brand/25 focus:ring-1 focus:ring-brand/10"
+            />
           </div>
-        </div>
-      )}
+
+          {/* List */}
+          <div className="flex-1 overflow-auto -mx-4 px-4 space-y-1.5">
+            {availablePrompts.filter(p => !addSearch || p.title.toLowerCase().includes(addSearch.toLowerCase())).length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-sm text-muted-foreground">{addSearch ? "Ничего не найдено" : "Все промпты уже в коллекциях"}</p>
+              </div>
+            ) : (
+              availablePrompts.filter(p => !addSearch || p.title.toLowerCase().includes(addSearch.toLowerCase())).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => toggleSelect(p.id)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                    selected.has(p.id)
+                      ? "bg-brand/10 ring-1 ring-brand/20"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-colors ${
+                    selected.has(p.id)
+                      ? "bg-brand text-brand-foreground"
+                      : "border border-border bg-muted/30"
+                  }`}>
+                    {selected.has(p.id) && <Check className="h-3 w-3" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[0.82rem] font-medium text-foreground">{p.title}</p>
+                    <p className="mt-0.5 truncate text-[0.72rem] text-muted-foreground">{p.content}</p>
+                  </div>
+                  {p.model && (
+                    <span className="shrink-0 text-[0.65rem] text-muted-foreground">{p.model}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setAddDialogOpen(false); setAddSearch("") }}>Отмена</Button>
+            <Button variant="brand" size="sm" onClick={handleAddSelected} disabled={selected.size === 0 || adding}>
+              {adding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Добавить{selected.size > 0 ? ` (${selected.size})` : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

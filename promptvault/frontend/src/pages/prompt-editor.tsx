@@ -3,15 +3,17 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, Search, ChevronDown, History, Copy } from "lucide-react"
+import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, Search, ChevronDown, History, Copy, Trash2, Share2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { usePrompt, useCreatePrompt, useUpdatePrompt, useIncrementUsage } from "@/hooks/use-prompts"
+import { usePrompt, useCreatePrompt, useUpdatePrompt, useIncrementUsage, useDeletePrompt } from "@/hooks/use-prompts"
+import { Button } from "@/components/ui/button"
 import { useCollections } from "@/hooks/use-collections"
 import { useWorkspaceStore } from "@/stores/workspace-store"
 import { TagInput } from "@/components/tags/tag-input"
 import { AIPanel } from "@/components/ai/ai-panel"
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
+import { ShareDialog } from "@/components/prompts/share-dialog"
 import { hasVariables } from "@/lib/template/parse"
 import type { Prompt } from "@/api/types"
 
@@ -37,12 +39,14 @@ export default function PromptEditor() {
   const createPrompt = useCreatePrompt()
   const updatePrompt = useUpdatePrompt()
   const incrementUsage = useIncrementUsage()
+  const deletePrompt = useDeletePrompt()
   const [collectionIds, setCollectionIds] = useState<number[]>(preselectedCollectionId ? [preselectedCollectionId] : [])
   const [tagIds, setTagIds] = useState<number[]>([])
   const [collSearch, setCollSearch] = useState("")
   const [collExpanded, setCollExpanded] = useState(false)
   const [changeNote, setChangeNote] = useState("")
   const [usePromptModal, setUsePromptModal] = useState<Prompt | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
 
   const {
     register,
@@ -146,7 +150,7 @@ export default function PromptEditor() {
             <input
               id="title"
               placeholder="Например: Генерация README для проекта"
-              className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
+              className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
               {...register("title")}
             />
             {errors.title && (
@@ -169,7 +173,7 @@ export default function PromptEditor() {
               rows={16}
               maxLength={10000}
               placeholder="Введите текст промпта...&#10;&#10;Совет: будьте конкретны и используйте примеры для лучших результатов"
-              className="flex w-full min-h-[280px] resize-y rounded-lg border border-border bg-background px-3.5 py-3 text-sm leading-relaxed text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
+              className="flex w-full min-h-[280px] resize-y rounded-lg border border-border bg-background px-3.5 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
               {...register("content")}
             />
             {errors.content && (
@@ -187,7 +191,7 @@ export default function PromptEditor() {
           />
 
           {/* Модель + Коллекция */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label htmlFor="model" className="flex items-center gap-1.5 text-[0.8rem] font-medium text-foreground">
                 <Sparkles className="h-3 w-3 text-violet-400/60" />
@@ -197,7 +201,7 @@ export default function PromptEditor() {
               <input
                 id="model"
                 placeholder="gpt-4o, claude-sonnet..."
-                className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
+                className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
                 {...register("model")}
               />
             </div>
@@ -223,7 +227,7 @@ export default function PromptEditor() {
                     />
                   </div>
                 )}
-                <div className={`relative flex flex-wrap gap-1.5 px-3 py-2.5 overflow-hidden transition-all ${collExpanded || collSearch ? "" : "max-h-[72px]"}`}>
+                <div className={`relative flex flex-wrap gap-1.5 px-3 py-2.5 overflow-hidden transition-[max-height] ${collExpanded || collSearch ? "" : "max-h-[72px]"}`}>
                   {(!collections || collections.length === 0) ? (
                     <span className="text-[0.8rem] text-muted-foreground">Нет коллекций</span>
                   ) : collections
@@ -237,7 +241,7 @@ export default function PromptEditor() {
                           onClick={() => setCollectionIds(prev =>
                             isSelected ? prev.filter(id => id !== c.id) : [...prev, c.id]
                           )}
-                          className={`flex items-center gap-1 rounded-md px-2 py-1 text-[0.75rem] font-medium transition-all ${
+                          className={`flex items-center gap-1 rounded-md px-2 py-1 text-[0.75rem] font-medium transition-colors ${
                             isSelected
                               ? "text-white ring-1"
                               : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -292,7 +296,7 @@ export default function PromptEditor() {
                 onChange={(e) => setChangeNote(e.target.value)}
                 maxLength={300}
                 placeholder="Что изменилось? Например: улучшил формулировку"
-                className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
+                className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
               />
             </div>
           )}
@@ -305,22 +309,15 @@ export default function PromptEditor() {
         </div>
 
         {/* Кнопки */}
-        <div className="flex items-center gap-2.5">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="flex h-9 items-center gap-2 rounded-lg px-5 text-[0.8rem] font-medium text-white transition-all active:scale-[0.97] disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)", boxShadow: "0 4px 16px -2px rgba(124,58,237,0.25)" }}
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.boxShadow = "0 6px 24px -2px rgba(124,58,237,0.35)" }}
-            onMouseLeave={(e) => { (e.target as HTMLElement).style.boxShadow = "0 4px 16px -2px rgba(124,58,237,0.25)" }}
-          >
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button type="submit" variant="brand" size="sm" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {isEdit ? "Сохранить изменения" : "Создать промпт"}
-          </button>
+          </Button>
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="flex h-9 items-center rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-foreground"
+            className="flex h-9 items-center rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-colors hover:text-foreground"
           >
             Отмена
           </button>
@@ -340,7 +337,7 @@ export default function PromptEditor() {
                   toast.error("Не удалось скопировать")
                 }
               }}
-              className="ml-auto flex h-9 items-center gap-1.5 rounded-lg border border-violet-500/25 bg-violet-500/10 px-4 text-[0.8rem] font-medium text-violet-300 transition-all hover:bg-violet-500/15 hover:text-violet-200"
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 text-[0.8rem] font-medium text-violet-600 transition-colors hover:bg-violet-500/20 hover:text-violet-700 dark:text-violet-300 dark:hover:text-violet-200 sm:ml-auto"
             >
               <Copy className="h-3.5 w-3.5" />
               Использовать
@@ -350,10 +347,40 @@ export default function PromptEditor() {
             <button
               type="button"
               onClick={() => navigate(`/prompts/${promptId}/versions`)}
-              className={`flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-all hover:text-violet-400 ${existing ? "" : "ml-auto"}`}
+              className={`flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-colors hover:text-violet-400 ${existing ? "" : "ml-auto"}`}
             >
               <History className="h-3.5 w-3.5" />
               История версий
+            </button>
+          )}
+          {isEdit && (
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-colors hover:text-violet-400"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              Поделиться
+            </button>
+          )}
+          {isEdit && (
+            <button
+              type="button"
+              disabled={deletePrompt.isPending}
+              onClick={() => {
+                if (deletePrompt.isPending) return
+                deletePrompt.mutate(promptId, {
+                  onSuccess: () => {
+                    toast("Промпт перемещён в корзину")
+                    navigate("/dashboard")
+                  },
+                  onError: (e) => toast.error(e instanceof Error ? e.message : "Ошибка удаления"),
+                })
+              }}
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/5 px-4 text-[0.8rem] text-red-600 transition-colors hover:bg-red-500/15 hover:text-red-700 dark:text-red-400/70 dark:hover:text-red-400 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Удалить
             </button>
           )}
         </div>
@@ -364,6 +391,14 @@ export default function PromptEditor() {
           prompt={usePromptModal}
           open
           onOpenChange={(o) => !o && setUsePromptModal(null)}
+        />
+      )}
+
+      {isEdit && (
+        <ShareDialog
+          promptId={promptId}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
         />
       )}
     </div>

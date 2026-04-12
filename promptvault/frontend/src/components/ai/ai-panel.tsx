@@ -5,6 +5,7 @@ import { toast } from "sonner"
 
 import { useSSE } from "@/hooks/use-sse"
 import { ModelSelector } from "./model-selector"
+import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
@@ -91,15 +92,15 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
   const hasResult = data.length > 0
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(139,92,246,0.1)", background: "rgba(139,92,246,0.02)" }}>
+    <div className="rounded-xl overflow-hidden border border-brand/10 bg-brand/[0.02]">
       {/* Toggle bar */}
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-violet-500/[0.04]"
+        className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-brand/[0.04]"
       >
-        <Sparkles className="h-3.5 w-3.5 text-violet-400" />
-        <span className="text-[0.82rem] font-medium text-violet-300">AI-ассистент</span>
+        <Sparkles className="h-3.5 w-3.5 text-brand-muted-foreground" />
+        <span className="text-[0.82rem] font-medium text-brand-muted-foreground">AI-ассистент</span>
         <ChevronDown className={`ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
 
@@ -116,8 +117,7 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
               {rewriteStyles.map((s) => (
                 <span
                   key={s.value}
-                  className="rounded-md px-2 py-0.5 text-[0.72rem] font-medium text-violet-300"
-                  style={{ background: "rgba(139,92,246,0.12)" }}
+                  className="rounded-md px-2 py-0.5 text-[0.72rem] font-medium text-brand-muted-foreground bg-brand/[0.12]"
                 >
                   {s.label}
                 </span>
@@ -138,12 +138,11 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
                       type="button"
                       disabled={!hasContent || !selectedModel || (isStreaming && activeAction !== key)}
                       onClick={() => handleAction("rewrite")}
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] font-medium transition-all disabled:opacity-30"
-                      style={{
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        background: isActive ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.03)",
-                        color: isActive ? "#a78bfa" : "#a1a1aa",
-                      }}
+                      className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[0.78rem] font-medium transition-colors disabled:opacity-30 ${
+                        isActive
+                          ? "border-brand/30 bg-brand/15 text-brand-muted-foreground"
+                          : "border-foreground/[0.08] bg-foreground/[0.03] text-muted-foreground"
+                      }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
                       {label}
@@ -170,12 +169,11 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
                   type="button"
                   disabled={!hasContent || !selectedModel || (isStreaming && activeAction !== key)}
                   onClick={() => isActive ? abort() : handleAction(key)}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] font-medium transition-all disabled:opacity-30"
-                  style={{
-                    border: `1px solid ${isActive ? "rgba(139,92,246,0.3)" : "rgba(255,255,255,0.08)"}`,
-                    background: isActive ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.03)",
-                    color: isActive ? "#a78bfa" : "#a1a1aa",
-                  }}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[0.78rem] font-medium transition-colors disabled:opacity-30 ${
+                    isActive
+                      ? "border-brand/30 bg-brand/15 text-brand-muted-foreground"
+                      : "border-foreground/[0.08] bg-foreground/[0.03] text-muted-foreground"
+                  }`}
                 >
                   {isActive ? (
                     <>
@@ -196,8 +194,7 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
           {/* Error */}
           {error && (
             <div
-              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-[0.78rem] text-red-300"
-              style={{ border: "1px solid rgba(239,68,68,0.15)", background: "rgba(239,68,68,0.06)" }}
+              className="flex items-center gap-2 rounded-lg border border-destructive/15 bg-destructive/[0.06] px-3 py-2.5 text-[0.78rem] text-red-300"
             >
               <X className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="flex-1">{error}</span>
@@ -214,20 +211,20 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
           {/* Result area */}
           {(hasResult || isStreaming) && (
             <div
-              className="relative min-h-[120px] max-h-[400px] overflow-y-auto rounded-lg px-3.5 py-3 text-[0.82rem] leading-relaxed text-foreground"
-              style={{ border: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.02)" }}
+              className="relative min-h-[120px] max-h-[400px] overflow-y-auto rounded-lg border border-foreground/[0.05] bg-foreground/[0.02] px-3.5 py-3 text-[0.82rem] leading-relaxed text-foreground"
+              aria-live="polite"
             >
               {/* Skeleton + bouncing dots while waiting for first token */}
               {isStreaming && !data && (
                 <div className="space-y-3 py-1">
-                  <div className="h-3 w-4/5 rounded bg-white/[0.04] animate-pulse" />
-                  <div className="h-3 w-3/5 rounded bg-white/[0.04] animate-pulse" />
-                  <div className="h-3 w-full rounded bg-white/[0.04] animate-pulse" />
-                  <div className="h-3 w-2/3 rounded bg-white/[0.04] animate-pulse" />
+                  <div className="h-3 w-4/5 rounded bg-foreground/[0.06] animate-pulse" />
+                  <div className="h-3 w-3/5 rounded bg-foreground/[0.06] animate-pulse" />
+                  <div className="h-3 w-full rounded bg-foreground/[0.06] animate-pulse" />
+                  <div className="h-3 w-2/3 rounded bg-foreground/[0.06] animate-pulse" />
                   <div className="flex items-center gap-1.5 pt-2">
-                    <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "0s" }} />
-                    <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "0.15s" }} />
-                    <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "0.3s" }} />
+                    <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: "0s" }} />
+                    <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: "0.15s" }} />
+                    <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: "0.3s" }} />
                   </div>
                 </div>
               )}
@@ -235,14 +232,14 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
               {data && (
                 <div className="ai-markdown prose prose-invert prose-sm max-w-none">
                   <Markdown>{data}</Markdown>
-                  {isStreaming && <span className="inline-block w-1.5 h-4 ml-0.5 bg-violet-400 animate-pulse rounded-sm" />}
+                  {isStreaming && <span className="inline-block w-1.5 h-4 ml-0.5 bg-brand animate-pulse rounded-sm" />}
                 </div>
               )}
               {/* Spinner + elapsed timer */}
               {isStreaming && (
                 <div className="absolute top-2 right-2 flex items-center gap-1.5">
                   <span className="text-[0.7rem] text-muted-foreground tabular-nums">{elapsed} сек</span>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400/60" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-muted-foreground/60" />
                 </div>
               )}
             </div>
@@ -252,21 +249,20 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
           {hasResult && !isStreaming && (
             <div className="flex items-center gap-2">
               {activeAction !== "analyze" && (
-                <button
-                  type="button"
+                <Button
+                  variant="brand"
+                  size="sm"
                   onClick={handleApply}
-                  className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-[0.78rem] font-medium text-white transition-all active:scale-[0.97]"
-                  style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)", boxShadow: "0 2px 8px -1px rgba(124,58,237,0.25)" }}
+                  className="gap-1.5"
                 >
                   <Check className="h-3.5 w-3.5" />
                   Применить
-                </button>
+                </Button>
               )}
               <button
                 type="button"
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] text-muted-foreground transition-all hover:text-foreground"
-                style={{ border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}
+                className="flex items-center gap-1.5 rounded-lg border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-1.5 text-[0.78rem] text-muted-foreground transition-colors hover:text-foreground"
               >
                 <Copy className="h-3.5 w-3.5" />
                 Копировать

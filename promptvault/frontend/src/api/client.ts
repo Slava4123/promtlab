@@ -72,14 +72,32 @@ export async function api<T>(
     headers["Authorization"] = `Bearer ${accessToken}`
   }
 
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (tz) headers["X-Timezone"] = tz
+  } catch {
+    // Intl unavailable — streak will use UTC fallback
+  }
+
   // credentials: include для auth-эндпоинтов (cookie)
   const credentials = path.startsWith("/auth") ? "include" as const : undefined
 
   let res = await fetch(url, { ...options, headers, credentials })
 
-  // Auto-refresh на 401 (только для защищённых эндпоинтов, не для login/register/refresh)
-  const isAuthEndpoint = path.startsWith("/auth/login") || path.startsWith("/auth/register") || path.startsWith("/auth/refresh")
-  if (res.status === 401 && !isAuthEndpoint) {
+  // Auto-refresh ТОЛЬКО на 401 от auth middleware (истёкший/невалидный JWT).
+  // Бизнес-валидация (неверный TOTP код, не найден enrollment) возвращается
+  // как 422 Unprocessable Entity — такие ошибки НЕ триггерят refresh retry.
+  //
+  // Историческая заметка (BUG #1 из QA): раньше любая 401 на protected
+  // endpoint делала retry, что приводило к двойному запросу при неверном
+  // TOTP коде. Теперь backend маппит бизнес-валидацию в 422, а client
+  // ретритит только истинные auth failures (401 без токена или с expired).
+  const isAuthEndpoint =
+    path.startsWith("/auth/login") ||
+    path.startsWith("/auth/register") ||
+    path.startsWith("/auth/refresh") ||
+    path.startsWith("/auth/verify-totp")
+  if (res.status === 401 && !isAuthEndpoint && accessToken) {
     try {
       await ensureFreshToken()
       headers["Authorization"] = `Bearer ${accessToken}`
@@ -117,4 +135,33 @@ export async function apiVoid(
   options: RequestInit = {},
 ): Promise<void> {
   await api<unknown>(path, options)
+}
+
+export async function publicApi<T>(path: string): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch {
+    throw new ApiError("Ошибка сети, проверьте подключение", 0)
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Ошибка запроса" }))
+    const apiError = new ApiError(body.error || `Ошибка (${res.status})`, res.status)
+    if (res.status >= 500) {
+      captureException(apiError, {
+        tags: { api_status: String(res.status), api_path: path },
+      })
+    }
+    throw apiError
+  }
+
+  try {
+    return await res.json()
+  } catch {
+    throw new ApiError("Ошибка при обработке ответа сервера", 0)
+  }
 }
