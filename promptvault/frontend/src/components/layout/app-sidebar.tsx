@@ -321,6 +321,11 @@ export function AppSidebar() {
       <SidebarFooter className="p-3">
         <FeedbackDialog />
         <UserMenu />
+        <div className="flex items-center justify-center gap-2 pt-1 text-[0.6rem] text-muted-foreground/40">
+          <button onClick={() => go("/legal/terms")} className="hover:text-muted-foreground transition-colors">Условия</button>
+          <span>&middot;</span>
+          <button onClick={() => go("/legal/privacy")} className="hover:text-muted-foreground transition-colors">Конфиденциальность</button>
+        </div>
       </SidebarFooter>
     </Sidebar>
   )

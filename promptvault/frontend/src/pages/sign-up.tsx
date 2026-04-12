@@ -150,6 +150,13 @@ export default function SignUp() {
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isSubmitting ? "Регистрация..." : "Зарегистрироваться"}
         </Button>
+
+        <p className="mt-3 text-center text-[0.7rem] text-muted-foreground/60">
+          Регистрируясь, вы принимаете{" "}
+          <Link to="/legal/terms" className="underline hover:text-foreground">условия использования</Link>
+          {" "}и{" "}
+          <Link to="/legal/privacy" className="underline hover:text-foreground">политику конфиденциальности</Link>
+        </p>
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">

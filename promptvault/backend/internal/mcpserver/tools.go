@@ -16,6 +16,7 @@ import (
 	"promptvault/internal/models"
 	colluc "promptvault/internal/usecases/collection"
 	promptuc "promptvault/internal/usecases/prompt"
+	shareuc "promptvault/internal/usecases/share"
 	taguc "promptvault/internal/usecases/tag"
 )
 
@@ -24,6 +25,7 @@ type toolHandlers struct {
 	collections CollectionService
 	tags        TagService
 	search      SearchService
+	shares      ShareService
 }
 
 // --- tool input types ---
@@ -102,6 +104,56 @@ type DeleteCollectionInput struct {
 	ID uint `json:"id" jsonschema:"required,Collection ID"`
 }
 
+// --- new tool input types ---
+
+type PromptIDInput struct {
+	ID uint `json:"id" jsonschema:"required,Prompt ID"`
+}
+
+type PromptPinInput struct {
+	ID       uint `json:"id" jsonschema:"required,Prompt ID"`
+	TeamWide bool `json:"team_wide,omitempty" jsonschema:"Pin for entire team (owner/editor only)"`
+}
+
+type ListLimitedInput struct {
+	TeamID *uint `json:"team_id,omitempty" jsonschema:"Team ID (omit for personal workspace)"`
+	Limit  int   `json:"limit,omitempty" jsonschema:"Max items to return (default 10, max 50)"`
+}
+
+type RevertInput struct {
+	PromptID  uint `json:"prompt_id" jsonschema:"required,Prompt ID"`
+	VersionID uint `json:"version_id" jsonschema:"required,Version ID to revert to"`
+}
+
+type ShareCreateInput struct {
+	PromptID uint `json:"prompt_id" jsonschema:"required,Prompt ID"`
+}
+
+type ShareDeactivateInput struct {
+	PromptID uint `json:"prompt_id" jsonschema:"required,Prompt ID"`
+}
+
+type CollectionGetInput struct {
+	ID uint `json:"id" jsonschema:"required,Collection ID"`
+}
+
+type CollectionUpdateInput struct {
+	ID          uint    `json:"id" jsonschema:"required,Collection ID"`
+	Name        *string `json:"name,omitempty" jsonschema:"New name"`
+	Description *string `json:"description,omitempty" jsonschema:"New description"`
+	Color       *string `json:"color,omitempty" jsonschema:"New color (#RRGGBB)"`
+	Icon        *string `json:"icon,omitempty" jsonschema:"New icon emoji"`
+}
+
+type TagDeleteInput struct {
+	ID uint `json:"id" jsonschema:"required,Tag ID"`
+}
+
+type SuggestInput struct {
+	Prefix string `json:"prefix" jsonschema:"required,Search prefix for autocomplete"`
+	TeamID *uint  `json:"team_id,omitempty" jsonschema:"Team ID (omit for personal workspace)"`
+}
+
 var (
 	readOnlyAnnotations = &sdkmcp.ToolAnnotations{
 		ReadOnlyHint:  true,
@@ -114,6 +166,17 @@ var (
 	deleteAnnotations = &sdkmcp.ToolAnnotations{
 		// DestructiveHint defaults to true — correct for delete operations.
 		OpenWorldHint: boolPtr(false),
+	}
+	// writeIdempotentAnnotations — for toggle/upsert operations safe to repeat.
+	writeIdempotentAnnotations = &sdkmcp.ToolAnnotations{
+		DestructiveHint: boolPtr(false),
+		IdempotentHint:  true,
+		OpenWorldHint:   boolPtr(false),
+	}
+	// deleteIdempotentAnnotations — for destructive but idempotent operations (deactivate, delete).
+	deleteIdempotentAnnotations = &sdkmcp.ToolAnnotations{
+		IdempotentHint: true,
+		OpenWorldHint:  boolPtr(false),
 	}
 )
 
@@ -205,6 +268,93 @@ func (t *toolHandlers) register(server *sdkmcp.Server) {
 		Description: "Delete a collection (prompts inside are not deleted)",
 		Annotations: deleteAnnotations,
 	}, t.deleteCollection)
+
+	// --- new read tools ---
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "prompt_list_pinned",
+		Title:       "List pinned prompts",
+		Description: "List pinned prompts. Use to quickly access frequently used prompts.",
+		Annotations: readOnlyAnnotations,
+	}, t.promptListPinned)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "prompt_list_recent",
+		Title:       "List recent prompts",
+		Description: "List recently used prompts, ordered by last access time.",
+		Annotations: readOnlyAnnotations,
+	}, t.promptListRecent)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "collection_get",
+		Title:       "Get collection",
+		Description: "Get a single collection by ID.",
+		Annotations: readOnlyAnnotations,
+	}, t.collectionGet)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "search_suggest",
+		Title:       "Search suggestions",
+		Description: "Get autocomplete suggestions by prefix. Use for interactive search.",
+		Annotations: readOnlyAnnotations,
+	}, t.searchSuggest)
+
+	// --- new write tools ---
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "prompt_favorite",
+		Title:       "Toggle favorite",
+		Description: "Toggle favorite status on a prompt. Safe to call repeatedly.",
+		Annotations: writeIdempotentAnnotations,
+	}, t.promptFavorite)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "prompt_pin",
+		Title:       "Toggle pin",
+		Description: "Pin or unpin a prompt. Use team_wide=true to pin for entire team (owner/editor only).",
+		Annotations: writeIdempotentAnnotations,
+	}, t.promptPin)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "prompt_increment_usage",
+		Title:       "Record prompt usage",
+		Description: "Record that a prompt was used. Increments usage counter for analytics.",
+		Annotations: writeAnnotations,
+	}, t.promptIncrementUsage)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "share_create",
+		Title:       "Create share link",
+		Description: "Create a public share link for a prompt. Returns existing link if one is already active.",
+		Annotations: writeIdempotentAnnotations,
+	}, t.shareCreate)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "collection_update",
+		Title:       "Update collection",
+		Description: "Update collection name, description, color, or icon.",
+		Annotations: writeIdempotentAnnotations,
+	}, t.collectionUpdate)
+
+	// --- new destructive/revert tools ---
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "prompt_revert",
+		Title:       "Revert prompt to version",
+		Description: "Revert a prompt to a previous version. Creates a new version with the old content. Use get_prompt_versions first to find the version ID.",
+		Annotations: writeAnnotations,
+	}, t.promptRevert)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "share_deactivate",
+		Title:       "Deactivate share link",
+		Description: "Deactivate the public share link for a prompt. The link will no longer be accessible.",
+		Annotations: deleteIdempotentAnnotations,
+	}, t.shareDeactivate)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "tag_delete",
+		Title:       "Delete tag",
+		Description: "Delete a tag. Prompts using this tag are not affected.",
+		Annotations: deleteIdempotentAnnotations,
+	}, t.tagDelete)
 }
 
 // --- logging wrapper ---
@@ -233,6 +383,7 @@ func isDomainError(err error) bool {
 		promptuc.ErrVersionNotFound, promptuc.ErrWorkspaceMismatch, promptuc.ErrPinForbidden,
 		colluc.ErrNotFound, colluc.ErrForbidden, colluc.ErrViewerReadOnly,
 		taguc.ErrNotFound, taguc.ErrForbidden, taguc.ErrViewerReadOnly, taguc.ErrNameEmpty,
+		shareuc.ErrNotFound, shareuc.ErrPromptNotFound, shareuc.ErrForbidden, shareuc.ErrViewerReadOnly,
 	}
 	for _, de := range domainErrors {
 		if errors.Is(err, de) {
@@ -516,6 +667,223 @@ func (t *toolHandlers) deleteCollection(ctx context.Context, _ *sdkmcp.CallToolR
 	res, err := jsonResult(map[string]string{
 		"status":  "deleted",
 		"message": "Collection deleted. Prompts inside are not affected.",
+	})
+	return res, nil, err
+}
+
+// --- new read tool handlers ---
+
+func (t *toolHandlers) promptListPinned(ctx context.Context, _ *sdkmcp.CallToolRequest, input ListLimitedInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	prompts, err := t.prompts.ListPinned(ctx, userID, input.TeamID, limit)
+	logTool(ctx, "prompt_list_pinned", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(map[string]any{"prompts": toPromptList(prompts)})
+	return res, nil, err
+}
+
+func (t *toolHandlers) promptListRecent(ctx context.Context, _ *sdkmcp.CallToolRequest, input ListLimitedInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	prompts, err := t.prompts.ListRecent(ctx, userID, input.TeamID, limit)
+	logTool(ctx, "prompt_list_recent", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(map[string]any{"prompts": toPromptList(prompts)})
+	return res, nil, err
+}
+
+func (t *toolHandlers) collectionGet(ctx context.Context, _ *sdkmcp.CallToolRequest, input CollectionGetInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	coll, err := t.collections.GetByID(ctx, input.ID, userID)
+	logTool(ctx, "collection_get", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(CollectionResponse{
+		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: coll.Color, Icon: coll.Icon,
+	})
+	return res, nil, err
+}
+
+func (t *toolHandlers) searchSuggest(ctx context.Context, _ *sdkmcp.CallToolRequest, input SuggestInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	result, err := t.search.Suggest(ctx, userID, input.TeamID, input.Prefix)
+	logTool(ctx, "search_suggest", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(result)
+	return res, nil, err
+}
+
+// --- new write tool handlers ---
+
+func (t *toolHandlers) promptFavorite(ctx context.Context, _ *sdkmcp.CallToolRequest, input PromptIDInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	prompt, err := t.prompts.ToggleFavorite(ctx, input.ID, userID)
+	logTool(ctx, "prompt_favorite", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(toPromptResponse(prompt))
+	return res, nil, err
+}
+
+func (t *toolHandlers) promptPin(ctx context.Context, _ *sdkmcp.CallToolRequest, input PromptPinInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	result, err := t.prompts.TogglePin(ctx, promptuc.PinInput{
+		PromptID: input.ID,
+		UserID:   userID,
+		TeamWide: input.TeamWide,
+	})
+	logTool(ctx, "prompt_pin", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(PinResultResponse{Pinned: result.Pinned, TeamWide: result.TeamWide})
+	return res, nil, err
+}
+
+func (t *toolHandlers) promptIncrementUsage(ctx context.Context, _ *sdkmcp.CallToolRequest, input PromptIDInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	err := t.prompts.IncrementUsage(ctx, input.ID, userID)
+	logTool(ctx, "prompt_increment_usage", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(map[string]string{"status": "recorded"})
+	return res, nil, err
+}
+
+func (t *toolHandlers) shareCreate(ctx context.Context, _ *sdkmcp.CallToolRequest, input ShareCreateInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	link, _, err := t.shares.CreateOrGet(ctx, input.PromptID, userID)
+	logTool(ctx, "share_create", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(ShareLinkResponse{
+		ID: link.ID, Token: link.Token, URL: link.URL,
+		IsActive: link.IsActive, ViewCount: link.ViewCount,
+		LastViewedAt: link.LastViewedAt, CreatedAt: link.CreatedAt,
+	})
+	return res, nil, err
+}
+
+func (t *toolHandlers) collectionUpdate(ctx context.Context, _ *sdkmcp.CallToolRequest, input CollectionUpdateInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	// Resolve optional fields: fetch current values for fields not provided.
+	current, err := t.collections.GetByID(ctx, input.ID, userID)
+	if err != nil {
+		logTool(ctx, "collection_update", start, err)
+		return nil, nil, mapDomainError(err)
+	}
+
+	name := current.Name
+	if input.Name != nil {
+		name = *input.Name
+	}
+	description := current.Description
+	if input.Description != nil {
+		description = *input.Description
+	}
+	color := current.Color
+	if input.Color != nil {
+		color = *input.Color
+	}
+	icon := current.Icon
+	if input.Icon != nil {
+		icon = *input.Icon
+	}
+
+	coll, err := t.collections.Update(ctx, input.ID, userID, name, description, color, icon)
+	logTool(ctx, "collection_update", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(CollectionResponse{
+		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: coll.Color, Icon: coll.Icon,
+	})
+	return res, nil, err
+}
+
+// --- new destructive/revert tool handlers ---
+
+func (t *toolHandlers) promptRevert(ctx context.Context, _ *sdkmcp.CallToolRequest, input RevertInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	prompt, err := t.prompts.RevertToVersion(ctx, input.PromptID, userID, input.VersionID)
+	logTool(ctx, "prompt_revert", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(toPromptResponse(prompt))
+	return res, nil, err
+}
+
+func (t *toolHandlers) shareDeactivate(ctx context.Context, _ *sdkmcp.CallToolRequest, input ShareDeactivateInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	err := t.shares.Deactivate(ctx, input.PromptID, userID)
+	logTool(ctx, "share_deactivate", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(map[string]string{"status": "deactivated"})
+	return res, nil, err
+}
+
+func (t *toolHandlers) tagDelete(ctx context.Context, _ *sdkmcp.CallToolRequest, input TagDeleteInput) (*sdkmcp.CallToolResult, any, error) {
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	err := t.tags.Delete(ctx, input.ID, userID)
+	logTool(ctx, "tag_delete", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	res, err := jsonResult(map[string]string{
+		"status":  "deleted",
+		"message": "Tag deleted. Prompts are not affected.",
 	})
 	return res, nil, err
 }

@@ -45,3 +45,18 @@ type VersionResponse struct {
 	ChangeNote    string    `json:"change_note,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 }
+
+type PinResultResponse struct {
+	Pinned   bool `json:"pinned"`
+	TeamWide bool `json:"team_wide"`
+}
+
+type ShareLinkResponse struct {
+	ID           uint       `json:"id"`
+	Token        string     `json:"token"`
+	URL          string     `json:"url"`
+	IsActive     bool       `json:"is_active"`
+	ViewCount    int        `json:"view_count"`
+	LastViewedAt *time.Time `json:"last_viewed_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+}

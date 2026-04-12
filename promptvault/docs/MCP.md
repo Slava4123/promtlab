@@ -50,29 +50,46 @@ claude mcp add promptvault --transport http https://ваш-домен/mcp --head
 
 ## Возможности
 
-### Tools (12 шт.)
+### Tools (24 шт.)
 
-#### Чтение
+#### Чтение (10)
 
 | Tool | Описание | Viewer |
 |------|----------|--------|
 | `search_prompts` | Поиск по промптам, коллекциям, тегам | ✅ |
+| `search_suggest` | Автодополнение по префиксу | ✅ |
 | `list_prompts` | Список промптов с фильтрами (коллекция, теги, избранное) | ✅ |
 | `get_prompt` | Получить промпт по ID с полным содержимым | ✅ |
+| `prompt_list_pinned` | Список закреплённых промптов | ✅ |
+| `prompt_list_recent` | Список недавно использованных промптов | ✅ |
 | `list_collections` | Список коллекций с количеством промптов | ✅ |
+| `collection_get` | Получить коллекцию по ID | ✅ |
 | `list_tags` | Список тегов | ✅ |
 | `get_prompt_versions` | История версий промпта | ✅ |
 
-#### Запись
+#### Запись (11)
 
 | Tool | Описание | Viewer |
 |------|----------|--------|
 | `create_prompt` | Создать промпт | ❌ |
 | `update_prompt` | Обновить промпт (создаёт новую версию) | ❌ |
-| `delete_prompt` | Удалить промпт (в корзину на 30 дней) | ❌ |
+| `prompt_favorite` | Переключить статус избранного | ❌ |
+| `prompt_pin` | Закрепить/открепить промпт (team_wide для команды) | ❌ |
+| `prompt_revert` | Откатить промпт к предыдущей версии | ❌ |
+| `prompt_increment_usage` | Отметить использование промпта (для аналитики) | ❌ |
+| `share_create` | Создать публичную ссылку на промпт | ❌ |
+| `collection_update` | Обновить название/описание/цвет/иконку коллекции | ❌ |
 | `create_tag` | Создать тег | ❌ |
 | `create_collection` | Создать коллекцию для организации промптов | ❌ |
+
+#### Удаление (3)
+
+| Tool | Описание | Viewer |
+|------|----------|--------|
+| `delete_prompt` | Удалить промпт (в корзину на 30 дней) | ❌ |
 | `delete_collection` | Удалить коллекцию (промпты внутри не затрагиваются) | ❌ |
+| `tag_delete` | Удалить тег (промпты не затрагиваются) | ❌ |
+| `share_deactivate` | Деактивировать публичную ссылку | ❌ |
 
 ### Resources
 
@@ -108,7 +125,7 @@ claude mcp add promptvault --transport http https://ваш-домен/mcp --head
 | **editor** | ✅ | ✅ |
 | **viewer** | ✅ | ❌ |
 
-Viewer имеет доступ только к read-tools: `search_prompts`, `list_prompts`, `get_prompt`, `list_collections`, `list_tags`, `get_prompt_versions`.
+Viewer имеет доступ только к read-tools: `search_prompts`, `search_suggest`, `list_prompts`, `get_prompt`, `prompt_list_pinned`, `prompt_list_recent`, `list_collections`, `collection_get`, `list_tags`, `get_prompt_versions`.
 
 ## Примеры использования
 
@@ -142,11 +159,38 @@ Viewer имеет доступ только к read-tools: `search_prompts`, `li
 # LLM получает отформатированный промпт: "# Заголовок\n\nСодержимое"
 ```
 
-### История версий
+### История версий и откат
 
 ```
 "Покажи историю изменений промпта #10"
 → get_prompt_versions(prompt_id=10)
+
+"Откати промпт #10 к версии #3"
+→ prompt_revert(prompt_id=10, version_id=3)
+```
+
+### Управление избранным и закреплением
+
+```
+"Добавь промпт #5 в избранное"
+→ prompt_favorite(id=5)
+
+"Закрепи промпт #5 для всей команды"
+→ prompt_pin(id=5, team_wide=true)
+
+"Покажи мои закреплённые промпты"
+→ prompt_list_pinned()
+```
+
+### Шаринг
+
+```
+"Поделись промптом #5"
+→ share_create(prompt_id=5)
+# → { url: "https://promtlabs.ru/s/abc123" }
+
+"Отключи ссылку на промпт #5"
+→ share_deactivate(prompt_id=5)
 ```
 
 ## API-ключи

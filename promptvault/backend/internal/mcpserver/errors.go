@@ -6,6 +6,7 @@ import (
 
 	colluc "promptvault/internal/usecases/collection"
 	promptuc "promptvault/internal/usecases/prompt"
+	shareuc "promptvault/internal/usecases/share"
 	taguc "promptvault/internal/usecases/tag"
 )
 
@@ -22,6 +23,8 @@ func mapDomainError(err error) error {
 		return fmt.Errorf("version not found")
 	case errors.Is(err, promptuc.ErrWorkspaceMismatch):
 		return fmt.Errorf("collections and tags must belong to the same workspace")
+	case errors.Is(err, promptuc.ErrPinForbidden):
+		return fmt.Errorf("pin forbidden for viewers")
 
 	// collections
 	case errors.Is(err, colluc.ErrNotFound):
@@ -44,6 +47,16 @@ func mapDomainError(err error) error {
 		return fmt.Errorf("read-only access")
 	case errors.Is(err, taguc.ErrNameEmpty):
 		return fmt.Errorf("tag name is required")
+
+	// shares
+	case errors.Is(err, shareuc.ErrNotFound):
+		return fmt.Errorf("share link not found")
+	case errors.Is(err, shareuc.ErrPromptNotFound):
+		return fmt.Errorf("prompt not found")
+	case errors.Is(err, shareuc.ErrForbidden):
+		return fmt.Errorf("access denied")
+	case errors.Is(err, shareuc.ErrViewerReadOnly):
+		return fmt.Errorf("read-only access")
 	}
 	return fmt.Errorf("internal server error")
 }

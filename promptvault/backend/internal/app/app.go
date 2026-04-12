@@ -93,6 +93,16 @@ func (a *mcpPromptAdapter) Update(ctx context.Context, id, userID uint, in promp
 	return p, err
 }
 
+func (a *mcpPromptAdapter) RevertToVersion(ctx context.Context, promptID, userID, versionID uint) (*models.Prompt, error) {
+	p, _, err := a.Service.RevertToVersion(ctx, promptID, userID, versionID)
+	return p, err
+}
+
+func (a *mcpPromptAdapter) IncrementUsage(ctx context.Context, id, userID uint) error {
+	_, err := a.Service.IncrementUsage(ctx, id, userID)
+	return err
+}
+
 // mcpCollectionAdapter — симметричный адаптер для *colluc.Service. Скрывает
 // возвращаемый slice бейджей из Create, чтобы mcpserver.CollectionService
 // оставался узким контрактом.
@@ -228,6 +238,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			&mcpCollectionAdapter{Service: collectionSvc},
 			tagSvc,
 			searchSvc,
+			shareSvc,
 			60,
 		)
 	}

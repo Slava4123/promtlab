@@ -44,6 +44,8 @@ const AdminAuditLog = lazy(() => import("@/pages/admin/audit-log"))
 const AdminHealth = lazy(() => import("@/pages/admin/health"))
 const AdminTOTPEnroll = lazy(() => import("@/pages/admin/totp-enroll"))
 const ExtensionPrivacy = lazy(() => import("@/pages/legal/extension-privacy"))
+const Terms = lazy(() => import("@/pages/legal/terms"))
+const Privacy = lazy(() => import("@/pages/legal/privacy"))
 
 function PageFallback() {
   return (
@@ -98,6 +100,8 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/s/:token" element={<SharedPrompt />} />
       <Route path="/legal/extension-privacy" element={<Suspense fallback={<PageFallback />}><ExtensionPrivacy /></Suspense>} />
+      <Route path="/legal/terms" element={<Suspense fallback={<PageFallback />}><Terms /></Suspense>} />
+      <Route path="/legal/privacy" element={<Suspense fallback={<PageFallback />}><Privacy /></Suspense>} />
 
       {/* protected — with layout */}
       <Route element={<ProtectedRoute />}>

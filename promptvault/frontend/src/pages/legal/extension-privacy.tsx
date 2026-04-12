@@ -199,7 +199,7 @@ export default function ExtensionPrivacyPage() {
             </p>
             <ul>
               <li>
-                Email: <a href="mailto:privacy@promtlabs.ru" className="text-brand hover:underline">privacy@promtlabs.ru</a>
+                Email: <a href="mailto:slava0gpt@gmail.com" className="text-brand hover:underline">slava0gpt@gmail.com</a>
               </li>
               <li>
                 GitHub:{" "}
