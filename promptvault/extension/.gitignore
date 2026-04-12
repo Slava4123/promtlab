@@ -1,0 +1,7 @@
+node_modules/
+.wxt/
+.output/
+*.log
+.env
+.env.local
+stats.html
