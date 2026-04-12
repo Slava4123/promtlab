@@ -35,7 +35,7 @@ function detectBrowser(): BrowserInfo {
 }
 
 export function ExtensionPromoSection() {
-  const browser = useMemo(detectBrowser, [])
+  const browser = useMemo(() => detectBrowser(), [])
   const isLive = Boolean(CHROME_WEB_STORE_URL)
 
   return (

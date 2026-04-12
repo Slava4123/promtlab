@@ -37,14 +37,12 @@ export function initSentry(): void {
   if (!enabled) {
     // Намеренно silent в prod, warn только в dev — чтобы не пугать юзеров.
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.info("[Sentry] init skipped: VITE_SENTRY_ENABLED !== 'true'")
     }
     return
   }
 
   if (!dsn) {
-    // eslint-disable-next-line no-console
     console.warn("[Sentry] init skipped: VITE_SENTRY_DSN is empty")
     return
   }
