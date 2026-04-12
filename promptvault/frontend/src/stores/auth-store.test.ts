@@ -132,6 +132,7 @@ describe("auth-store", () => {
 
   describe("restoreSession", () => {
     it("success — sets user and stops loading", async () => {
+      localStorage.setItem("pv_has_session", "1")
       mockedEnsureFreshToken.mockResolvedValueOnce(undefined)
       mockedApi.mockResolvedValueOnce(testUser)
 
@@ -146,6 +147,7 @@ describe("auth-store", () => {
     })
 
     it("auth error clears state", async () => {
+      localStorage.setItem("pv_has_session", "1")
       mockedEnsureFreshToken.mockRejectedValueOnce(new Error("refresh failed"))
 
       await useAuthStore.getState().restoreSession()
@@ -156,6 +158,7 @@ describe("auth-store", () => {
     })
 
     it("unauthorized error clears state", async () => {
+      localStorage.setItem("pv_has_session", "1")
       mockedEnsureFreshToken.mockRejectedValueOnce(new Error("unauthorized"))
 
       await useAuthStore.getState().restoreSession()
@@ -166,6 +169,7 @@ describe("auth-store", () => {
     })
 
     it("transient error does not clear user", async () => {
+      localStorage.setItem("pv_has_session", "1")
       useAuthStore.setState({ user: testUser, isLoading: true })
       mockedEnsureFreshToken.mockRejectedValueOnce(new Error("network timeout"))
 
