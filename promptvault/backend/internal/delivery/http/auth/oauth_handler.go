@@ -33,14 +33,16 @@ func NewOAuthHandler(oauthSvc *authuc.OAuthService, frontendURL, jwtSecret strin
 }
 
 func (h *OAuthHandler) redirectWithTokens(w http.ResponseWriter, r *http.Request, tokens *authuc.TokenPair) {
-	// Refresh token — HttpOnly cookie (не видна JS, не в URL)
+	// Refresh token — HttpOnly cookie (не видна JS, не в URL).
+	// Lax чтобы cookie отправлялась при возврате с OAuth-провайдера (top-level
+	// cross-site navigation, которое Strict блокирует).
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    tokens.RefreshToken,
 		Path:     "/api/auth",
 		HttpOnly: true,
 		Secure:   h.secureCookies,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   7 * 24 * 3600,
 	})
 	// Access token — URL fragment (# не отправляется серверу, не попадает в логи)

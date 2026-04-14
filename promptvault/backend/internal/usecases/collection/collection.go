@@ -8,6 +8,7 @@ import (
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 	badgeuc "promptvault/internal/usecases/badge"
+	quotauc "promptvault/internal/usecases/quota"
 	"promptvault/internal/usecases/teamcheck"
 )
 
@@ -17,13 +18,21 @@ type Service struct {
 	collections repo.CollectionRepository
 	teams       repo.TeamRepository
 	badges      *badgeuc.Service
+	quotas      *quotauc.Service
 }
 
-func NewService(collections repo.CollectionRepository, teams repo.TeamRepository, badges *badgeuc.Service) *Service {
-	return &Service{collections: collections, teams: teams, badges: badges}
+func NewService(collections repo.CollectionRepository, teams repo.TeamRepository, badges *badgeuc.Service, quotas *quotauc.Service) *Service {
+	return &Service{collections: collections, teams: teams, badges: badges, quotas: quotas}
 }
 
 func (s *Service) Create(ctx context.Context, userID uint, name, description, color, icon string, teamID *uint) (*models.Collection, []badgeuc.Badge, error) {
+	// Проверка квоты коллекций
+	if s.quotas != nil {
+		if err := s.quotas.CheckCollectionQuota(ctx, userID); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// Проверка роли для командной коллекции
 	if err := teamcheck.RequireEditor(ctx, s.teams, teamID, userID); err != nil {
 		return nil, nil, mapTeamError(err)

@@ -10,6 +10,7 @@ export interface User {
   email_verified: boolean
   has_password: boolean
   default_model: string
+  plan_id?: PlanID
   role?: UserRole
   status?: UserStatus
   onboarding_completed_at?: string | null
@@ -431,4 +432,61 @@ export interface BadgeListResponse {
   items: Badge[]
   total_count: number
   total_unlocked: number
+}
+
+// Subscription / Billing
+
+export type PlanID = "free" | "pro" | "max"
+export type SubscriptionStatus = "active" | "past_due" | "cancelled" | "expired"
+
+export interface Plan {
+  id: PlanID
+  name: string
+  price_kop: number
+  period_days: number
+  max_prompts: number
+  max_collections: number
+  max_ai_requests_daily: number
+  ai_requests_is_total: boolean
+  max_teams: number
+  max_team_members: number
+  max_share_links: number
+  max_ext_uses_daily: number
+  max_mcp_uses_daily: number
+  features: string[]
+  sort_order: number
+  is_active: boolean
+}
+
+export interface Subscription {
+  id: number
+  plan_id: PlanID
+  status: SubscriptionStatus
+  current_period_start: string
+  current_period_end: string
+  cancel_at_period_end: boolean
+  cancelled_at?: string
+  auto_renew: boolean
+  plan: Plan
+}
+
+export interface QuotaInfo {
+  used: number
+  limit: number
+  is_total?: boolean
+}
+
+export interface UsageSummary {
+  plan_id: PlanID
+  prompts: QuotaInfo
+  collections: QuotaInfo
+  ai_requests: QuotaInfo
+  teams: QuotaInfo
+  share_links: QuotaInfo
+  ext_uses_today: QuotaInfo
+  mcp_uses_today: QuotaInfo
+}
+
+export interface CheckoutResponse {
+  payment_url: string
 }

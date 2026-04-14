@@ -51,6 +51,19 @@ func Internal(err error) *AppError {
 	return &AppError{Code: http.StatusInternalServerError, Message: "internal error", Err: err}
 }
 
+// RespondQuotaError пишет enriched 402 ответ для QuotaExceededError.
+// Используется всеми delivery-пакетами при маппинге quota errors.
+func RespondQuotaError(w http.ResponseWriter, quotaType string, used, limit int, planID, message string) {
+	utils.WriteJSON(w, http.StatusPaymentRequired, map[string]any{
+		"error":       message,
+		"quota_type":  quotaType,
+		"used":        used,
+		"limit":       limit,
+		"plan":        planID,
+		"upgrade_url": "/pricing",
+	})
+}
+
 func Respond(w http.ResponseWriter, err error) {
 	var appErr *AppError
 	if stderrors.As(err, &appErr) {

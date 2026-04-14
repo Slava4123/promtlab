@@ -16,7 +16,7 @@ func newTestService() (*Service, *mockPromptRepo, *mockVersionRepo, *mockTagRepo
 	vr := new(mockVersionRepo)
 	tr := new(mockTagRepo)
 	cr := new(mockCollectionRepo)
-	svc := NewService(pr, tr, cr, vr, nil, nil, nil, nil)
+	svc := NewService(pr, tr, cr, vr, nil, nil, nil, nil, nil)
 	return svc, pr, vr, tr, cr
 }
 

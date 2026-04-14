@@ -11,6 +11,7 @@ import (
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	quotauc "promptvault/internal/usecases/quota"
 	"promptvault/internal/usecases/teamcheck"
 )
 
@@ -25,6 +26,7 @@ type Service struct {
 	prompts     repo.PromptRepository
 	teams       repo.TeamRepository
 	frontendURL string
+	quotas      *quotauc.Service
 }
 
 func NewService(
@@ -32,12 +34,14 @@ func NewService(
 	prompts repo.PromptRepository,
 	teams repo.TeamRepository,
 	frontendURL string,
+	quotas *quotauc.Service,
 ) *Service {
 	return &Service{
 		shares:      shares,
 		prompts:     prompts,
 		teams:       teams,
 		frontendURL: frontendURL,
+		quotas:      quotas,
 	}
 }
 
@@ -59,6 +63,13 @@ func (s *Service) CreateOrGet(ctx context.Context, promptID, userID uint) (*Shar
 	}
 	if !errors.Is(err, repo.ErrNotFound) {
 		return nil, false, err
+	}
+
+	// Проверка квоты share links (только при создании новой)
+	if s.quotas != nil {
+		if err := s.quotas.CheckShareLinkQuota(ctx, userID); err != nil {
+			return nil, false, err
+		}
 	}
 
 	token, err := generateToken()

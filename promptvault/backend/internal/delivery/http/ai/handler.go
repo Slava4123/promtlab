@@ -14,15 +14,17 @@ import (
 	"promptvault/internal/infrastructure/openrouter"
 	authmw "promptvault/internal/middleware/auth"
 	aiuc "promptvault/internal/usecases/ai"
+	quotauc "promptvault/internal/usecases/quota"
 )
 
 type Handler struct {
 	svc      *aiuc.Service
+	quotas   *quotauc.Service
 	validate *validator.Validate
 }
 
-func NewHandler(svc *aiuc.Service) *Handler {
-	return &Handler{svc: svc, validate: validator.New()}
+func NewHandler(svc *aiuc.Service, quotas *quotauc.Service) *Handler {
+	return &Handler{svc: svc, quotas: quotas, validate: validator.New()}
 }
 
 // GET /api/ai/models
@@ -99,6 +101,14 @@ func (h *Handler) streamEndpoint(w http.ResponseWriter, r *http.Request, req any
 		return
 	}
 
+	// Бизнес-квота AI (DB-backed, отдельно от in-memory RPM limiter)
+	if h.quotas != nil {
+		if err := h.quotas.CheckAIQuota(r.Context(), userID); err != nil {
+			respondQuotaError(w, err)
+			return
+		}
+	}
+
 	flusher, ok := acquireFlusher(w)
 	if !ok {
 		return
@@ -108,6 +118,13 @@ func (h *Handler) streamEndpoint(w http.ResponseWriter, r *http.Request, req any
 
 	err := call(userID, streamCallback(w, flusher))
 	finishSSE(w, flusher, err)
+
+	// Инкремент только после успешного стрима
+	if err == nil && h.quotas != nil {
+		if incErr := h.quotas.IncrementAIUsage(r.Context(), userID); incErr != nil {
+			slog.Error("failed to increment AI usage", "error", incErr, "user_id", userID)
+		}
+	}
 }
 
 // SSE helpers

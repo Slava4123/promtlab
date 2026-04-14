@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>ПромтЛаб — Скриншот 1</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1280px; height: 800px; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #f8f9fa; display: flex; flex-direction: column; }
+
+  /* Chrome tab bar */
+  .chrome-tabs { height: 40px; background: #dee1e6; display: flex; align-items: flex-end; padding: 0 80px 0 8px; gap: 0; }
+  .chrome-tab { height: 34px; background: #c8ccd3; border-radius: 8px 8px 0 0; padding: 0 16px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: #5f6368; min-width: 200px; }
+  .chrome-tab.active { background: #fff; color: #1a1a1a; }
+  .tab-icon { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; }
+  .tab-icon-gpt { background: #1a1a1a; }
+  .tab-icon-claude { background: #d4a27a; }
+  .tab-close { margin-left: auto; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #80868b; }
+  .tab-close:hover { background: #d0d3d8; }
+
+  /* Chrome address bar */
+  .chrome-bar { height: 44px; background: #fff; border-bottom: 1px solid #dadce0; display: flex; align-items: center; padding: 0 12px; gap: 8px; }
+  .nav-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+  .nav-arrow { width: 0; height: 0; border-style: solid; }
+  .nav-back .nav-arrow { border-width: 5px 7px 5px 0; border-color: transparent #80868b transparent transparent; }
+  .nav-fwd .nav-arrow { border-width: 5px 0 5px 7px; border-color: transparent transparent transparent #bdc1c6; }
+  .nav-reload { width: 14px; height: 14px; border: 2px solid #80868b; border-radius: 50%; border-top-color: transparent; }
+  .url-bar { flex: 1; height: 32px; background: #f1f3f4; border-radius: 20px; display: flex; align-items: center; padding: 0 14px; font-size: 14px; color: #5f6368; gap: 8px; }
+  .lock-icon { width: 12px; height: 12px; border: 1.5px solid #5f6368; border-radius: 2px; position: relative; }
+  .lock-icon::before { content: ''; position: absolute; top: -5px; left: 1.5px; width: 6px; height: 5px; border: 1.5px solid #5f6368; border-radius: 4px 4px 0 0; border-bottom: none; }
+  .url-domain { color: #202124; }
+  .ext-area { display: flex; gap: 4px; align-items: center; }
+  .ext-btn { width: 28px; height: 28px; border-radius: 6px; background: #8b5cf6; display: flex; align-items: center; justify-content: center; color: white; font-size: 13px; font-weight: 700; }
+
+  /* Main area */
+  .main { flex: 1; display: flex; overflow: hidden; }
+
+  /* ChatGPT */
+  .gpt { flex: 1; background: #fff; display: flex; }
+  .gpt-side { width: 260px; background: #f7f7f8; border-right: 1px solid #ebebeb; padding: 12px 8px; flex-shrink: 0; }
+  .gpt-side-title { font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px 4px; font-weight: 500; }
+  .gpt-side-item { padding: 8px 12px; border-radius: 8px; font-size: 13px; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gpt-side-item.active { background: #ececec; }
+  .gpt-main { flex: 1; display: flex; flex-direction: column; }
+  .gpt-msgs { flex: 1; padding: 24px 40px; overflow: hidden; }
+  .msg { margin-bottom: 24px; }
+  .msg-user { background: #f7f7f8; border-radius: 18px; padding: 12px 18px; max-width: 520px; margin-left: auto; font-size: 14px; color: #1a1a1a; line-height: 1.6; }
+  .msg-ai { max-width: 680px; font-size: 14px; color: #374151; line-height: 1.7; }
+  .msg-ai-avatar { width: 28px; height: 28px; border-radius: 50%; background: #1a1a1a; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; }
+  .msg-ai-avatar::after { content: ''; width: 8px; height: 8px; background: #10a37f; border-radius: 50%; }
+  .gpt-input-wrap { padding: 12px 40px 20px; }
+  .gpt-input { background: #f4f4f4; border-radius: 24px; padding: 14px 52px 14px 20px; font-size: 14px; color: #9ca3af; position: relative; }
+  .gpt-send { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; background: #d1d5db; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .gpt-send::after { content: ''; width: 0; height: 0; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent white; margin-left: 2px; }
+
+  /* Extension Side Panel */
+  .panel { width: 360px; background: #fff; border-left: 1px solid #e5e5e5; display: flex; flex-direction: column; flex-shrink: 0; }
+  .p-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; }
+  .p-ws { font-size: 13px; font-weight: 600; color: #1a1a1a; background: #f5f5f5; padding: 4px 10px; border-radius: 6px; border: 1px solid #e5e5e5; }
+  .p-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .p-badge-gpt { background: #dcfce7; color: #166534; }
+  .p-badge-streak { background: #fef3c7; color: #92400e; }
+  .p-actions { margin-left: auto; display: flex; gap: 2px; }
+  .p-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #9ca3af; }
+  /* CSS arrows for refresh/settings icons */
+  .icon-refresh { width: 12px; height: 12px; border: 1.5px solid #9ca3af; border-radius: 50%; border-top-color: transparent; position: relative; }
+  .icon-refresh::after { content: ''; position: absolute; top: -2px; right: -1px; border: 3px solid transparent; border-bottom-color: #9ca3af; }
+  .icon-gear { width: 12px; height: 12px; border: 1.5px solid #9ca3af; border-radius: 50%; position: relative; }
+  .icon-gear::before { content: ''; position: absolute; inset: 3px; background: #9ca3af; border-radius: 50%; }
+
+  .p-search { padding: 10px 12px; border-bottom: 1px solid #eee; }
+  .p-search-box { width: 100%; height: 32px; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 8px; padding: 0 10px; font-size: 12px; color: #9ca3af; display: flex; align-items: center; gap: 8px; }
+  .search-lens { width: 12px; height: 12px; border: 1.5px solid #9ca3af; border-radius: 50%; position: relative; }
+  .search-lens::after { content: ''; position: absolute; bottom: -3px; right: -3px; width: 4px; height: 1.5px; background: #9ca3af; transform: rotate(45deg); }
+  .p-coll { margin-top: 8px; display: flex; gap: 6px; }
+  .p-chip { font-size: 11px; padding: 3px 10px; border-radius: 6px; background: #f0f0f0; border: 1px solid #e5e5e5; color: #555; }
+  .p-chip.on { background: #f5f0ff; border-color: #c4b5fd; color: #7c3aed; }
+
+  .p-tabs { display: flex; padding: 8px 12px 0; border-bottom: 1px solid #eee; }
+  .p-tab { padding: 4px 10px 8px; font-size: 11px; font-weight: 500; color: #9ca3af; position: relative; }
+  .p-tab.on { color: #1a1a1a; }
+  .p-tab.on::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: #1a1a1a; border-radius: 2px 2px 0 0; }
+
+  .p-cards { flex: 1; overflow: hidden; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .card { border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; background: #fff; }
+  .card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .card-title { flex: 1; font-size: 13px; font-weight: 500; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Pin icon CSS */
+  .icon-pin { width: 10px; height: 10px; border: 1.5px solid #8b5cf6; border-radius: 50%; position: relative; }
+  .icon-pin::after { content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); width: 1.5px; height: 4px; background: #8b5cf6; }
+  .icon-pin.off { border-color: transparent; }
+  .icon-pin.off::after { background: transparent; }
+  /* Star icon CSS */
+  .icon-star { color: #fbbf24; font-size: 13px; line-height: 1; }
+  .icon-star.off { color: transparent; }
+  .card-preview { font-size: 11px; color: #9ca3af; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-tags { display: flex; gap: 4px; margin-top: 6px; }
+  .tag { font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid; }
+  .t-blue { background: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+  .t-green { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+  .t-purple { background: #ede9fe; border-color: #c4b5fd; color: #5b21b6; }
+  .t-orange { background: #ffedd5; border-color: #fdba74; color: #9a3412; }
+  .t-red { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+</style>
+</head>
+<body>
+  <div class="chrome-tabs">
+    <div class="chrome-tab active">
+      <div class="tab-icon tab-icon-gpt"></div>
+      <span>ChatGPT</span>
+      <span class="tab-close">×</span>
+    </div>
+    <div class="chrome-tab">
+      <div class="tab-icon tab-icon-claude"></div>
+      <span>Claude</span>
+      <span class="tab-close">×</span>
+    </div>
+  </div>
+
+  <div class="chrome-bar">
+    <div class="nav-btn nav-back"><div class="nav-arrow"></div></div>
+    <div class="nav-btn nav-fwd"><div class="nav-arrow"></div></div>
+    <div class="nav-reload"></div>
+    <div class="url-bar">
+      <div class="lock-icon"></div>
+      <span class="url-domain">chatgpt.com</span>
+    </div>
+    <div class="ext-area">
+      <div class="ext-btn">П</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="gpt">
+      <div class="gpt-side">
+        <div class="gpt-side-title">Сегодня</div>
+        <div class="gpt-side-item active">Анализ конкурентов SaaS</div>
+        <div class="gpt-side-item">Рефакторинг Go-сервиса</div>
+        <div class="gpt-side-item">Маркетинг план Q2 2026</div>
+        <div class="gpt-side-title">Вчера</div>
+        <div class="gpt-side-item">React компоненты UI</div>
+        <div class="gpt-side-item">Docker compose отладка</div>
+        <div class="gpt-side-item">Тексты для лендинга</div>
+        <div class="gpt-side-title">На прошлой неделе</div>
+        <div class="gpt-side-item">PostgreSQL оптимизация</div>
+      </div>
+      <div class="gpt-main">
+        <div class="gpt-msgs">
+          <div class="msg">
+            <div class="msg-user">Проанализируй конкурентов в нише AI prompt management. Какие ключевые фичи есть у PromptBase, FlowGPT и AIPRM?</div>
+          </div>
+          <div class="msg">
+            <div class="msg-ai">
+              <div class="msg-ai-avatar"></div>
+              <strong>Анализ конкурентов в нише AI Prompt Management:</strong>
+              <br><br>
+              <strong>1. PromptBase</strong> — маркетплейс промптов с возможностью продажи. Фокус на монетизации, но слабая организация личной библиотеки.
+              <br><br>
+              <strong>2. FlowGPT</strong> — социальная платформа с рейтингами. Хорошее комьюнити, но нет командной работы и версионирования.
+              <br><br>
+              <strong>3. AIPRM</strong> — Chrome-расширение для ChatGPT. Большая база шаблонов, но привязка только к одному AI и нет self-hosted варианта.
+            </div>
+          </div>
+        </div>
+        <div class="gpt-input-wrap">
+          <div class="gpt-input" style="position: relative;">
+            Сообщение ChatGPT…
+            <div class="gpt-send"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Extension Side Panel -->
+    <div class="panel">
+      <div class="p-head">
+        <div class="p-ws">Личное</div>
+        <div class="p-badge p-badge-gpt">ChatGPT</div>
+        <div class="p-badge p-badge-streak">12 дн.</div>
+        <div class="p-actions">
+          <div class="p-icon"><div class="icon-refresh"></div></div>
+          <div class="p-icon"><div class="icon-gear"></div></div>
+        </div>
+      </div>
+
+      <div class="p-search">
+        <div class="p-search-box">
+          <div class="search-lens"></div>
+          <span>Поиск промптов…</span>
+        </div>
+        <div class="p-coll">
+          <div class="p-chip on">Все</div>
+          <div class="p-chip">Маркетинг</div>
+          <div class="p-chip">Код</div>
+          <div class="p-chip">Контент</div>
+        </div>
+      </div>
+
+      <div class="p-tabs">
+        <div class="p-tab on">Все</div>
+        <div class="p-tab">Закреплённые</div>
+        <div class="p-tab">Недавние</div>
+        <div class="p-tab">Избранное</div>
+      </div>
+
+      <div class="p-cards">
+        <div class="card">
+          <div class="card-top">
+            <div class="card-title">Анализ конкурентов</div>
+            <div class="icon-pin"></div>
+            <div class="icon-star">★</div>
+          </div>
+          <div class="card-preview">Проанализируй конкурентов в нише {{niche}}. Составь таблицу: название, ключевые фичи, цены, сильные и слабые стороны…</div>
+          <div class="card-tags">
+            <span class="tag t-blue">маркетинг</span>
+            <span class="tag t-green">анализ</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-top">
+            <div class="card-title">Code Review промпт</div>
+            <div class="icon-pin off"></div>
+            <div class="icon-star">★</div>
+          </div>
+          <div class="card-preview">Проведи ревью кода. Проверь: безопасность, производительность, читаемость. Укажи конкретные строки и предложи исправления…</div>
+          <div class="card-tags">
+            <span class="tag t-purple">разработка</span>
+            <span class="tag t-red">review</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-top">
+            <div class="card-title">Контент-план для Telegram</div>
+            <div class="icon-pin"></div>
+            <div class="icon-star off">★</div>
+          </div>
+          <div class="card-preview">Составь контент-план на {{period}} для Telegram-канала о {{topic}}. Включи: рубрики, частоту постов, форматы…</div>
+          <div class="card-tags">
+            <span class="tag t-orange">контент</span>
+            <span class="tag t-blue">telegram</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-top">
+            <div class="card-title">SQL-запрос генератор</div>
+            <div class="icon-pin off"></div>
+            <div class="icon-star off">★</div>
+          </div>
+          <div class="card-preview">Напиши оптимизированный SQL-запрос для {{database}}. Таблицы: {{tables}}. Задача: {{task}}…</div>
+          <div class="card-tags">
+            <span class="tag t-purple">SQL</span>
+            <span class="tag t-green">БД</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-top">
+            <div class="card-title">Landing page копирайтинг</div>
+            <div class="icon-pin off"></div>
+            <div class="icon-star">★</div>
+          </div>
+          <div class="card-preview">Напиши тексты для лендинга продукта {{product}}. Целевая аудитория: {{audience}}. Включи заголовок…</div>
+          <div class="card-tags">
+            <span class="tag t-orange">копирайтинг</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

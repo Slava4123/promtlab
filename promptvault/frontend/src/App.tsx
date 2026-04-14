@@ -46,6 +46,7 @@ const AdminTOTPEnroll = lazy(() => import("@/pages/admin/totp-enroll"))
 const ExtensionPrivacy = lazy(() => import("@/pages/legal/extension-privacy"))
 const Terms = lazy(() => import("@/pages/legal/terms"))
 const Privacy = lazy(() => import("@/pages/legal/privacy"))
+const Offer = lazy(() => import("@/pages/legal/offer"))
 
 function PageFallback() {
   return (
@@ -102,6 +103,7 @@ function AppRoutes() {
       <Route path="/legal/extension-privacy" element={<Suspense fallback={<PageFallback />}><ExtensionPrivacy /></Suspense>} />
       <Route path="/legal/terms" element={<Suspense fallback={<PageFallback />}><Terms /></Suspense>} />
       <Route path="/legal/privacy" element={<Suspense fallback={<PageFallback />}><Privacy /></Suspense>} />
+      <Route path="/legal/offer" element={<Suspense fallback={<PageFallback />}><Offer /></Suspense>} />
 
       {/* protected — with layout */}
       <Route element={<ProtectedRoute />}>

@@ -23,8 +23,8 @@ var (
 	// ErrInvalidStatus — передан неизвестный статус юзера.
 	ErrInvalidStatus = errors.New("неверный статус пользователя")
 
-	// ErrTierNotImplemented — ChangeTier пока stub (нет subscription system).
-	ErrTierNotImplemented = errors.New("система тарифов не реализована")
+	// ErrInvalidTier — передан несуществующий plan_id.
+	ErrInvalidTier = errors.New("неверный тарифный план")
 
 	// ErrEmailNotConfigured — попытка reset password при отключённом SMTP.
 	ErrEmailNotConfigured = errors.New("SMTP не настроен, невозможно отправить email")

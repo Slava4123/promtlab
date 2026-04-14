@@ -20,6 +20,7 @@ import {
 } from "@/hooks/use-settings"
 import { APIKeysSection } from "@/components/settings/api-keys-section"
 import { ExtensionPromoSection } from "@/components/settings/extension-promo-section"
+import { SubscriptionSection } from "@/components/subscription/subscription-section"
 
 // --- Schemas ---
 
@@ -75,6 +76,7 @@ export default function SettingsPage() {
       <ProfileSection user={user} onUpdate={fetchMe} />
       <PasswordSection key={user.has_password ? "change" : "set"} hasPassword={user.has_password} onUpdate={fetchMe} />
       <LinkedAccountsSection />
+      <SubscriptionSection />
       <ExtensionPromoSection />
       <APIKeysSection />
       <ThemeSection />

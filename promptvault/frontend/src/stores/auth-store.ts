@@ -42,6 +42,10 @@ interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  // sessionError отличает «refresh упал из-за сети/сервера» (transient) от
+  // «refresh истёк/невалиден» (auth). При transient ProtectedRoute показывает
+  // offline-UI вместо редиректа на /sign-in.
+  sessionError: "auth" | "transient" | null
 
   login: (email: string, password: string) => Promise<LoginResult>
   verifyTOTP: (preAuthToken: string, code: string) => Promise<VerifyTOTPResponse>
@@ -57,6 +61,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: true,
+      sessionError: null,
 
       login: async (email, password) => {
         // Backend может вернуть два разных JSON'а: обычный AuthResponse
@@ -144,7 +149,7 @@ export const useAuthStore = create<AuthState>()(
         clearTokens()
         clearSessionHint()
         clearSentryUser()
-        set({ user: null, isAuthenticated: false })
+        set({ user: null, isAuthenticated: false, sessionError: null })
       },
 
       fetchMe: async () => {
@@ -157,29 +162,46 @@ export const useAuthStore = create<AuthState>()(
         // никогда не логинился или уже вышел — не делаем заведомо провальный
         // refresh запрос (избавляет от 401 noise в browser console на landing).
         if (!hasSessionHint()) {
-          set({ user: null, isAuthenticated: false, isLoading: false })
+          set({ user: null, isAuthenticated: false, isLoading: false, sessionError: null })
           return
         }
-        // Пробуем refresh через HttpOnly cookie
-        try {
-          await ensureFreshToken()
-          const user = await api<User>("/auth/me")
-          set({ user, isAuthenticated: true, isLoading: false })
-          setSentryUser({
-            id: user.id,
-            email: user.email,
-            username: user.username,
-          })
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : ""
-          const isAuthError = msg.includes("Сессия истекла") || msg.includes("unauthorized") || msg.includes("refresh failed") || msg.includes("invalid") || msg.includes("expired")
-          if (isAuthError) {
-            clearTokens()
-            clearSessionHint()
-            set({ user: null, isAuthenticated: false, isLoading: false })
-          } else {
-            // Transient error — retry on next navigation
-            set({ isLoading: false })
+
+        // Transient ошибки (сеть/5xx) ретраим до 3 раз с exponential backoff.
+        // Auth ошибки (401/403) — сразу разлогиниваем.
+        const maxAttempts = 3
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            await ensureFreshToken()
+            const user = await api<User>("/auth/me")
+            set({ user, isAuthenticated: true, isLoading: false, sessionError: null })
+            setSentryUser({
+              id: user.id,
+              email: user.email,
+              username: user.username,
+            })
+            return
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : ""
+            const isAuthError =
+              msg.includes("Сессия истекла") ||
+              msg.includes("unauthorized") ||
+              msg.includes("invalid") ||
+              msg.includes("expired")
+            if (isAuthError) {
+              clearTokens()
+              clearSessionHint()
+              set({ user: null, isAuthenticated: false, isLoading: false, sessionError: "auth" })
+              return
+            }
+            // Transient — ждём и ретраим.
+            if (attempt < maxAttempts) {
+              await new Promise((r) => setTimeout(r, attempt * 500))
+              continue
+            }
+            // Все попытки исчерпаны. НЕ сбрасываем auth — возможно, юзер
+            // был залогинен (session hint есть), но сервер/сеть лежат.
+            // ProtectedRoute покажет offline UI с кнопкой "Попробовать снова".
+            set({ isLoading: false, sessionError: "transient" })
           }
         }
       },

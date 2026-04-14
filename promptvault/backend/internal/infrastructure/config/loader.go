@@ -77,6 +77,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("SENTRY_ENABLED=true but SENTRY_DSN is empty")
 	}
 
+	// Payment safety — если биллинг включён, все T-Bank ключи обязательны.
+	// Fail-fast предотвращает запуск с броken-конфигом (юзер видел бы 501 на Checkout).
+	if err := cfg.Payment.Validate(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 
@@ -128,6 +134,18 @@ func defaults() map[string]any {
 		"mcp": map[string]any{
 			"enabled":          false,
 			"max_keys_per_user": 5,
+		},
+		"payment": map[string]any{
+			"enabled":            false,
+			"tbank_terminal_key": "",
+			"tbank_password":     "",
+			"tbank_base_url":     "https://securepay.tinkoff.ru/v2",
+			"webhook_base_url":   "",
+			"success_url":        "/settings?payment=success",
+			"fail_url":           "/settings?payment=failure",
+			"receipt_enabled":    false,
+			"taxation":           "usn_income",
+			"recurrent_enabled":  true,
 		},
 	}
 }

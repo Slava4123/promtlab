@@ -9,4 +9,5 @@ type Config struct {
 	AI       AIConfig       `koanf:"ai"`
 	Sentry   SentryConfig   `koanf:"sentry"`
 	MCP      MCPConfig      `koanf:"mcp"`
+	Payment  PaymentConfig  `koanf:"payment"`
 }

@@ -30,6 +30,7 @@ import {
 import { UserMenu } from "@/components/layout/user-menu"
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog"
 import { useAuthStore } from "@/stores/auth-store"
+import { PlanBadge } from "@/components/subscription/plan-badge"
 import { useCollections } from "@/hooks/use-collections"
 import { useTeams } from "@/hooks/use-teams"
 import { useTrashCount } from "@/hooks/use-trash"
@@ -94,6 +95,7 @@ export function AppSidebar() {
   const { data: trashCounts } = useTrashCount(teamId)
   const hasUnreadChangelog = useAuthStore((s) => s.user?.has_unread_changelog)
   const isAdmin = useAuthStore((s) => s.user?.role === "admin")
+  const planId = useAuthStore((s) => s.user?.plan_id ?? "free")
   const trashTotal = (trashCounts?.prompts ?? 0) + (trashCounts?.collections ?? 0) + (trashCounts?.tags ?? 0)
   const [collectionsOpen, setCollectionsOpen] = useState(true)
   const [collectionSearch, setCollectionSearch] = useState("")
@@ -302,6 +304,11 @@ export function AppSidebar() {
                   isActive={location.pathname === item.path}
                   onClick={() => go(item.path)}
                 />
+                {item.path === "/pricing" && planId !== "free" && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <PlanBadge planId={planId as "free" | "pro" | "max"} />
+                  </span>
+                )}
                 {item.path === "/changelog" && hasUnreadChangelog && (
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-violet-500" />
                 )}
@@ -325,6 +332,8 @@ export function AppSidebar() {
           <button onClick={() => go("/legal/terms")} className="hover:text-muted-foreground transition-colors">Условия</button>
           <span>&middot;</span>
           <button onClick={() => go("/legal/privacy")} className="hover:text-muted-foreground transition-colors">Конфиденциальность</button>
+          <span>&middot;</span>
+          <button onClick={() => go("/legal/offer")} className="hover:text-muted-foreground transition-colors">Оферта</button>
         </div>
       </SidebarFooter>
     </Sidebar>

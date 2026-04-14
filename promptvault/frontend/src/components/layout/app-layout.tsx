@@ -1,14 +1,16 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Outlet } from "react-router-dom"
 import { Toaster } from "sonner"
-import { Search, Bell, Check, X, Users } from "lucide-react"
+import { Search, Bell, Check, X, Users, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { CommandPalette } from "@/components/command-palette"
+import { QuotaExceededDialog } from "@/components/subscription/quota-exceeded-dialog"
 import { useMyInvitations, useAcceptInvitation, useDeclineInvitation } from "@/hooks/use-teams"
+import { useRefreshSubscription } from "@/hooks/use-subscription"
 import { RoleBadge } from "@/components/teams/role-badge"
 
 // TODO: centralize hardcoded dark theme colors (bg-[#0a0a0c], from-[#101015], etc.) as Tailwind theme tokens
@@ -17,6 +19,58 @@ export default function AppLayout() {
   const acceptInvitation = useAcceptInvitation()
   const declineInvitation = useDeclineInvitation()
   const [bellOpen, setBellOpen] = useState(false)
+  const refreshSubscription = useRefreshSubscription()
+
+  // checking=true пока polling идёт — показывает баннер "Проверяем оплату".
+  // Polling длится до 2 минут (40 × 3 сек), т.к. T-Bank иногда шлёт webhook
+  // с задержкой 30-60 сек. При timeout показываем мягкое сообщение с советом
+  // обновить страницу позже (webhook дойдёт, план обновится асинхронно).
+  const [checking, setChecking] = useState(false)
+
+  // Обработка возврата после оплаты T-Bank.
+  // 1) ?payment=success/failure — если T-Bank использует наш SuccessURL/FailURL
+  // 2) sessionStorage pending_checkout — если T-Bank DEMO терминал редиректит на promtlabs.ru
+  //    и юзер вручную возвращается в приложение
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const payment = params.get("payment")
+
+    const runCheck = async () => {
+      setChecking(true)
+      try {
+        const result = await refreshSubscription()
+        if (result === "updated" || result === "already_pro") {
+          toast.success("Подписка оформлена!")
+        } else {
+          toast.warning(
+            "Оплата получена, но подтверждение от банка задерживается. Подписка активируется автоматически — обновите страницу через минуту.",
+            { duration: 8000 },
+          )
+        }
+      } finally {
+        setChecking(false)
+      }
+    }
+
+    if (payment === "success") {
+      window.history.replaceState({}, "", window.location.pathname)
+      sessionStorage.removeItem("pending_checkout")
+      void runCheck()
+      return
+    }
+
+    if (payment === "failure" || payment === "cancel") {
+      window.history.replaceState({}, "", window.location.pathname)
+      sessionStorage.removeItem("pending_checkout")
+      toast.error("Оплата не завершена")
+      return
+    }
+
+    if (sessionStorage.getItem("pending_checkout")) {
+      sessionStorage.removeItem("pending_checkout")
+      void runCheck()
+    }
+  }, [refreshSubscription])
 
   const pendingCount = invitations?.length ?? 0
 
@@ -41,6 +95,16 @@ export default function AppLayout() {
           <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:text-foreground focus:shadow-lg focus:ring-2 focus:ring-brand">
             Перейти к содержимому
           </a>
+          {checking && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 bg-brand/95 px-4 py-2 text-sm font-medium text-brand-foreground shadow-md"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Проверяем оплату… подписка активируется после подтверждения банка.
+            </div>
+          )}
           <AppSidebar />
           <div className="flex min-w-0 flex-1 flex-col">
             <header role="banner" className="flex h-14 items-center justify-between px-4">
@@ -141,6 +205,7 @@ export default function AppLayout() {
           </div>
         </div>
         <CommandPalette />
+        <QuotaExceededDialog />
         <Toaster
           theme="dark"
           richColors

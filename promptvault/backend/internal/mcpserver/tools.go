@@ -16,6 +16,7 @@ import (
 	"promptvault/internal/models"
 	colluc "promptvault/internal/usecases/collection"
 	promptuc "promptvault/internal/usecases/prompt"
+	quotauc "promptvault/internal/usecases/quota"
 	shareuc "promptvault/internal/usecases/share"
 	taguc "promptvault/internal/usecases/tag"
 )
@@ -26,6 +27,24 @@ type toolHandlers struct {
 	tags        TagService
 	search      SearchService
 	shares      ShareService
+	quotas      *quotauc.Service
+}
+
+// checkAndIncrementMCP проверяет MCP-квоту перед write-операцией и инкрементит после.
+func (h *toolHandlers) checkMCPQuota(ctx context.Context) error {
+	if h.quotas == nil {
+		return nil
+	}
+	return h.quotas.CheckMCPQuota(ctx, authmw.GetUserID(ctx))
+}
+
+func (h *toolHandlers) incrementMCPUsage(ctx context.Context) {
+	if h.quotas == nil {
+		return
+	}
+	if err := h.quotas.IncrementMCPUsage(ctx, authmw.GetUserID(ctx)); err != nil {
+		slog.Error("mcp.quota.increment_failed", "error", err)
+	}
 }
 
 // --- tool input types ---
@@ -571,6 +590,9 @@ func (t *toolHandlers) getPromptVersions(ctx context.Context, _ *sdkmcp.CallTool
 // --- write tool handlers ---
 
 func (t *toolHandlers) createPrompt(ctx context.Context, _ *sdkmcp.CallToolRequest, input CreatePromptInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -587,11 +609,15 @@ func (t *toolHandlers) createPrompt(ctx context.Context, _ *sdkmcp.CallToolReque
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	res, err := jsonResult(toPromptResponse(prompt))
 	return res, nil, err
 }
 
 func (t *toolHandlers) updatePrompt(ctx context.Context, _ *sdkmcp.CallToolRequest, input UpdatePromptInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -607,11 +633,15 @@ func (t *toolHandlers) updatePrompt(ctx context.Context, _ *sdkmcp.CallToolReque
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	res, err := jsonResult(toPromptResponse(prompt))
 	return res, nil, err
 }
 
 func (t *toolHandlers) deletePrompt(ctx context.Context, _ *sdkmcp.CallToolRequest, input DeletePromptInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -628,6 +658,9 @@ func (t *toolHandlers) deletePrompt(ctx context.Context, _ *sdkmcp.CallToolReque
 }
 
 func (t *toolHandlers) createTag(ctx context.Context, _ *sdkmcp.CallToolRequest, input CreateTagInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -641,6 +674,9 @@ func (t *toolHandlers) createTag(ctx context.Context, _ *sdkmcp.CallToolRequest,
 }
 
 func (t *toolHandlers) createCollection(ctx context.Context, _ *sdkmcp.CallToolRequest, input CreateCollectionInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -656,6 +692,9 @@ func (t *toolHandlers) createCollection(ctx context.Context, _ *sdkmcp.CallToolR
 }
 
 func (t *toolHandlers) deleteCollection(ctx context.Context, _ *sdkmcp.CallToolRequest, input DeleteCollectionInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 

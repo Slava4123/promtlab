@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "ru.promtlabs/promptvault",
+  "title": "ПромтЛаб — библиотека AI-промптов",
+  "description": "AI prompt library with collections, tags, version history and team collaboration.",
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://promtlabs.ru/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "API-ключ для аутентификации. Формат: Bearer pvlt_YOUR_KEY. Создайте ключ в настройках аккаунта на promtlabs.ru",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

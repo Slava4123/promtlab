@@ -9,16 +9,18 @@ import (
 	repo "promptvault/internal/interface/repository"
 	iservice "promptvault/internal/interface/service"
 	"promptvault/internal/models"
+	quotauc "promptvault/internal/usecases/quota"
 )
 
 type Service struct {
-	teams repo.TeamRepository
-	users repo.UserRepository
-	email iservice.EmailSender
+	teams  repo.TeamRepository
+	users  repo.UserRepository
+	email  iservice.EmailSender
+	quotas *quotauc.Service
 }
 
-func NewService(teams repo.TeamRepository, users repo.UserRepository) *Service {
-	return &Service{teams: teams, users: users}
+func NewService(teams repo.TeamRepository, users repo.UserRepository, quotas *quotauc.Service) *Service {
+	return &Service{teams: teams, users: users, quotas: quotas}
 }
 
 // SetEmail sets the email service for team notifications.
@@ -27,6 +29,13 @@ func (s *Service) SetEmail(email iservice.EmailSender) {
 }
 
 func (s *Service) Create(ctx context.Context, userID uint, input CreateInput) (*models.Team, error) {
+	// Проверка квоты команд
+	if s.quotas != nil {
+		if err := s.quotas.CheckTeamQuota(ctx, userID); err != nil {
+			return nil, err
+		}
+	}
+
 	// Retry на случай slug collision (unique index)
 	var lastErr error
 	for range 3 {
@@ -108,6 +117,13 @@ func (s *Service) InviteMember(ctx context.Context, slug string, userID uint, in
 	team, _, err := s.checkAccess(ctx, slug, userID, models.RoleOwner)
 	if err != nil {
 		return nil, err
+	}
+
+	// Проверка квоты участников команды (по плану владельца)
+	if s.quotas != nil {
+		if err := s.quotas.CheckTeamMemberQuota(ctx, team.ID, team.CreatedBy); err != nil {
+			return nil, err
+		}
 	}
 
 	if input.Role == models.RoleOwner {

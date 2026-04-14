@@ -31,11 +31,8 @@ func respondError(w http.ResponseWriter, err error) {
 		httperr.Respond(w, httperr.BadRequest(err.Error()))
 	case errors.Is(err, adminuc.ErrInvalidStatus):
 		httperr.Respond(w, httperr.BadRequest(err.Error()))
-	case errors.Is(err, adminuc.ErrTierNotImplemented):
-		httperr.Respond(w, &httperr.AppError{
-			Code:    http.StatusNotImplemented,
-			Message: err.Error(),
-		})
+	case errors.Is(err, adminuc.ErrInvalidTier):
+		httperr.Respond(w, httperr.BadRequest(err.Error()))
 	case errors.Is(err, adminuc.ErrEmailNotConfigured):
 		httperr.Respond(w, &httperr.AppError{
 			Code:    http.StatusServiceUnavailable,

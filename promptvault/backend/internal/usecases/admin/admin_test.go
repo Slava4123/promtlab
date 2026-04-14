@@ -198,7 +198,7 @@ func newFixture(t *testing.T) *fixture {
 	badgeSvc, err := badgeuc.NewService(badgeRepo, nil)
 	require.NoError(t, err)
 
-	svc := NewService(adminRepo, users, auditSvc, nil, badgeSvc)
+	svc := NewService(adminRepo, users, auditSvc, nil, badgeSvc, nil, nil)
 
 	return &fixture{
 		svc:        svc,
@@ -363,11 +363,12 @@ func TestRevokeBadge_UnknownBadge(t *testing.T) {
 
 // ========== ChangeTier ==========
 
-func TestChangeTier_NotImplemented(t *testing.T) {
+func TestChangeTier_InvalidPlan(t *testing.T) {
 	fx := newFixture(t)
 	ctx := ctxWithAdmin(1)
+	// plans repo is nil → returns ErrInvalidTier
 	err := fx.svc.ChangeTier(ctx, 2, "pro")
-	assert.ErrorIs(t, err, ErrTierNotImplemented)
+	assert.ErrorIs(t, err, ErrInvalidTier)
 }
 
 // ========== helpers tests ==========

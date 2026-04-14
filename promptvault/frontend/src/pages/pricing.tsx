@@ -1,161 +1,225 @@
-import { Check, Sparkles, Zap, Crown } from "lucide-react"
+import { Check, Sparkles, Zap, Crown, Loader2, type LucideIcon } from "lucide-react"
 import { PageLayout } from "@/components/layout/page-layout"
+import { Skeleton } from "@/components/ui/skeleton"
+import { usePlans, useCheckout, useDowngrade } from "@/hooks/use-subscription"
+import { useAuthStore } from "@/stores/auth-store"
+import type { Plan } from "@/api/types"
 
-const plans = [
-  {
-    name: "Free",
-    price: "0",
-    period: "навсегда",
-    description: "Для знакомства с платформой",
-    icon: Zap,
-    color: "#6366f1",
-    features: [
-      "До 50 промптов",
-      "3 коллекции",
-      "5 AI-запросов в день",
-      "1 команда (до 3 участников)",
-      "Версионирование промптов",
-    ],
-    limits: [
-      "Без экспорта",
-    ],
-    current: true,
-  },
-  {
-    name: "Pro",
-    price: "599",
-    period: "в месяц",
-    description: "Для активной работы с промптами",
-    icon: Sparkles,
-    color: "#8b5cf6",
-    popular: true,
-    features: [
-      "До 500 промптов",
-      "Безлимитные коллекции",
-      "100 AI-запросов в день",
-      "5 команд (до 10 участников)",
-      "Версионирование промптов",
-      "Экспорт в JSON/Markdown",
-      "Приоритетная поддержка",
-    ],
-    limits: [],
-  },
-  {
-    name: "Max",
-    price: "1 299",
-    period: "в месяц",
-    description: "Максимум возможностей для команд",
-    icon: Crown,
-    color: "#f59e0b",
-    features: [
-      "Безлимитные промпты",
-      "Безлимитные коллекции",
-      "Безлимитные AI-запросы",
-      "Безлимитные команды",
-      "Версионирование промптов",
-      "Экспорт в JSON/Markdown",
-      "Приоритетная поддержка",
-      "API-доступ (скоро)",
-    ],
-    limits: [],
-  },
-]
+const planIcons: Record<string, LucideIcon> = {
+  free: Zap,
+  pro: Sparkles,
+  max: Crown,
+}
+
+const planColors: Record<string, string> = {
+  free: "#6366f1",
+  pro: "#8b5cf6",
+  max: "#f59e0b",
+}
+
+const planDescriptions: Record<string, string> = {
+  free: "Для знакомства с платформой",
+  pro: "Для активной работы с промптами",
+  max: "Максимум возможностей для команд",
+}
+
+function formatLimit(value: number, suffix: string = ""): string {
+  return value === -1 ? "Безлимит" : `${value}${suffix}`
+}
+
+function planFeatures(plan: Plan): string[] {
+  const features: string[] = []
+  features.push(
+    plan.max_prompts === -1
+      ? "Безлимитные промпты"
+      : `До ${plan.max_prompts} промптов`,
+  )
+  features.push(
+    plan.max_collections === -1
+      ? "Безлимитные коллекции"
+      : `${plan.max_collections} коллекции`,
+  )
+  features.push(
+    plan.max_ai_requests_daily === -1
+      ? "Безлимитные AI-запросы"
+      : plan.ai_requests_is_total
+        ? `${plan.max_ai_requests_daily} AI-запросов всего`
+        : `${plan.max_ai_requests_daily} AI-запросов в день`,
+  )
+  features.push(
+    plan.max_teams === -1
+      ? "Безлимитные команды"
+      : `${plan.max_teams} ${plan.max_teams === 1 ? "команда" : "команд"} (до ${formatLimit(plan.max_team_members)} участников)`,
+  )
+  features.push(
+    plan.max_share_links === -1
+      ? "Безлимитный шаринг"
+      : `${plan.max_share_links} публичных ссылок`,
+  )
+  features.push(
+    plan.max_ext_uses_daily === -1
+      ? "Безлимитные вставки (расширение)"
+      : `${plan.max_ext_uses_daily} вставок/день (расширение)`,
+  )
+  features.push(
+    plan.max_mcp_uses_daily === -1
+      ? "Безлимитные MCP-вызовы"
+      : `${plan.max_mcp_uses_daily} MCP-вызовов/день`,
+  )
+  if (plan.features.includes("priority_support")) {
+    features.push("Приоритетная поддержка")
+  }
+  return features
+}
+
+function formatPrice(priceKop: number): string {
+  if (priceKop === 0) return "0"
+  return (priceKop / 100).toLocaleString("ru-RU")
+}
 
 export default function Pricing() {
+  const { data: plans, isLoading, error } = usePlans()
+  const checkout = useCheckout()
+  const downgrade = useDowngrade()
+  const currentPlanId = useAuthStore((s) => s.user?.plan_id ?? "free")
+
   return (
     <PageLayout
       title="Тарифы"
       description="Выберите план, который подходит вам"
     >
-      {/* Plans grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {plans.map((plan) => {
-          const Icon = plan.icon
-          return (
-            <div
-              key={plan.name}
-              className={`relative flex flex-col rounded-2xl border p-6 transition-colors ${
-                plan.popular
-                  ? "border-violet-500/30 shadow-lg shadow-violet-500/5"
-                  : "border-border"
-              }`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-3 py-0.5 text-[0.7rem] font-medium text-white">
-                  Популярный
-                </div>
-              )}
+      {isLoading && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-96 rounded-2xl" />
+          ))}
+        </div>
+      )}
 
-              {/* Icon + name */}
-              <div className="mb-4 flex items-center gap-3">
+      {error && (
+        <div className="text-center text-sm text-destructive">
+          Не удалось загрузить тарифы
+        </div>
+      )}
+
+      {plans && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {plans.map((plan) => {
+              const Icon = planIcons[plan.id] ?? Zap
+              const color = planColors[plan.id] ?? "#6366f1"
+              const isPopular = plan.id === "pro"
+              const isCurrent = currentPlanId === plan.id
+              const features = planFeatures(plan)
+
+              return (
                 <div
-                  className="flex h-10 w-10 items-center justify-center rounded-xl"
-                  style={{
-                    background: `${plan.color}15`,
-                    boxShadow: `inset 0 0 0 1px ${plan.color}25`,
-                  }}
+                  key={plan.id}
+                  className={`relative flex flex-col rounded-2xl border p-6 transition-colors ${
+                    isPopular
+                      ? "border-violet-500/30 shadow-lg shadow-violet-500/5"
+                      : "border-border"
+                  }`}
                 >
-                  <Icon className="h-5 w-5" style={{ color: plan.color }} />
+                  {isPopular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-3 py-0.5 text-[0.7rem] font-medium text-white">
+                      Популярный
+                    </div>
+                  )}
+
+                  <div className="mb-4 flex items-center gap-3">
+                    <div
+                      className="flex h-10 w-10 items-center justify-center rounded-xl"
+                      style={{
+                        background: `${color}15`,
+                        boxShadow: `inset 0 0 0 1px ${color}25`,
+                      }}
+                    >
+                      <Icon className="h-5 w-5" style={{ color }} />
+                    </div>
+                    <div>
+                      <h3 className="text-[0.95rem] font-semibold text-foreground">
+                        {plan.name}
+                      </h3>
+                      <p className="text-[0.72rem] text-muted-foreground">
+                        {planDescriptions[plan.id] ?? ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mb-5">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-bold tracking-tight text-foreground">
+                        {formatPrice(plan.price_kop)} ₽
+                      </span>
+                      <span className="text-[0.8rem] text-muted-foreground">
+                        / {plan.period_days === 0 ? "навсегда" : "в месяц"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <ul className="mb-6 flex-1 space-y-2.5">
+                    {features.map((feature) => (
+                      <li
+                        key={feature}
+                        className="flex items-start gap-2 text-[0.8rem]"
+                      >
+                        <Check
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                          style={{ color }}
+                        />
+                        <span className="text-foreground">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button
+                    disabled={isCurrent || checkout.isPending || downgrade.isPending}
+                    onClick={() => {
+                      if (isCurrent) return
+                      if (plan.id === "free") {
+                        downgrade.mutate()
+                      } else {
+                        checkout.mutate(plan.id)
+                      }
+                    }}
+                    className={`flex h-11 w-full items-center justify-center rounded-lg text-[0.85rem] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isCurrent
+                        ? "border border-border bg-muted/30 text-muted-foreground"
+                        : isPopular
+                          ? "text-white"
+                          : "border border-border bg-card text-foreground hover:bg-muted/50"
+                    }`}
+                    style={
+                      !isCurrent && isPopular
+                        ? { background: "var(--brand-gradient)" }
+                        : undefined
+                    }
+                  >
+                    {isCurrent ? (
+                      "Текущий план"
+                    ) : checkout.isPending || downgrade.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      `Перейти на ${plan.name}`
+                    )}
+                  </button>
                 </div>
-                <div>
-                  <h3 className="text-[0.95rem] font-semibold text-foreground">{plan.name}</h3>
-                  <p className="text-[0.72rem] text-muted-foreground">{plan.description}</p>
-                </div>
-              </div>
+              )
+            })}
+          </div>
 
-              {/* Price */}
-              <div className="mb-5">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-bold tracking-tight text-foreground">{plan.price} ₽</span>
-                  <span className="text-[0.8rem] text-muted-foreground">/ {plan.period}</span>
-                </div>
-              </div>
-
-              {/* Features */}
-              <ul className="mb-6 flex-1 space-y-2.5">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-[0.8rem]">
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: plan.color }} />
-                    <span className="text-foreground">{feature}</span>
-                  </li>
-                ))}
-                {plan.limits.map((limit) => (
-                  <li key={limit} className="flex items-start gap-2 text-[0.8rem] text-muted-foreground">
-                    <span className="mt-0.5 h-3.5 w-3.5 shrink-0 text-center">—</span>
-                    <span>{limit}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {/* Button */}
-              <button
-                disabled
-                className={`flex h-11 w-full items-center justify-center rounded-lg text-[0.85rem] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                  plan.current
-                    ? "border border-border bg-muted/30 text-muted-foreground"
-                    : plan.popular
-                      ? "text-white"
-                      : "border border-border bg-card text-foreground"
-                }`}
-                style={
-                  !plan.current && plan.popular
-                    ? { background: "var(--brand-gradient)" }
-                    : undefined
-                }
-              >
-                {plan.current ? "Текущий план" : "Скоро"}
-              </button>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Footer note */}
-      <div className="text-center">
-        <p className="text-[0.75rem] text-muted-foreground">
-          Оплата через ЮKassa. Подписку можно отменить в любой момент.
-        </p>
-      </div>
+          <div className="text-center">
+            <p className="text-[0.75rem] text-muted-foreground">
+              Оплата через Т-Банк. Подписку можно отменить в любой момент.
+              {" "}Оплачивая, вы принимаете{" "}
+              <a href="/legal/offer" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                публичную оферту
+              </a>.
+            </p>
+          </div>
+        </>
+      )}
     </PageLayout>
   )
 }

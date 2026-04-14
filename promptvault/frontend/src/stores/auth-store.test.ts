@@ -146,15 +146,17 @@ describe("auth-store", () => {
       expect(state.isLoading).toBe(false)
     })
 
-    it("auth error clears state", async () => {
+    it("auth error clears state and sets sessionError=auth", async () => {
       localStorage.setItem("pv_has_session", "1")
-      mockedEnsureFreshToken.mockRejectedValueOnce(new Error("refresh failed"))
+      mockedEnsureFreshToken.mockRejectedValueOnce(new Error("Сессия истекла"))
 
       await useAuthStore.getState().restoreSession()
 
       const state = useAuthStore.getState()
       expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
       expect(state.isLoading).toBe(false)
+      expect(state.sessionError).toBe("auth")
     })
 
     it("unauthorized error clears state", async () => {
@@ -166,19 +168,25 @@ describe("auth-store", () => {
       const state = useAuthStore.getState()
       expect(state.user).toBeNull()
       expect(state.isLoading).toBe(false)
+      expect(state.sessionError).toBe("auth")
     })
 
-    it("transient error does not clear user", async () => {
+    it("transient error retries 3 times and sets sessionError=transient", async () => {
       localStorage.setItem("pv_has_session", "1")
       useAuthStore.setState({ user: testUser, isLoading: true })
-      mockedEnsureFreshToken.mockRejectedValueOnce(new Error("network timeout"))
+      // Все 3 попытки падают с transient ошибкой — user должен остаться нетронутым.
+      mockedEnsureFreshToken
+        .mockRejectedValueOnce(new Error("transient: network unavailable"))
+        .mockRejectedValueOnce(new Error("transient: server 500"))
+        .mockRejectedValueOnce(new Error("transient: network unavailable"))
 
       await useAuthStore.getState().restoreSession()
 
+      expect(mockedEnsureFreshToken).toHaveBeenCalledTimes(3)
       const state = useAuthStore.getState()
-      // User stays as-is for transient errors
       expect(state.user).toEqual(testUser)
       expect(state.isLoading).toBe(false)
+      expect(state.sessionError).toBe("transient")
     })
   })
 })

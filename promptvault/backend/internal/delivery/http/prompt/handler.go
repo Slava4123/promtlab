@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -17,15 +18,17 @@ import (
 	"promptvault/internal/models"
 	badgeuc "promptvault/internal/usecases/badge"
 	promptuc "promptvault/internal/usecases/prompt"
+	quotauc "promptvault/internal/usecases/quota"
 )
 
 type Handler struct {
 	svc      *promptuc.Service
+	quotas   *quotauc.Service
 	validate *validator.Validate
 }
 
-func NewHandler(svc *promptuc.Service) *Handler {
-	return &Handler{svc: svc, validate: validator.New()}
+func NewHandler(svc *promptuc.Service, quotas *quotauc.Service) *Handler {
+	return &Handler{svc: svc, quotas: quotas, validate: validator.New()}
 }
 
 // GET /api/prompts
@@ -222,10 +225,29 @@ func (h *Handler) IncrementUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extension quota check (по заголовку X-Client-Source)
+	isExtension := r.Header.Get("X-Client-Source") == "extension"
+	if isExtension && h.quotas != nil {
+		if qErr := h.quotas.CheckExtensionQuota(ctx, userID); qErr != nil {
+			var qe *quotauc.QuotaExceededError
+			if errors.As(qErr, &qe) {
+				httperr.RespondQuotaError(w, qe.QuotaType, qe.Used, qe.Limit, qe.PlanID, qe.Message)
+				return
+			}
+			httperr.Respond(w, httperr.Internal(qErr))
+			return
+		}
+	}
+
 	newBadges, err := h.svc.IncrementUsage(ctx, id, userID)
 	if err != nil {
 		respondError(w, err)
 		return
+	}
+
+	// Extension usage increment
+	if isExtension && h.quotas != nil {
+		_ = h.quotas.IncrementExtensionUsage(ctx, userID)
 	}
 
 	utils.WriteOK(w, IncrementUsageResponse{

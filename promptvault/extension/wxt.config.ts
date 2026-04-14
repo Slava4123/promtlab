@@ -21,7 +21,6 @@ export default defineConfig({
       'https://www.perplexity.ai/*',
       'https://promtlabs.ru/*',
       'https://*.promtlabs.ru/*',
-      'http://localhost:8080/*',
     ],
     icons: {
       16: 'icon/16.png',

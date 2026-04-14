@@ -19,6 +19,8 @@ import (
 	"promptvault/internal/middleware/ratelimit"
 	sentrymw "promptvault/internal/middleware/sentry"
 
+	subscriptionhttp "promptvault/internal/delivery/http/subscription"
+	webhookhttp "promptvault/internal/delivery/http/webhook"
 	adminhttp "promptvault/internal/delivery/http/admin"
 	adminauthhttp "promptvault/internal/delivery/http/adminauth"
 	aihttp "promptvault/internal/delivery/http/ai"
@@ -38,6 +40,8 @@ import (
 	trashhttp "promptvault/internal/delivery/http/trash"
 	userhttp "promptvault/internal/delivery/http/user"
 	"promptvault/internal/infrastructure/openrouter"
+	"promptvault/internal/infrastructure/payment"
+	"promptvault/internal/infrastructure/payment/tbank"
 	"promptvault/internal/mcpserver"
 	adminmw "promptvault/internal/middleware/admin"
 	adminuc "promptvault/internal/usecases/admin"
@@ -51,9 +55,11 @@ import (
 	colluc "promptvault/internal/usecases/collection"
 	feedbackuc "promptvault/internal/usecases/feedback"
 	promptuc "promptvault/internal/usecases/prompt"
+	quotauc "promptvault/internal/usecases/quota"
 	searchuc "promptvault/internal/usecases/search"
 	streakuc "promptvault/internal/usecases/streak"
 	shareuc "promptvault/internal/usecases/share"
+	subscriptionuc "promptvault/internal/usecases/subscription"
 	starteruc "promptvault/internal/usecases/starter"
 	taguc "promptvault/internal/usecases/tag"
 	teamuc "promptvault/internal/usecases/team"
@@ -148,13 +154,17 @@ type App struct {
 	badgeHandler      *badgehttp.Handler
 	adminauthHandler  *adminauthhttp.Handler
 	adminHandler      *adminhttp.Handler
-	feedbackHandler   *feedbackhttp.Handler
-	changelogHandler  *changeloghttp.Handler
+	feedbackHandler       *feedbackhttp.Handler
+	changelogHandler      *changeloghttp.Handler
+	subscriptionHandler   *subscriptionhttp.Handler
+	webhookHandler        *webhookhttp.Handler
 	// Следующие поля используются в MountRoutes для admin-middleware chain:
 	userLookup adminmw.UserLookup
 	auditSvc   *auditsvc.Service
 	mcpServer         *mcpserver.MCPServer
 	purgeLoop         *trashuc.PurgeLoop
+	expirationLoop    *subscriptionuc.ExpirationLoop
+	renewalLoop       *subscriptionuc.RenewalLoop
 	feedbackRL        *ratelimit.Limiter[uint]
 }
 
@@ -172,9 +182,14 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 
 	authSvc := authuc.NewService(cfg, userRepo, linkedAccountRepo, verificationRepo, emailSvc)
 	oauthSvc := authuc.NewOAuthService(cfg, userRepo, linkedAccountRepo, authSvc)
+	// Subscription / Quota repos
+	planRepo := pgrepo.NewPlanRepository(db)
+	quotaRepo := pgrepo.NewQuotaRepository(db)
+	quotaSvc := quotauc.NewService(planRepo, quotaRepo, userRepo)
+
 	// Teams
 	teamRepo := pgrepo.NewTeamRepository(db)
-	teamSvc := teamuc.NewService(teamRepo, userRepo)
+	teamSvc := teamuc.NewService(teamRepo, userRepo, quotaSvc)
 	teamSvc.SetEmail(emailSvc)
 
 	pinRepo := pgrepo.NewPinRepository(db)
@@ -200,13 +215,17 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	adminauthSvc := adminauthuc.NewService(totpRepo, userRepo)
 	adminRepo := pgrepo.NewAdminRepository(db)
 
-	promptSvc := promptuc.NewService(promptRepo, tagRepo, collectionRepo, versionRepo, teamRepo, pinRepo, streakSvc, badgeSvc)
-	collectionSvc := colluc.NewService(collectionRepo, teamRepo, badgeSvc)
+	promptSvc := promptuc.NewService(promptRepo, tagRepo, collectionRepo, versionRepo, teamRepo, pinRepo, streakSvc, badgeSvc, quotaSvc)
+	collectionSvc := colluc.NewService(collectionRepo, teamRepo, badgeSvc, quotaSvc)
 	tagSvc := taguc.NewService(tagRepo, teamRepo)
+
+	// Subscription repos (нужны и для admin, и для subscription service)
+	subscriptionRepo := pgrepo.NewSubscriptionRepository(db)
+	paymentRepo := pgrepo.NewPaymentRepository(db)
 
 	// Admin usecase (AU1) — зависит от auth/audit/badge сервисов, поэтому
 	// собирается после promptSvc/collectionSvc, но до handlers.
-	adminSvc := adminuc.NewService(adminRepo, userRepo, auditSvc, authSvc, badgeSvc)
+	adminSvc := adminuc.NewService(adminRepo, userRepo, auditSvc, authSvc, badgeSvc, planRepo, subscriptionRepo)
 	adminHealth := &adminHealthAdapter{repo: adminRepo}
 
 	// AI
@@ -226,7 +245,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 
 	// Share Links
 	shareLinkRepo := pgrepo.NewShareLinkRepository(db)
-	shareSvc := shareuc.NewService(shareLinkRepo, promptRepo, teamRepo, cfg.Server.FrontendURL)
+	shareSvc := shareuc.NewService(shareLinkRepo, promptRepo, teamRepo, cfg.Server.FrontendURL, quotaSvc)
 
 	// MCP Server — promptSvc и collectionSvc оборачиваются в адаптеры, которые
 	// скрывают возвращаемые badges-slices (MCP-клиенты не показывают toast-ов).
@@ -240,10 +259,35 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			searchSvc,
 			shareSvc,
 			60,
+			quotaSvc,
 		)
 	}
 
+	// Payment provider
+	var paymentProvider payment.PaymentProvider
+	if cfg.Payment.Enabled && cfg.Payment.TBankTerminalKey != "" {
+		paymentProvider = tbank.NewProvider(tbank.Config{
+			TerminalKey: cfg.Payment.TBankTerminalKey,
+			Password:    cfg.Payment.TBankPassword,
+			BaseURL:     cfg.Payment.TBankBaseURL,
+		})
+		slog.Info("payment.tbank.enabled")
+	}
+
+	subscriptionSvc := subscriptionuc.NewService(
+		subscriptionRepo, planRepo, paymentRepo, userRepo,
+		paymentProvider, &cfg.Payment,
+	)
+
 	purgeLoop := trashuc.NewPurgeLoop(trashRepo, 1*time.Hour, 30)
+	expirationLoop := subscriptionuc.NewExpirationLoop(subscriptionRepo, 1*time.Hour)
+	// renewalLoop пытается продлить подписки за 48ч до конца периода;
+	// если payment не настроен — Start() сам no-op'ит.
+	renewalLoop := subscriptionuc.NewRenewalLoop(
+		subscriptionRepo, planRepo, paymentRepo,
+		paymentProvider, &cfg.Payment,
+		1*time.Hour, 48*time.Hour,
+	)
 
 	// Feedback
 	feedbackRepo := pgrepo.NewFeedbackRepository(db)
@@ -277,10 +321,10 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		userLookup:        userRepo,
 		auditSvc:          auditSvc,
 		oauthHandler:      authhttp.NewOAuthHandler(oauthSvc, cfg.Server.FrontendURL, cfg.JWT.Secret, cfg.Server.SecureCookies),
-		promptHandler:     prompthttp.NewHandler(promptSvc),
+		promptHandler:     prompthttp.NewHandler(promptSvc, quotaSvc),
 		collectionHandler: collhttp.NewHandler(collectionSvc),
 		tagHandler:        taghttp.NewHandler(tagSvc),
-		aiHandler:         aihttp.NewHandler(aiSvc),
+		aiHandler:         aihttp.NewHandler(aiSvc, quotaSvc),
 		searchHandler:     searchhttp.NewHandler(searchSvc),
 		teamHandler:       teamhttp.NewHandler(teamSvc),
 		userHandler:       userhttp.NewHandler(useruc.NewService(userRepo)),
@@ -291,8 +335,12 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		streakHandler:     streakhttp.NewHandler(streakSvc),
 		badgeHandler:      badgehttp.NewHandler(badgeSvc),
 		feedbackHandler:   feedbackhttp.NewHandler(feedbackSvc),
-		changelogHandler:  changeloghttp.NewHandler(changelogSvc),
-		mcpServer:         mcpSrv,
+		changelogHandler:      changeloghttp.NewHandler(changelogSvc),
+		subscriptionHandler:  subscriptionhttp.NewHandler(subscriptionSvc, quotaSvc),
+		webhookHandler:       webhookhttp.NewHandler(subscriptionSvc),
+		mcpServer:            mcpSrv,
+		expirationLoop:       expirationLoop,
+		renewalLoop:          renewalLoop,
 		purgeLoop:         purgeLoop,
 		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour),
 	}
@@ -300,11 +348,15 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 
 func (a *App) StartBackground() {
 	a.purgeLoop.Start()
+	a.expirationLoop.Start()
+	a.renewalLoop.Start()
 }
 
 // Shutdown waits for background tasks to complete.
 func (a *App) Shutdown(timeout time.Duration) {
 	a.purgeLoop.Stop()
+	a.expirationLoop.Stop()
+	a.renewalLoop.Stop()
 	a.feedbackRL.Close()
 	a.authSvc.WaitBackground(timeout)
 }
@@ -324,10 +376,24 @@ func (a *App) MountRoutes(r chi.Router) {
 	}
 
 	r.Route("/api", func(r chi.Router) {
+		// public — plans (rate limited: 60 req/min per IP)
+		r.Route("/plans", func(r chi.Router) {
+			r.Use(ratelimit.ByIP(60))
+			r.Get("/", a.subscriptionHandler.ListPlans)
+		})
+
 		// public — share links (rate limited: 60 req/min per IP)
 		r.Route("/s", func(r chi.Router) {
 			r.Use(ratelimit.ByIP(60))
 			r.Get("/{token}", a.shareHandler.GetPublic)
+		})
+
+		// public — webhooks. T-Bank шлёт 1-5 уведомлений за цикл платежа;
+		// 30 req/min per IP с запасом покрывает retry-поведение банка.
+		// Защита от DoS на публичный endpoint без авторизации.
+		r.Route("/webhooks", func(r chi.Router) {
+			r.Use(ratelimit.ByIP(30))
+			r.Post("/tbank", a.webhookHandler.TBank)
 		})
 
 		// public — auth (rate limited: 20 req/min per IP)
@@ -520,6 +586,16 @@ func (a *App) MountRoutes(r chi.Router) {
 			r.Route("/starter", func(r chi.Router) {
 				r.Get("/catalog", a.starterHandler.Catalog)
 				r.Post("/complete", a.starterHandler.Complete)
+			})
+
+			// Subscription
+			r.Route("/subscription", func(r chi.Router) {
+				r.Get("/", a.subscriptionHandler.GetSubscription)
+				r.Get("/usage", a.subscriptionHandler.GetUsage)
+				r.Post("/checkout", a.subscriptionHandler.Checkout)
+				r.Post("/cancel", a.subscriptionHandler.Cancel)
+				r.Post("/downgrade", a.subscriptionHandler.Downgrade)
+				r.Post("/auto-renew", a.subscriptionHandler.SetAutoRenew)
 			})
 
 			// API Keys

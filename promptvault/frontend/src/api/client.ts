@@ -42,15 +42,29 @@ export async function ensureFreshToken(): Promise<void> {
 }
 
 async function refreshAccessToken(): Promise<void> {
-  const res = await fetch(`${API_BASE}/auth/refresh`, {
-    method: "POST",
-    credentials: "include", // отправляет HttpOnly cookie
-    headers: { "Content-Type": "application/json" },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "include", // отправляет HttpOnly cookie
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch (err) {
+    // Network error (сервер недоступен, потеряна сеть, AbortError) — transient,
+    // не сбрасываем сессию. Ошибка помечена специальным сообщением, которое
+    // auth-store ловит и не редиректит на /sign-in.
+    throw new Error("transient: network unavailable", { cause: err })
+  }
 
-  if (!res.ok) {
+  // 401/403 — истинный auth-fail (refresh истёк/невалиден). Только в этом случае
+  // чистим токены и заставляем юзера перелогиниться.
+  if (res.status === 401 || res.status === 403) {
     clearTokens()
     throw new Error("Сессия истекла")
+  }
+  // 5xx — сервер временно недоступен. Не чистим токены.
+  if (!res.ok) {
+    throw new Error(`transient: server ${res.status}`)
   }
 
   const tokens: TokenPair = await res.json()
@@ -109,6 +123,15 @@ export async function api<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Ошибка запроса" }))
+
+    // Quota exceeded (402) — показываем глобальный upgrade dialog
+    if (res.status === 402) {
+      const { useQuotaStore } = await import("@/stores/quota-store")
+      useQuotaStore
+        .getState()
+        .show(body.quota_type || "unknown", body.error || "Лимит исчерпан")
+    }
+
     const apiError = new ApiError(body.error || `Ошибка сервера (${res.status})`, res.status)
     // Капчурим только 5xx — это server errors, которые разработчик должен увидеть.
     // 4xx обычно user input errors (validation, auth, not found) — не шлём noise.

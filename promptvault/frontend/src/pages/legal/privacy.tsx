@@ -136,10 +136,8 @@ export default function PrivacyPage() {
           <Section title="7. Ваши права">
             <p>Вы имеете право:</p>
             <ul>
-              <li><strong>Доступ</strong> — получить копию своих данных</li>
               <li><strong>Исправление</strong> — обновить данные профиля в настройках</li>
               <li><strong>Удаление</strong> — удалить аккаунт и все связанные данные</li>
-              <li><strong>Переносимость</strong> — экспортировать промпты</li>
               <li><strong>Отзыв согласия</strong> — отключить OAuth-привязки, удалить API-ключи</li>
             </ul>
             <p>

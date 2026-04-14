@@ -444,20 +444,28 @@
 
 ## Фаза 13: Подписки и оплата
 
-### 13.1 — Модель подписки
-- [ ] Модель Subscription (user_id, plan, status, expires_at, stripe_id)
-- [ ] Тарифы: Free (5 запросов ВСЕГО) / Pro 599₽/мес (10/день) / Max 1299₽/мес (30/день)
-- [ ] Годовые планы: Pro 4990₽/год / Max 10990₽/год (скидка 30%)
-- [ ] Rate limiting по тарифу (заменить глобальный RPM на per-user по плану)
+> Обновлено 2026-04-14 — Фаза реализована (sandbox). Остаток: prod-терминал, 54-ФЗ, v2-фичи.
 
-### 13.2 — Интеграция оплаты
-- [ ] ЮKassa интеграция (платежи в рублях)
-- [ ] Webhook для подтверждения оплаты
-- [ ] Автопродление подписки
-- [ ] Страница "Тарифы" с карточками Free/Pro/Max
+### 13.1 — Модель подписки ✅
+- [x] Модель Subscription (миграции 000019-000023: plans, subscriptions, payments, daily_feature_usage, users.plan_id)
+- [x] Тарифы: Free (5 запросов ВСЕГО) / Pro 599₽/мес (10/день) / Max 1299₽/мес (30/день)
+- [ ] Годовые планы: Pro 4990₽/год / Max 10990₽/год (скидка 30%) — v2
+- [x] Rate limiting по тарифу (usecases/quota с CheckAIQuota/CheckPromptQuota/...)
 
-### 13.3 — UI подписок
-- [ ] Страница `/pricing` — сравнение тарифов
-- [ ] Баннер "Осталось N запросов" для Free
-- [ ] Upgrade flow: Free → Pro → Max
-- [ ] Управление подпиской в настройках
+### 13.2 — Интеграция оплаты ✅
+- [x] T-Bank Acquiring API V2 (провайдер выбран вместо ЮKassa)
+- [x] Webhook для подтверждения оплаты (подпись SHA-256, idempotent, rate-limited)
+- [ ] Автопродление подписки — v2 (SubStatusPastDue зарезервирован)
+- [x] Страница "Тарифы" с карточками Free/Pro/Max
+
+### 13.3 — UI подписок ✅
+- [x] Страница `/pricing` — сравнение тарифов
+- [x] `QuotaExceededDialog` на 402 (баннер «Осталось N запросов» заменён на dialog)
+- [x] Upgrade flow: Free → Pro/Max через `useCheckout` → T-Bank redirect → polling 2 мин
+- [x] Управление подпиской в `SubscriptionSection` (отмена/downgrade/usage-meters)
+
+### 13.4 — Осталось для prod-релиза
+- [ ] Production-терминал T-Bank (sandbox работает)
+- [ ] IP allowlist T-Bank в middleware (ждём диапазоны)
+- [ ] 54-ФЗ фискализация: Receipt в T-Bank Init (для физлиц РФ)
+- [ ] Публичная оферта + условия возврата (юридический документ)

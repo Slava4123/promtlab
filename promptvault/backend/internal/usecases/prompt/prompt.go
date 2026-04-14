@@ -10,6 +10,7 @@ import (
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 	badgeuc "promptvault/internal/usecases/badge"
+	quotauc "promptvault/internal/usecases/quota"
 	streakuc "promptvault/internal/usecases/streak"
 	"promptvault/internal/usecases/teamcheck"
 )
@@ -23,13 +24,21 @@ type Service struct {
 	teams       repo.TeamRepository
 	streaks     *streakuc.Service
 	badges      *badgeuc.Service
+	quotas      *quotauc.Service
 }
 
-func NewService(prompts repo.PromptRepository, tags repo.TagRepository, collections repo.CollectionRepository, versions repo.VersionRepository, teams repo.TeamRepository, pins repo.PinRepository, streaks *streakuc.Service, badges *badgeuc.Service) *Service {
-	return &Service{prompts: prompts, tags: tags, collections: collections, versions: versions, teams: teams, pins: pins, streaks: streaks, badges: badges}
+func NewService(prompts repo.PromptRepository, tags repo.TagRepository, collections repo.CollectionRepository, versions repo.VersionRepository, teams repo.TeamRepository, pins repo.PinRepository, streaks *streakuc.Service, badges *badgeuc.Service, quotas *quotauc.Service) *Service {
+	return &Service{prompts: prompts, tags: tags, collections: collections, versions: versions, teams: teams, pins: pins, streaks: streaks, badges: badges, quotas: quotas}
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Prompt, []badgeuc.Badge, error) {
+	// Проверка квоты промптов
+	if s.quotas != nil {
+		if err := s.quotas.CheckPromptQuota(ctx, in.UserID); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// Проверка роли для командного промпта (viewer не может создавать)
 	if err := teamcheck.RequireEditor(ctx, s.teams, in.TeamID, in.UserID); err != nil {
 		return nil, nil, mapTeamError(err)

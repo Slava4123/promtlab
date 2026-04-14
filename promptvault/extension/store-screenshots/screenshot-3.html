@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Скриншот 3 — 4 платформы</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1280px; height: 800px; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; }
+
+  .container { text-align: center; }
+  .headline { color: white; font-size: 36px; font-weight: 700; margin-bottom: 8px; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  .subheadline { color: rgba(255,255,255,0.85); font-size: 18px; margin-bottom: 48px; font-weight: 400; }
+
+  .platforms { display: flex; gap: 24px; justify-content: center; }
+  .platform-card {
+    width: 220px;
+    background: white;
+    border-radius: 20px;
+    padding: 28px 20px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    transition: transform 0.2s;
+  }
+  .platform-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+    color: white;
+  }
+  .platform-name { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+  .platform-desc { font-size: 12px; color: #6b7280; line-height: 1.5; }
+  .platform-check { color: #10b981; font-size: 13px; margin-top: 4px; font-weight: 500; display: flex; align-items: center; gap: 4px; justify-content: center; }
+  .check-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
+
+  .icon-chatgpt { background: #10a37f; }
+  .icon-claude { background: #c96442; }
+  .icon-gemini { background: linear-gradient(135deg, #4285f4, #ea4335, #fbbc05, #34a853); }
+  .icon-perplexity { background: #1a1a2e; }
+
+  .bottom-note {
+    margin-top: 40px;
+    color: rgba(255,255,255,0.7);
+    font-size: 14px;
+  }
+  .bottom-note strong { color: white; }
+
+  .logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .logo-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: #8b5cf6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(139,92,246,0.4);
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo-row">
+      <div class="logo-icon">П</div>
+    </div>
+    <div class="headline">Работает везде, где вы используете AI</div>
+    <div class="subheadline">Одно расширение — 4 платформы. Вставляйте промпты одним кликом.</div>
+
+    <div class="platforms">
+      <div class="platform-card">
+        <div class="platform-icon icon-chatgpt">G</div>
+        <div class="platform-name">ChatGPT</div>
+        <div class="platform-desc">Полная поддержка textarea и ProseMirror редакторов</div>
+        <div class="platform-check"><div class="check-dot"></div> Поддерживается</div>
+      </div>
+      <div class="platform-card">
+        <div class="platform-icon icon-claude">C</div>
+        <div class="platform-name">Claude</div>
+        <div class="platform-desc">ProseMirror contenteditable с автоподстановкой</div>
+        <div class="platform-check"><div class="check-dot"></div> Поддерживается</div>
+      </div>
+      <div class="platform-card">
+        <div class="platform-icon icon-gemini">G</div>
+        <div class="platform-name">Gemini</div>
+        <div class="platform-desc">Quill и ProseMirror rich-textarea интеграция</div>
+        <div class="platform-check"><div class="check-dot"></div> Поддерживается</div>
+      </div>
+      <div class="platform-card">
+        <div class="platform-icon icon-perplexity">P</div>
+        <div class="platform-name">Perplexity</div>
+        <div class="platform-desc">Lexical editor с полной поддержкой вставки</div>
+        <div class="platform-check"><div class="check-dot"></div> Поддерживается</div>
+      </div>
+    </div>
+
+    <div class="bottom-note">
+      Боковая панель <strong>Ctrl+Shift+K</strong> • Автоопределение платформы • Отмена вставки
+    </div>
+  </div>
+</body>
+</html>

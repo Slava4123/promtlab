@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Скриншот 2 — Шаблонные переменные</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1280px; height: 800px; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #f8f9fa; display: flex; flex-direction: column; }
+
+  .chrome-tabs { height: 40px; background: #dee1e6; display: flex; align-items: flex-end; padding: 0 80px 0 8px; }
+  .chrome-tab { height: 34px; background: #fff; border-radius: 8px 8px 0 0; padding: 0 16px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: #1a1a1a; min-width: 200px; }
+  .tab-icon { width: 16px; height: 16px; border-radius: 50%; background: #d4a27a; flex-shrink: 0; }
+  .tab-close { margin-left: auto; font-size: 12px; color: #80868b; }
+  .chrome-bar { height: 44px; background: #fff; border-bottom: 1px solid #dadce0; display: flex; align-items: center; padding: 0 12px; gap: 8px; }
+  .nav-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
+  .nav-arrow-back { width: 0; height: 0; border-style: solid; border-width: 5px 7px 5px 0; border-color: transparent #80868b transparent transparent; }
+  .nav-arrow-fwd { width: 0; height: 0; border-style: solid; border-width: 5px 0 5px 7px; border-color: transparent transparent transparent #bdc1c6; }
+  .nav-reload { width: 14px; height: 14px; border: 2px solid #80868b; border-radius: 50%; border-top-color: transparent; }
+  .url-bar { flex: 1; height: 32px; background: #f1f3f4; border-radius: 20px; display: flex; align-items: center; padding: 0 14px; font-size: 14px; color: #5f6368; gap: 8px; }
+  .lock-icon { width: 12px; height: 12px; border: 1.5px solid #5f6368; border-radius: 2px; position: relative; }
+  .lock-icon::before { content: ''; position: absolute; top: -5px; left: 1.5px; width: 6px; height: 5px; border: 1.5px solid #5f6368; border-radius: 4px 4px 0 0; border-bottom: none; }
+  .ext-btn { width: 28px; height: 28px; border-radius: 6px; background: #8b5cf6; display: flex; align-items: center; justify-content: center; color: white; font-size: 13px; font-weight: 700; }
+  .main { flex: 1; display: flex; overflow: hidden; }
+
+  /* Claude */
+  .claude { flex: 1; background: #faf8f5; display: flex; flex-direction: column; }
+  .claude-head { height: 52px; background: #faf8f5; border-bottom: 1px solid #ede8de; display: flex; align-items: center; padding: 0 20px; gap: 12px; }
+  .claude-name { font-size: 18px; font-weight: 700; color: #c96442; }
+  .claude-model { font-size: 12px; color: #8b7355; background: #f0e8da; padding: 3px 10px; border-radius: 12px; }
+  .claude-body { flex: 1; padding: 24px 48px; max-width: 760px; margin: 0 auto; width: 100%; }
+  .c-msg { margin-bottom: 20px; }
+  .c-msg-user { font-size: 14px; color: #1a1a1a; line-height: 1.6; padding: 14px 18px; background: #f0e8da; border-radius: 16px; }
+  .c-msg-ai { font-size: 14px; color: #374151; line-height: 1.7; }
+  .c-avatar { width: 24px; height: 24px; border-radius: 50%; background: #c96442; display: inline-block; margin-right: 8px; vertical-align: middle; }
+  .claude-input { margin-top: auto; margin-bottom: 20px; background: white; border: 1px solid #e8e0d0; border-radius: 20px; padding: 14px 20px; font-size: 14px; color: #9ca3af; margin-left: 48px; margin-right: 48px; }
+
+  /* Side Panel */
+  .panel { width: 360px; background: #fff; border-left: 1px solid #e5e5e5; display: flex; flex-direction: column; flex-shrink: 0; }
+  .p-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; }
+  .p-back { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #f5f5f5; }
+  .p-back-arrow { width: 0; height: 0; border-style: solid; border-width: 5px 7px 5px 0; border-color: transparent #666 transparent transparent; }
+  .p-title { flex: 1; font-size: 13px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .p-section { padding: 12px; border-bottom: 1px solid #eee; }
+  .p-section-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 10px; }
+  .var-group { margin-bottom: 12px; }
+  .var-label { font-family: 'SF Mono', 'Consolas', 'Courier New', monospace; font-size: 11px; color: #1a1a1a; margin-bottom: 4px; font-weight: 500; }
+  .var-input { width: 100%; border: 1px solid #e5e5e5; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: #1a1a1a; background: #fff; font-family: inherit; line-height: 1.4; }
+  .var-input.filled { background: #faf5ff; border-color: #c4b5fd; }
+  .var-input.empty { color: #9ca3af; }
+
+  .preview-wrap { padding: 12px; flex: 1; overflow: hidden; }
+  .preview-head { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .preview-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; }
+  .preview-stats { font-size: 9px; color: #9ca3af; }
+  .preview-box { border: 1px solid #eee; border-radius: 8px; background: #fafafa; padding: 10px; font-size: 11px; line-height: 1.6; color: #374151; max-height: 150px; overflow: hidden; }
+  .pv-filled { background: #ede9fe; padding: 1px 3px; border-radius: 3px; color: #5b21b6; }
+  .pv-empty { font-family: monospace; color: #8b5cf6; opacity: 0.6; }
+
+  .p-footer { padding: 12px; border-top: 1px solid #eee; }
+  .btn-row { display: flex; gap: 6px; }
+  .btn-primary { flex: 1; background: #1a1a1a; color: white; border: none; border-radius: 8px; padding: 9px 16px; font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn-primary .arrow { width: 0; height: 0; border-style: solid; border-width: 4px 0 4px 7px; border-color: transparent transparent transparent white; }
+  .btn-outline { width: 34px; height: 34px; border: 1px solid #e5e5e5; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: white; }
+  /* Copy icon */
+  .ico-copy { width: 11px; height: 13px; border: 1.5px solid #666; border-radius: 2px; position: relative; }
+  .ico-copy::before { content: ''; position: absolute; top: -3px; left: -3px; width: 11px; height: 13px; border: 1.5px solid #999; border-radius: 2px; background: white; z-index: -1; }
+  /* Zap icon */
+  .ico-zap { width: 10px; height: 14px; position: relative; }
+  .ico-zap::before { content: ''; position: absolute; top: 0; left: 2px; width: 8px; height: 8px; background: #666; clip-path: polygon(50% 0%, 0% 60%, 40% 60%, 30% 100%, 100% 40%, 60% 40%); }
+  /* Share icon */
+  .ico-share { width: 12px; height: 12px; position: relative; }
+  .ico-share::before { content: ''; width: 12px; height: 12px; border: 1.5px solid #666; border-radius: 50%; position: absolute; clip-path: polygon(100% 0%, 60% 0%, 60% 100%, 100% 100%); }
+</style>
+</head>
+<body>
+  <div class="chrome-tabs">
+    <div class="chrome-tab"><div class="tab-icon"></div><span>Claude</span><span class="tab-close">×</span></div>
+  </div>
+  <div class="chrome-bar">
+    <div class="nav-btn"><div class="nav-arrow-back"></div></div>
+    <div class="nav-btn"><div class="nav-arrow-fwd"></div></div>
+    <div class="nav-reload"></div>
+    <div class="url-bar"><div class="lock-icon"></div><span style="color:#202124;">claude.ai</span></div>
+    <div class="ext-btn">П</div>
+  </div>
+
+  <div class="main">
+    <div class="claude">
+      <div class="claude-head">
+        <div class="claude-name">Claude</div>
+        <div class="claude-model">Sonnet 4</div>
+      </div>
+      <div class="claude-body">
+        <div class="c-msg">
+          <div class="c-msg-user">Составь контент-план на месяц для Telegram-канала о продуктивности и AI-инструментах. Тон: дружелюбный, экспертный.</div>
+        </div>
+        <div class="c-msg">
+          <div class="c-msg-ai">
+            <span class="c-avatar"></span>
+            <strong>Контент-план: март 2026</strong>
+            <br><br>
+            <strong>Неделя 1 — Основы продуктивности</strong><br>
+            Пн: «5 привычек, которые экономят 2 часа в день»<br>
+            Ср: Обзор Notion + AI — автоматизация рутины<br>
+            Пт: Пост-карусель: «До/После с AI-ассистентом»<br>
+            <br>
+            <strong>Неделя 2 — AI-инструменты для работы</strong><br>
+            Пн: Сравнение Claude vs ChatGPT для рабочих задач<br>
+            Ср: Гайд: промпт-инженерия за 10 минут<br>
+            Пт: Кейс — как сократить время на тексты в 3 раза
+          </div>
+        </div>
+      </div>
+      <div class="claude-input">Ответьте Claude…</div>
+    </div>
+
+    <div class="panel">
+      <div class="p-head">
+        <div class="p-back"><div class="p-back-arrow"></div></div>
+        <div class="p-title">Контент-план для Telegram</div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-label">Переменные</div>
+        <div class="var-group">
+          <div class="var-label">{{period}}</div>
+          <div class="var-input filled">месяц</div>
+        </div>
+        <div class="var-group">
+          <div class="var-label">{{topic}}</div>
+          <div class="var-input filled">продуктивность и AI-инструменты</div>
+        </div>
+        <div class="var-group">
+          <div class="var-label">{{audience}}</div>
+          <div class="var-input empty">Значение для audience</div>
+        </div>
+        <div class="var-group">
+          <div class="var-label">{{tone}}</div>
+          <div class="var-input filled">дружелюбный, экспертный</div>
+        </div>
+      </div>
+
+      <div class="preview-wrap">
+        <div class="preview-head">
+          <div class="preview-label">Предпросмотр</div>
+          <div class="preview-stats">847 симв · ~212 ток</div>
+        </div>
+        <div class="preview-box">
+          Составь контент-план на <span class="pv-filled">месяц</span> для Telegram-канала о <span class="pv-filled">продуктивность и AI-инструменты</span>. Целевая аудитория: <span class="pv-empty">{{audience}}</span>. Тон: <span class="pv-filled">дружелюбный, экспертный</span>. Включи: рубрики, частоту постов, форматы (текст, карусель, видео), примеры заголовков, хештеги. Для каждой недели укажи тему и 3 поста с кратким описанием…
+        </div>
+      </div>
+
+      <div class="p-footer">
+        <div class="btn-row">
+          <button class="btn-primary"><span class="arrow"></span> Вставить</button>
+          <div class="btn-outline"><div class="ico-copy"></div></div>
+          <div class="btn-outline"><div class="ico-zap"></div></div>
+          <div class="btn-outline"><div class="ico-share"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

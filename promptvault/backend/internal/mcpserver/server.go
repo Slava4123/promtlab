@@ -10,6 +10,7 @@ import (
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/middleware/ratelimit"
 	apikeyuc "promptvault/internal/usecases/apikey"
+	quotauc "promptvault/internal/usecases/quota"
 )
 
 type MCPServer struct {
@@ -50,6 +51,7 @@ func NewMCPServer(
 	searchSvc SearchService,
 	shareSvc ShareService,
 	userRPM int,
+	quotas *quotauc.Service,
 ) *MCPServer {
 	logger := slog.Default().With("component", "mcp")
 
@@ -68,6 +70,7 @@ func NewMCPServer(
 		tags:        tagSvc,
 		search:      searchSvc,
 		shares:      shareSvc,
+		quotas:      quotas,
 	}
 	tools.register(server)
 

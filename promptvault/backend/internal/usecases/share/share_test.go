@@ -145,7 +145,7 @@ func setupService() (*Service, *mockShareRepo, *mockPromptRepo, *mockTeamRepo) {
 	sr := new(mockShareRepo)
 	pr := new(mockPromptRepo)
 	tr := new(mockTeamRepo)
-	svc := NewService(sr, pr, tr, "https://app.test.ru")
+	svc := NewService(sr, pr, tr, "https://app.test.ru", nil)
 	return svc, sr, pr, tr
 }
 

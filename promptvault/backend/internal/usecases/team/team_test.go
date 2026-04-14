@@ -153,7 +153,7 @@ func (m *mockUserRepo) Update(ctx context.Context, user *models.User) error {
 func newTestService() (*Service, *mockTeamRepo, *mockUserRepo) {
 	tr := new(mockTeamRepo)
 	ur := new(mockUserRepo)
-	svc := NewService(tr, ur)
+	svc := NewService(tr, ur, nil)
 	return svc, tr, ur
 }
 

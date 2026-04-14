@@ -44,7 +44,12 @@ func (h *Handler) setRefreshCookie(w http.ResponseWriter, token string, maxAge i
 		Path:     "/api/auth",
 		HttpOnly: true,
 		Secure:   h.secureCookies,
-		SameSite: http.SameSiteStrictMode,
+		// Lax (не Strict) чтобы cookie отправлялась при возврате с OAuth-провайдера
+		// (GitHub/Google/Yandex) и при F5 на защищённых страницах. Strict блокировал
+		// cookie при top-level cross-site navigation, что ломало OAuth login.
+		// От CSRF защищает то, что POST-запросы на protected endpoints требуют
+		// Authorization header с access-token (не cookie).
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   maxAge,
 	})
 }

@@ -31,6 +31,7 @@ type User struct {
 	EmailVerified         bool       `gorm:"default:false" json:"email_verified"`
 	Role                  UserRole   `gorm:"size:20;not null;default:user" json:"role"`
 	Status                UserStatus `gorm:"size:20;not null;default:active" json:"status"`
+	PlanID                string     `gorm:"size:20;not null;default:free" json:"plan_id"`
 	DefaultModel          string     `gorm:"size:100;default:anthropic/claude-sonnet-4" json:"default_model"`
 	TokenNonce            string     `gorm:"size:64" json:"-"`
 	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at,omitempty"`

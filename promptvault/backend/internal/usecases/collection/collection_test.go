@@ -165,7 +165,7 @@ func (m *mockTeamRepo) AcceptInvitationTx(ctx context.Context, invID uint, membe
 func newTestService() (*Service, *mockCollectionRepo, *mockTeamRepo) {
 	cr := new(mockCollectionRepo)
 	tr := new(mockTeamRepo)
-	svc := NewService(cr, tr, nil)
+	svc := NewService(cr, tr, nil, nil)
 	return svc, cr, tr
 }
 

@@ -16,6 +16,9 @@ export function LandingFooter() {
           <Link to="/legal/privacy" className="transition-colors hover:text-foreground">
             Конфиденциальность
           </Link>
+          <Link to="/legal/offer" className="transition-colors hover:text-foreground">
+            Публичная оферта
+          </Link>
         </div>
       </div>
     </footer>

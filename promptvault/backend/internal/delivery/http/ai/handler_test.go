@@ -26,7 +26,7 @@ func testHandlerNoAPIKey(client aiuc.AIClient) *Handler {
 		},
 	}
 	svc := aiuc.NewService(client, cfg)
-	return NewHandler(svc)
+	return NewHandler(svc, nil)
 }
 
 // --- helpers ---
@@ -51,7 +51,7 @@ func testHandler(client aiuc.AIClient) *Handler {
 		},
 	}
 	svc := aiuc.NewService(client, cfg)
-	return NewHandler(svc)
+	return NewHandler(svc, nil)
 }
 
 func testHandlerWithRPM(client aiuc.AIClient, rpm int) *Handler {
@@ -63,7 +63,7 @@ func testHandlerWithRPM(client aiuc.AIClient, rpm int) *Handler {
 		},
 	}
 	svc := aiuc.NewService(client, cfg)
-	return NewHandler(svc)
+	return NewHandler(svc, nil)
 }
 
 type flusherRecorder struct {

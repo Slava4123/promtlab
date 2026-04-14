@@ -194,8 +194,8 @@ func setupHandler() (*Handler, *mPromptRepo, *mVersionRepo, *mPinRepo) {
 	pinr := new(mPinRepo)
 	// Default: GetStatuses returns empty map (no pins)
 	pinr.On("GetStatuses", mock.Anything, mock.Anything, mock.Anything).Return(make(map[uint]repo.PinStatus), nil)
-	svc := promptuc.NewService(pr, tr, cr, vr, nil, pinr, nil, nil)
-	return NewHandler(svc), pr, vr, pinr
+	svc := promptuc.NewService(pr, tr, cr, vr, nil, pinr, nil, nil, nil)
+	return NewHandler(svc, nil), pr, vr, pinr
 }
 
 func makeReq(method, url string, userID uint, params map[string]string) (*http.Request, *httptest.ResponseRecorder) {

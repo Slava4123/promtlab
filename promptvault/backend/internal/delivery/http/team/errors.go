@@ -5,10 +5,17 @@ import (
 	"net/http"
 
 	httperr "promptvault/internal/delivery/http/errors"
+	quotauc "promptvault/internal/usecases/quota"
 	teamuc "promptvault/internal/usecases/team"
 )
 
 func respondError(w http.ResponseWriter, err error) {
+	var qe *quotauc.QuotaExceededError
+	if errors.As(err, &qe) {
+		httperr.RespondQuotaError(w, qe.QuotaType, qe.Used, qe.Limit, qe.PlanID, qe.Message)
+		return
+	}
+
 	switch {
 	case errors.Is(err, teamuc.ErrNotFound):
 		httperr.Respond(w, httperr.NotFound(err.Error()))

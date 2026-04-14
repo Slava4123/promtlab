@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1400px; height: 560px; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 40%, #4c1d95 100%); display: flex; align-items: center; }
+  .left { flex: 1; padding: 60px 40px 60px 80px; }
+  .logo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+  .logo { width: 56px; height: 56px; border-radius: 16px; background: white; display: flex; align-items: center; justify-content: center; color: #7c3aed; font-size: 30px; font-weight: 700; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+  .brand { color: white; font-size: 28px; font-weight: 700; }
+  .title { color: white; font-size: 36px; font-weight: 700; line-height: 1.25; margin-bottom: 14px; max-width: 520px; }
+  .sub { color: rgba(255,255,255,0.8); font-size: 16px; line-height: 1.6; max-width: 480px; margin-bottom: 24px; }
+  .badges { display: flex; gap: 10px; }
+  .badge { background: rgba(255,255,255,0.15); padding: 6px 16px; border-radius: 24px; font-size: 13px; color: white; font-weight: 500; border: 1px solid rgba(255,255,255,0.2); }
+
+  .right { width: 560px; padding: 40px 60px 40px 20px; display: flex; align-items: center; justify-content: center; }
+  .mockup { width: 320px; background: white; border-radius: 16px; box-shadow: 0 16px 48px rgba(0,0,0,0.3); overflow: hidden; }
+  .m-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid #eee; }
+  .m-ws { font-size: 11px; font-weight: 600; color: #1a1a1a; background: #f5f5f5; padding: 3px 8px; border-radius: 4px; }
+  .m-badge { font-size: 9px; padding: 2px 6px; border-radius: 8px; font-weight: 600; background: #dcfce7; color: #166534; }
+  .m-streak { font-size: 9px; padding: 2px 6px; border-radius: 8px; font-weight: 600; background: #fef3c7; color: #92400e; }
+  .m-search { margin: 8px 10px; height: 28px; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 6px; display: flex; align-items: center; padding: 0 8px; font-size: 10px; color: #9ca3af; }
+  .m-tabs { display: flex; padding: 4px 10px 0; border-bottom: 1px solid #eee; }
+  .m-tab { padding: 3px 8px 6px; font-size: 9px; font-weight: 500; color: #9ca3af; position: relative; }
+  .m-tab.on { color: #1a1a1a; }
+  .m-tab.on::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: #1a1a1a; border-radius: 1px 1px 0 0; }
+  .m-cards { padding: 8px 10px; }
+  .m-card { border: 1px solid #eee; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+  .m-card-title { font-size: 11px; font-weight: 500; color: #1a1a1a; margin-bottom: 2px; }
+  .m-card-preview { font-size: 9px; color: #9ca3af; line-height: 1.3; }
+  .m-card-tags { display: flex; gap: 3px; margin-top: 4px; }
+  .m-tag { font-size: 8px; padding: 1px 5px; border-radius: 2px; }
+  .mt-blue { background: #dbeafe; color: #1e40af; }
+  .mt-green { background: #d1fae5; color: #065f46; }
+  .mt-purple { background: #ede9fe; color: #5b21b6; }
+  .mt-orange { background: #ffedd5; color: #9a3412; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="logo-row">
+      <div class="logo">П</div>
+      <div class="brand">ПромтЛаб</div>
+    </div>
+    <div class="title">Ваши промпты всегда под рукой</div>
+    <div class="sub">Боковая панель с библиотекой AI-промптов. Поиск, коллекции, теги, шаблонные переменные и командная работа — прямо в браузере.</div>
+    <div class="badges">
+      <div class="badge">ChatGPT</div>
+      <div class="badge">Claude</div>
+      <div class="badge">Gemini</div>
+      <div class="badge">Perplexity</div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="mockup">
+      <div class="m-head">
+        <div class="m-ws">Личное</div>
+        <div class="m-badge">ChatGPT</div>
+        <div class="m-streak">12 дн.</div>
+      </div>
+      <div class="m-search">Поиск промптов…</div>
+      <div class="m-tabs">
+        <div class="m-tab on">Все</div>
+        <div class="m-tab">Закреплённые</div>
+        <div class="m-tab">Недавние</div>
+        <div class="m-tab">Избранное</div>
+      </div>
+      <div class="m-cards">
+        <div class="m-card">
+          <div class="m-card-title">Анализ конкурентов</div>
+          <div class="m-card-preview">Проанализируй конкурентов в нише {{niche}}…</div>
+          <div class="m-card-tags"><span class="m-tag mt-blue">маркетинг</span><span class="m-tag mt-green">анализ</span></div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">Code Review промпт</div>
+          <div class="m-card-preview">Проведи ревью кода. Проверь безопасность…</div>
+          <div class="m-card-tags"><span class="m-tag mt-purple">разработка</span></div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">Контент-план для Telegram</div>
+          <div class="m-card-preview">Составь план на {{period}} для канала…</div>
+          <div class="m-card-tags"><span class="m-tag mt-orange">контент</span><span class="m-tag mt-blue">telegram</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

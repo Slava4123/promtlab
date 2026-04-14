@@ -35,6 +35,8 @@ type Service struct {
 	audit  *auditsvc.Service
 	auth   *authuc.Service
 	badges *badgeuc.Service
+	plans  repo.PlanRepository
+	subs   repo.SubscriptionRepository
 }
 
 func NewService(
@@ -43,6 +45,8 @@ func NewService(
 	audit *auditsvc.Service,
 	auth *authuc.Service,
 	badges *badgeuc.Service,
+	plans repo.PlanRepository,
+	subs repo.SubscriptionRepository,
 ) *Service {
 	return &Service{
 		admins: admins,
@@ -50,6 +54,8 @@ func NewService(
 		audit:  audit,
 		auth:   auth,
 		badges: badges,
+		plans:  plans,
+		subs:   subs,
 	}
 }
 
@@ -194,13 +200,52 @@ func (s *Service) ResetPassword(ctx context.Context, targetID uint) error {
 	})
 }
 
-// ChangeTier — stub. Subscription system отсутствует в MVP.
-// Возвращает ErrTierNotImplemented, HTTP handler должен маппить в 501.
+// ChangeTier устанавливает plan_id для юзера (admin override, без оплаты).
+// Если у юзера есть активная подписка — отменяет её.
 func (s *Service) ChangeTier(ctx context.Context, targetID uint, tier string) error {
-	_ = ctx
-	_ = targetID
-	_ = tier
-	return ErrTierNotImplemented
+	info, ok := auditsvc.FromContext(ctx)
+	if !ok {
+		return auditsvc.ErrMissingRequestInfo
+	}
+	_ = info
+
+	// Validate plan exists
+	if s.plans == nil {
+		return ErrInvalidTier
+	}
+	if _, err := s.plans.GetByID(ctx, tier); err != nil {
+		return ErrInvalidTier
+	}
+
+	user, err := s.users.GetByID(ctx, targetID)
+	if err != nil {
+		if errors.Is(err, repo.ErrNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	before := map[string]any{"plan_id": user.PlanID}
+
+	// Cancel active subscription if exists
+	if sub, subErr := s.subs.GetActiveByUserID(ctx, targetID); subErr == nil {
+		_ = s.subs.CancelAtPeriodEnd(ctx, sub.ID)
+	}
+
+	// Update user plan
+	user.PlanID = tier
+	if err := s.users.Update(ctx, user); err != nil {
+		return err
+	}
+
+	after := map[string]any{"plan_id": tier}
+	return s.audit.Log(ctx, auditsvc.LogInput{
+		Action:      auditsvc.ActionChangeTier,
+		TargetType:  auditsvc.TargetUser,
+		TargetID:    &targetID,
+		BeforeState: before,
+		AfterState:  after,
+	})
 }
 
 // ==================== destructive: badges ====================

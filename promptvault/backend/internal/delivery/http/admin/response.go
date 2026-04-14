@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"cmp"
 	"time"
 
 	repo "promptvault/internal/interface/repository"
@@ -84,7 +85,7 @@ func NewUserDetailResponse(d *repo.UserDetail) UserDetailResponse {
 		TotalUsage:       d.TotalUsage,
 		LinkedProviders:  providers,
 		UnlockedBadgeIDs: unlockedIDs,
-		Tier:             "free",
+		Tier:             cmp.Or(d.User.PlanID, "free"),
 	}
 }
 

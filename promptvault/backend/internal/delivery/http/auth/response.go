@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"cmp"
 	"time"
 
 	"promptvault/internal/models"
@@ -28,6 +29,7 @@ type UserResponse struct {
 	EmailVerified         bool       `json:"email_verified"`
 	HasPassword           bool       `json:"has_password"`
 	DefaultModel          string     `json:"default_model"`
+	PlanID                string     `json:"plan_id"`
 	Role                  string     `json:"role"`
 	Status                string     `json:"status"`
 	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at,omitempty"`
@@ -44,6 +46,7 @@ func NewUserResponse(u models.User) UserResponse {
 		EmailVerified:         u.EmailVerified,
 		HasPassword:           u.HasPassword(),
 		DefaultModel:          u.DefaultModel,
+		PlanID:                cmp.Or(u.PlanID, "free"),
 		Role:                  string(u.Role),
 		Status:                string(u.Status),
 		OnboardingCompletedAt: u.OnboardingCompletedAt,
