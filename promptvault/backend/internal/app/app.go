@@ -16,6 +16,7 @@ import (
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 	authmw "promptvault/internal/middleware/auth"
+	"promptvault/internal/middleware/ipallowlist"
 	"promptvault/internal/middleware/ratelimit"
 	sentrymw "promptvault/internal/middleware/sentry"
 
@@ -280,12 +281,20 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	)
 
 	purgeLoop := trashuc.NewPurgeLoop(trashRepo, 1*time.Hour, 30)
-	expirationLoop := subscriptionuc.NewExpirationLoop(subscriptionRepo, 1*time.Hour)
+
+	// Email-уведомления для subscription loops. Если SMTP не сконфигурирован
+	// (Configured()=false), notifier=nil — loops сами пропускают отправку.
+	var subNotifier *subscriptionuc.EmailNotifier
+	if emailSvc.Configured() {
+		subNotifier = subscriptionuc.NewEmailNotifier(emailSvc, cfg.Server.FrontendURL)
+	}
+
+	expirationLoop := subscriptionuc.NewExpirationLoop(subscriptionRepo, userRepo, subNotifier, 1*time.Hour)
 	// renewalLoop пытается продлить подписки за 48ч до конца периода;
 	// если payment не настроен — Start() сам no-op'ит.
 	renewalLoop := subscriptionuc.NewRenewalLoop(
-		subscriptionRepo, planRepo, paymentRepo,
-		paymentProvider, &cfg.Payment,
+		subscriptionRepo, planRepo, paymentRepo, userRepo,
+		paymentProvider, subNotifier, &cfg.Payment,
 		1*time.Hour, 48*time.Hour,
 	)
 
@@ -391,7 +400,11 @@ func (a *App) MountRoutes(r chi.Router) {
 		// public — webhooks. T-Bank шлёт 1-5 уведомлений за цикл платежа;
 		// 30 req/min per IP с запасом покрывает retry-поведение банка.
 		// Защита от DoS на публичный endpoint без авторизации.
+		// IP allowlist — defence-in-depth поверх SHA-256 подписи: даже если
+		// атакующий получит Password терминала, он не сможет доставить webhook
+		// с чужого IP. Пустой список — middleware no-op (dev/pre-prod).
 		r.Route("/webhooks", func(r chi.Router) {
+			r.Use(ipallowlist.New(a.cfg.Payment.WebhookAllowedIPs, a.cfg.Payment.WebhookTrustXFF))
 			r.Use(ratelimit.ByIP(30))
 			r.Post("/tbank", a.webhookHandler.TBank)
 		})

@@ -62,7 +62,13 @@ export default function AppLayout() {
     if (payment === "failure" || payment === "cancel") {
       window.history.replaceState({}, "", window.location.pathname)
       sessionStorage.removeItem("pending_checkout")
-      toast.error("Оплата не завершена")
+      // Явно сообщаем: списания не было, банк отклонил или юзер отменил.
+      // Без такой формулировки юзер боится что деньги «зависли».
+      toast.error("Оплата отклонена", {
+        description:
+          "Средства не списаны. Попробуйте другую карту или свяжитесь с банком.",
+        duration: 8000,
+      })
       return
     }
 

@@ -11,6 +11,9 @@ export default defineConfig({
     },
   },
   server: {
+    // Разрешаем cloudflare/ngrok tunnels для dev-тестирования платежей
+    // (T-Bank требует публичный https Success/Fail URL).
+    allowedHosts: [".trycloudflare.com", ".ngrok-free.app", ".ngrok.io"],
     proxy: {
       "/api": {
         target: process.env.VITE_API_URL || "http://localhost:8080",

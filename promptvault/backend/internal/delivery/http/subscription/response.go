@@ -59,15 +59,16 @@ func NewPlansResponse(plans []models.SubscriptionPlan) []PlanResponse {
 
 // SubscriptionResponse — DTO подписки для API.
 type SubscriptionResponse struct {
-	ID                 uint               `json:"id"`
-	PlanID             string             `json:"plan_id"`
-	Status             string             `json:"status"`
-	CurrentPeriodStart time.Time          `json:"current_period_start"`
-	CurrentPeriodEnd   time.Time          `json:"current_period_end"`
-	CancelAtPeriodEnd  bool               `json:"cancel_at_period_end"`
-	CancelledAt        *time.Time         `json:"cancelled_at,omitempty"`
-	Plan               *PlanResponse      `json:"plan,omitempty"`
-	CreatedAt          time.Time          `json:"created_at"`
+	ID                 uint          `json:"id"`
+	PlanID             string        `json:"plan_id"`
+	Status             string        `json:"status"`
+	CurrentPeriodStart time.Time     `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time     `json:"current_period_end"`
+	CancelAtPeriodEnd  bool          `json:"cancel_at_period_end"`
+	CancelledAt        *time.Time    `json:"cancelled_at,omitempty"`
+	AutoRenew          bool          `json:"auto_renew"`
+	Plan               *PlanResponse `json:"plan,omitempty"`
+	CreatedAt          time.Time     `json:"created_at"`
 }
 
 // NewSubscriptionResponse конвертирует модель подписки в DTO.
@@ -83,6 +84,7 @@ func NewSubscriptionResponse(s *models.Subscription) *SubscriptionResponse {
 		CurrentPeriodEnd:   s.CurrentPeriodEnd,
 		CancelAtPeriodEnd:  s.CancelAtPeriodEnd,
 		CancelledAt:        s.CancelledAt,
+		AutoRenew:          s.AutoRenew,
 		CreatedAt:          s.CreatedAt,
 	}
 	if s.Plan.ID != "" {

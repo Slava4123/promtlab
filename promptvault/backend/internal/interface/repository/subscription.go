@@ -20,6 +20,10 @@ type SubscriptionRepository interface {
 	Create(ctx context.Context, sub *models.Subscription) error
 	GetActiveByUserID(ctx context.Context, userID uint) (*models.Subscription, error)
 	Update(ctx context.Context, sub *models.Subscription) error
+
+	// ListExpiring возвращает active и past_due подписки с истёкшим периодом
+	// (current_period_end < before). Используется expirationLoop для перевода
+	// в expired и даунгрейда на free.
 	ListExpiring(ctx context.Context, before time.Time) ([]models.Subscription, error)
 
 	// ActivateWithPlanUpdate создаёт/обновляет подписку и устанавливает
@@ -40,12 +44,20 @@ type SubscriptionRepository interface {
 	// списания; true — renewLoop попытается списать за 3 дня до окончания.
 	SetAutoRenew(ctx context.Context, subID uint, autoRenew bool) error
 
-	// ListReadyForRenewal возвращает active подписки с auto_renew=true и непустым
-	// rebill_id, у которых current_period_end <= before. Используется renewLoop.
-	ListReadyForRenewal(ctx context.Context, before time.Time) ([]models.Subscription, error)
+	// ListReadyForRenewal возвращает подписки, готовые к попытке списания:
+	//  - active с auto_renew=true, rebill_id<>'' и current_period_end <= before;
+	//  - past_due с renewal_attempts < maxAttempts и последней попыткой >= retryAfter назад.
+	// Используется renewLoop.
+	ListReadyForRenewal(ctx context.Context, before time.Time, retryAfter time.Time, maxAttempts int) ([]models.Subscription, error)
 
 	// ExtendPeriod продлевает подписку на заданный период (для успешного renewal).
+	// Сбрасывает renewal_attempts=0 и статус past_due→active.
 	ExtendPeriod(ctx context.Context, subID uint, newPeriodEnd time.Time) error
+
+	// RecordRenewalFailure фиксирует неудачную попытку Charge: переводит подписку
+	// в past_due (если была active), инкрементирует renewal_attempts и ставит
+	// last_renewal_attempt_at=now. Используется renewLoop при ошибке Init/Charge.
+	RecordRenewalFailure(ctx context.Context, subID uint) error
 }
 
 // PaymentRepository — управление платежами.
@@ -66,6 +78,13 @@ type PaymentRepository interface {
 	// если статус уже не expected (другой webhook опередил). Защищает от
 	// race conditions при параллельных webhook'ах без явных SELECT FOR UPDATE.
 	TransitionStatus(ctx context.Context, id uint, expected, next models.PaymentStatus) (bool, error)
+
+	// LinkSubscription связывает платёж с созданной подпиской после активации.
+	// Используется из HandleWebhook: платёж создаётся в Checkout без subscription_id
+	// (подписки ещё нет), связка устанавливается после activateSubscription.
+	// Без этого невозможно корректно обработать refund конкретной подписки и
+	// составить историю платежей за подписку.
+	LinkSubscription(ctx context.Context, paymentID, subscriptionID uint) error
 }
 
 // QuotaRepository — подсчёт использованных ресурсов для enforcement квот.

@@ -44,8 +44,12 @@ func (r *subscriptionRepo) Update(ctx context.Context, sub *models.Subscription)
 
 func (r *subscriptionRepo) ListExpiring(ctx context.Context, before time.Time) ([]models.Subscription, error) {
 	var subs []models.Subscription
+	// past_due с истёкшим периодом тоже экспайрим — если retry-попытки не помогли,
+	// подписка не должна зависнуть в past_due навечно.
 	err := r.db.WithContext(ctx).
-		Where("status = ? AND current_period_end < ?", models.SubStatusActive, before).
+		Preload("Plan").
+		Where("status IN ? AND current_period_end < ?",
+			[]models.SubscriptionStatus{models.SubStatusActive, models.SubStatusPastDue}, before).
 		Find(&subs).Error
 	return subs, err
 }
@@ -104,22 +108,49 @@ func (r *subscriptionRepo) SetAutoRenew(ctx context.Context, subID uint, autoRen
 		Update("auto_renew", autoRenew).Error
 }
 
-func (r *subscriptionRepo) ListReadyForRenewal(ctx context.Context, before time.Time) ([]models.Subscription, error) {
+func (r *subscriptionRepo) ListReadyForRenewal(ctx context.Context, before time.Time, retryAfter time.Time, maxAttempts int) ([]models.Subscription, error) {
 	var subs []models.Subscription
+	// Два случая:
+	//  1. active подписки, чей период заканчивается в ближайшие `before` (первая попытка).
+	//  2. past_due подписки, у которых была попытка раньше retryAfter и attempts < max.
+	// Обе ветки требуют auto_renew=true и непустой rebill_id.
 	err := r.db.WithContext(ctx).
-		Where("status = ? AND auto_renew = ? AND rebill_id <> '' AND current_period_end <= ?",
-			models.SubStatusActive, true, before).
+		Where("auto_renew = ? AND rebill_id <> '' AND (("+
+			"status = ? AND current_period_end <= ?) OR ("+
+			"status = ? AND renewal_attempts < ? AND "+
+			"(last_renewal_attempt_at IS NULL OR last_renewal_attempt_at <= ?)))",
+			true,
+			models.SubStatusActive, before,
+			models.SubStatusPastDue, maxAttempts, retryAfter).
 		Find(&subs).Error
 	return subs, err
 }
 
 func (r *subscriptionRepo) ExtendPeriod(ctx context.Context, subID uint, newPeriodEnd time.Time) error {
+	// При успешном продлении сбрасываем retry-счётчики и возвращаем в active
+	// на случай если подписка была past_due (восстановление после retry-успеха).
 	return r.db.WithContext(ctx).
 		Model(&models.Subscription{}).
 		Where("id = ?", subID).
 		Updates(map[string]any{
-			"current_period_start": time.Now(),
-			"current_period_end":   newPeriodEnd,
-			"updated_at":           time.Now(),
+			"current_period_start":    time.Now(),
+			"current_period_end":      newPeriodEnd,
+			"status":                  models.SubStatusActive,
+			"renewal_attempts":        0,
+			"last_renewal_attempt_at": nil,
+			"updated_at":              time.Now(),
+		}).Error
+}
+
+func (r *subscriptionRepo) RecordRenewalFailure(ctx context.Context, subID uint) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).
+		Model(&models.Subscription{}).
+		Where("id = ?", subID).
+		Updates(map[string]any{
+			"status":                  models.SubStatusPastDue,
+			"renewal_attempts":        gorm.Expr("renewal_attempts + 1"),
+			"last_renewal_attempt_at": now,
+			"updated_at":              now,
 		}).Error
 }

@@ -70,6 +70,34 @@ func (s *Service) SendTeamInvitation(to, teamName, inviterName string) error {
 	)
 }
 
+// SendRenewalFailed уведомляет юзера о неудачной попытке автопродления.
+// Причины обычно: недостаточно средств, карта истекла, банк-эмитент отклонил.
+// endsAt — момент когда подписка истечёт если продления не произойдёт.
+// frontendURL — корень приложения для ссылки «Обновить карту».
+func (s *Service) SendRenewalFailed(to, planName string, endsAt time.Time, frontendURL string) error {
+	body := fmt.Sprintf(
+		"Не удалось продлить подписку ПромтЛаб %s.\r\n\r\n"+
+			"Возможные причины: недостаточно средств, карта истекла или банк отклонил списание.\r\n\r\n"+
+			"Подписка остаётся активной до %s. Мы автоматически попробуем списать ещё раз через 24 часа.\r\n\r\n"+
+			"Обновить способ оплаты можно в настройках: %s/settings\r\n\r\n"+
+			"Если ничего не делать после 3 неуспешных попыток, подписка будет переведена на Free план.",
+		planName, endsAt.Format("02.01.2006"), frontendURL,
+	)
+	return s.send(to, fmt.Sprintf("Не удалось продлить подписку %s — ПромтЛаб", planName), body)
+}
+
+// SendSubscriptionExpired уведомляет о переводе на Free после исчерпания
+// retry-попыток. Отправляется из ExpirationLoop когда подписка переходит в expired.
+func (s *Service) SendSubscriptionExpired(to, planName, frontendURL string) error {
+	body := fmt.Sprintf(
+		"Подписка ПромтЛаб %s истекла после нескольких неудачных попыток автопродления.\r\n\r\n"+
+			"Ваш аккаунт переведён на Free план. Созданные промпты и коллекции сохранены, но часть возможностей ограничена.\r\n\r\n"+
+			"Чтобы возобновить подписку, перейдите: %s/pricing",
+		planName, frontendURL,
+	)
+	return s.send(to, fmt.Sprintf("Подписка %s истекла — ПромтЛаб", planName), body)
+}
+
 // --- Internal ---
 
 func (s *Service) send(to, subject, body string) error {

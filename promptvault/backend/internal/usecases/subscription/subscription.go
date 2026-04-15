@@ -383,6 +383,23 @@ func (s *Service) activateSubscription(ctx context.Context, pay *models.Payment,
 		return fmt.Errorf("subscription.activate: %w", err)
 	}
 
+	// Связываем платёж с созданной подпиской. Non-critical: если UPDATE упадёт,
+	// подписка уже активна и юзер не должен страдать — логируем Warn для Sentry.
+	// Без связки handleRefund может экспайрить неправильную подписку при upgrade.
+	if linkErr := s.pays.LinkSubscription(ctx, pay.ID, sub.ID); linkErr != nil {
+		slog.Warn("subscription.activate.link_payment_failed",
+			"payment_id", pay.ID, "sub_id", sub.ID, "user_id", pay.UserID, "error", linkErr)
+	}
+
+	// Warn если первичная активация с auto_renew=true, но T-Bank не выдал RebillId.
+	// В prod это не должно случаться (Recurrent=Y всегда возвращает RebillId в CONFIRMED
+	// webhook). Ловим через Sentry чтобы узнать раньше, чем юзер попытается автопродлиться.
+	if rebillID == "" && sub.AutoRenew && s.cfg != nil && s.cfg.RecurrentEnabled {
+		slog.Warn("subscription.activate.missing_rebill_id",
+			"user_id", pay.UserID, "sub_id", sub.ID, "payment_id", pay.ID,
+			"hint", "T-Bank не вернул RebillId — автопродление не сработает")
+	}
+
 	slog.Info("subscription.activate.success",
 		"user_id", pay.UserID,
 		"plan_id", plan.ID,

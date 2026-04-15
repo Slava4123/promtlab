@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { CreditCard, ExternalLink } from "lucide-react"
+import { AlertCircle, CreditCard, ExternalLink } from "lucide-react"
 import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -49,6 +49,31 @@ export function SubscriptionSection() {
               )}
             </div>
           </div>
+
+          {subscription?.status === "past_due" && (
+            <div
+              role="alert"
+              aria-live="polite"
+              className="flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200"
+            >
+              <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div>
+                  <span className="font-medium">Не удалось продлить подписку.</span>{" "}
+                  Возможно, недостаточно средств или карта истекла. Мы попробуем списать
+                  ещё раз через 24 часа (не более 3 попыток). Доступ сохраняется до{" "}
+                  {new Date(subscription.current_period_end).toLocaleDateString("ru-RU", {
+                    day: "numeric",
+                    month: "long",
+                  })}
+                  .
+                </div>
+                <Button size="sm" variant="outline" onClick={() => navigate("/pricing")}>
+                  Обновить способ оплаты
+                </Button>
+              </div>
+            </div>
+          )}
 
           {subscription?.cancel_at_period_end && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">

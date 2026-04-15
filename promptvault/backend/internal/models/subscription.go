@@ -66,8 +66,16 @@ type Subscription struct {
 	CancelledAt        *time.Time         `json:"cancelled_at,omitempty"`
 	RebillId           string             `gorm:"column:rebill_id;size:50" json:"-"`
 	AutoRenew          bool               `gorm:"not null;default:true" json:"auto_renew"`
-	CreatedAt          time.Time          `json:"created_at"`
-	UpdatedAt          time.Time          `json:"updated_at"`
+
+	// LastRenewalAttemptAt и RenewalAttempts реализуют retry-политику для
+	// past_due подписок: не более 3 попыток Charge за период, следующая — не
+	// раньше чем через 24ч после предыдущей. После 3-го фейла expirationLoop
+	// переводит в expired + downgrade на free.
+	LastRenewalAttemptAt *time.Time `gorm:"column:last_renewal_attempt_at" json:"last_renewal_attempt_at,omitempty"`
+	RenewalAttempts      int        `gorm:"column:renewal_attempts;not null;default:0" json:"renewal_attempts"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	Plan SubscriptionPlan `gorm:"foreignKey:PlanID" json:"plan,omitzero"`
 }

@@ -252,17 +252,19 @@ func (h *Handler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/auth/refresh
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-	// Читаем refresh_token из cookie (primary) или из body (fallback)
+	// Читаем refresh_token из cookie (primary) или из body (fallback).
+	// Если и cookie, и body отсутствуют — это семантически 401 (нет сессии),
+	// а не 400 (невалидный запрос). Без этого клиент на свежем визите видит
+	// 400 в Network и трактует его как transient, хотя это чистый auth-fail.
 	var refreshToken string
 	if c, err := r.Cookie("refresh_token"); err == nil && c.Value != "" {
 		refreshToken = c.Value
 	} else {
 		var req RefreshRequest
-		if err := utils.DecodeJSON(r, &req); err != nil {
-			httperr.Respond(w, httperr.BadRequest(err.Error()))
-			return
+		// Ошибку декода глотаем — нет body = нет токена = 401 ниже.
+		if err := utils.DecodeJSON(r, &req); err == nil {
+			refreshToken = req.RefreshToken
 		}
-		refreshToken = req.RefreshToken
 	}
 
 	if refreshToken == "" {

@@ -74,3 +74,10 @@ func (r *paymentRepo) TransitionStatus(ctx context.Context, id uint, expected, n
 	}
 	return result.RowsAffected > 0, nil
 }
+
+func (r *paymentRepo) LinkSubscription(ctx context.Context, paymentID, subscriptionID uint) error {
+	return r.db.WithContext(ctx).
+		Model(&models.Payment{}).
+		Where("id = ?", paymentID).
+		Update("subscription_id", subscriptionID).Error
+}

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -15,16 +16,33 @@ import (
 	"promptvault/internal/models"
 )
 
-// RenewalLoop пытается продлить подписки за `lookahead` дней до окончания периода.
-// Логика: для каждой active подписки с auto_renew=true и непустым rebill_id —
-// сделать Init+Charge через T-Bank. При успехе webhook сам продлит период.
-//
-// Здесь только инициирование Charge; финальная активация — в HandleWebhook.
+// Retry-политика автопродления. Три попытки списания с интервалом 24ч — даёт юзеру
+// время обновить карту или пополнить баланс. После maxRenewalAttempts подписка
+// остаётся в past_due до истечения current_period_end, затем expirationLoop переводит
+// в expired.
+const (
+	maxRenewalAttempts = 3
+	renewalRetryDelay  = 24 * time.Hour
+)
+
+// RenewalNotifier — абстракция для уведомлений юзера о событиях автопродления.
+// Email нельзя требовать обязательным (юзер мог зарегистрироваться через OAuth
+// без верификации email) — поэтому интерфейс, а реализация проверяет доступность.
+type RenewalNotifier interface {
+	NotifyRenewalFailed(to, planName string, endsAt time.Time) error
+}
+
+// RenewalLoop пытается продлить подписки за `lookahead` до окончания периода
+// и повторяет списание для past_due подписок с rate limiting.
+// Логика для каждой подписки: Init+Charge через T-Bank. При успехе webhook продлит
+// период через ExtendPeriod. При фейле — RecordRenewalFailure (past_due + attempts++).
 type RenewalLoop struct {
 	subs      repo.SubscriptionRepository
 	plans     repo.PlanRepository
 	pays      repo.PaymentRepository
+	users     repo.UserRepository
 	payment   payment.PaymentProvider
+	notifier  RenewalNotifier
 	cfg       *config.PaymentConfig
 	interval  time.Duration
 	lookahead time.Duration
@@ -33,18 +51,21 @@ type RenewalLoop struct {
 
 // NewRenewalLoop создаёт цикл автопродления. interval — частота проверки
 // (рекомендуется 1 час), lookahead — за сколько до конца периода пытаться
-// продлить (рекомендуется 24-72 часа: даёт буфер на retry если карта отклонена).
+// продлить (рекомендуется 48 часов: даёт буфер на retry).
+// notifier может быть nil — тогда уведомления не отправляются (dev-режим).
 func NewRenewalLoop(
 	subs repo.SubscriptionRepository,
 	plans repo.PlanRepository,
 	pays repo.PaymentRepository,
+	users repo.UserRepository,
 	pay payment.PaymentProvider,
+	notifier RenewalNotifier,
 	cfg *config.PaymentConfig,
 	interval, lookahead time.Duration,
 ) *RenewalLoop {
 	return &RenewalLoop{
-		subs: subs, plans: plans, pays: pays,
-		payment: pay, cfg: cfg,
+		subs: subs, plans: plans, pays: pays, users: users,
+		payment: pay, notifier: notifier, cfg: cfg,
 		interval: interval, lookahead: lookahead,
 		stopCh: make(chan struct{}),
 	}
@@ -78,8 +99,11 @@ func (l *RenewalLoop) tick() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	deadline := time.Now().Add(l.lookahead)
-	subs, err := l.subs.ListReadyForRenewal(ctx, deadline)
+	now := time.Now()
+	deadline := now.Add(l.lookahead)
+	retryAfter := now.Add(-renewalRetryDelay)
+
+	subs, err := l.subs.ListReadyForRenewal(ctx, deadline, retryAfter, maxRenewalAttempts)
 	if err != nil {
 		slog.Error("subscription.renewal.list_failed", "error", err)
 		return
@@ -92,15 +116,16 @@ func (l *RenewalLoop) tick() {
 		}
 		if err := l.renewOne(ctx, &sub); err != nil {
 			slog.Error("subscription.renewal.failed",
-				"sub_id", sub.ID, "user_id", sub.UserID, "error", err)
+				"sub_id", sub.ID, "user_id", sub.UserID, "attempts", sub.RenewalAttempts, "error", err)
 			continue
 		}
 	}
 }
 
 // renewOne инициирует рекуррентное списание для одной подписки.
-// При успехе T-Bank ответит CONFIRMED синхронно или асинхронно через webhook —
-// в любом случае webhook обработает активацию следующего периода.
+// При успехе T-Bank ответит CONFIRMED через webhook — ExtendPeriod продлит период
+// и сбросит attempts. При ошибке Init/Charge — RecordRenewalFailure (past_due, attempts++)
+// и email юзеру (только на первой неудаче, чтобы не спамить при retry).
 func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) error {
 	plan, err := l.plans.GetByID(ctx, sub.PlanID)
 	if err != nil {
@@ -139,6 +164,7 @@ func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) er
 	})
 	if err != nil {
 		_ = l.pays.UpdateStatus(ctx, pay.ID, models.PaymentFailed)
+		l.handleFailure(ctx, sub, plan, "init failed")
 		return fmt.Errorf("init: %w", err)
 	}
 	if err := l.pays.UpdateExternalID(ctx, pay.ID, initResult.ExternalID); err != nil {
@@ -152,16 +178,52 @@ func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) er
 	})
 	if err != nil {
 		_ = l.pays.UpdateStatus(ctx, pay.ID, models.PaymentFailed)
+		l.handleFailure(ctx, sub, plan, "charge failed")
 		return fmt.Errorf("charge: %w", err)
 	}
 
 	slog.Info("subscription.renewal.charge_sent",
 		"sub_id", sub.ID, "user_id", sub.UserID, "plan_id", plan.ID,
-		"external_id", chargeResult.ExternalID, "status", chargeResult.Status)
+		"external_id", chargeResult.ExternalID, "status", chargeResult.Status,
+		"attempt", sub.RenewalAttempts+1)
 
 	// Финальная активация и продление — в HandleWebhook (там же extractPlanID
-	// прочитает plan_id из ProviderData и продлит подписку).
+	// прочитает plan_id из ProviderData и продлит подписку, сбросив attempts).
 	return nil
+}
+
+// handleFailure — общая обработка неудачи Init/Charge: фиксирует попытку в БД,
+// шлёт email только при первой неудаче (attempts = 0 → станет 1 после update),
+// чтобы не спамить на каждом retry.
+func (l *RenewalLoop) handleFailure(ctx context.Context, sub *models.Subscription, plan *models.SubscriptionPlan, reason string) {
+	wasFirstAttempt := sub.RenewalAttempts == 0
+
+	if err := l.subs.RecordRenewalFailure(ctx, sub.ID); err != nil {
+		slog.Error("subscription.renewal.record_failure_failed",
+			"sub_id", sub.ID, "user_id", sub.UserID, "error", err)
+		return
+	}
+
+	slog.Warn("subscription.renewal.failure_recorded",
+		"sub_id", sub.ID, "user_id", sub.UserID, "reason", reason,
+		"attempts_before", sub.RenewalAttempts, "period_end", sub.CurrentPeriodEnd)
+
+	if !wasFirstAttempt || l.notifier == nil {
+		return
+	}
+	user, err := l.users.GetByID(ctx, sub.UserID)
+	if err != nil || user == nil || user.Email == "" {
+		// Email недоступен (OAuth без email, или user удалён) — не фатально.
+		if err != nil && !errors.Is(err, repo.ErrNotFound) {
+			slog.Warn("subscription.renewal.notify_user_fetch_failed",
+				"sub_id", sub.ID, "user_id", sub.UserID, "error", err)
+		}
+		return
+	}
+	if err := l.notifier.NotifyRenewalFailed(user.Email, plan.Name, sub.CurrentPeriodEnd); err != nil {
+		slog.Warn("subscription.renewal.notify_email_failed",
+			"sub_id", sub.ID, "user_id", sub.UserID, "error", err)
+	}
 }
 
 func generateRenewalKey() (string, error) {

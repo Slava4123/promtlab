@@ -48,6 +48,15 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Comma-separated IP/CIDR: "212.233.80.7,91.194.226.0/23" → []string.
+	// Поддерживаем тот же формат что и AllowedOrigins — коаnf даёт один элемент со всей строкой.
+	if len(cfg.Payment.WebhookAllowedIPs) == 1 && strings.Contains(cfg.Payment.WebhookAllowedIPs[0], ",") {
+		cfg.Payment.WebhookAllowedIPs = strings.Split(cfg.Payment.WebhookAllowedIPs[0], ",")
+		for i, ip := range cfg.Payment.WebhookAllowedIPs {
+			cfg.Payment.WebhookAllowedIPs[i] = strings.TrimSpace(ip)
+		}
+	}
+
 	// Production safety checks
 	if cfg.Server.IsProd() {
 		if cfg.JWT.Secret == "dev-secret-change-me" {
@@ -136,16 +145,18 @@ func defaults() map[string]any {
 			"max_keys_per_user": 5,
 		},
 		"payment": map[string]any{
-			"enabled":            false,
-			"tbank_terminal_key": "",
-			"tbank_password":     "",
-			"tbank_base_url":     "https://securepay.tinkoff.ru/v2",
-			"webhook_base_url":   "",
-			"success_url":        "/settings?payment=success",
-			"fail_url":           "/settings?payment=failure",
-			"receipt_enabled":    false,
-			"taxation":           "usn_income",
-			"recurrent_enabled":  true,
+			"enabled":              false,
+			"tbank_terminal_key":   "",
+			"tbank_password":       "",
+			"tbank_base_url":       "https://securepay.tinkoff.ru/v2",
+			"webhook_base_url":     "",
+			"success_url":          "/settings?payment=success",
+			"fail_url":             "/settings?payment=failure",
+			"receipt_enabled":      false,
+			"taxation":             "usn_income",
+			"recurrent_enabled":    true,
+			"webhook_allowed_ips":  []string{},
+			"webhook_trust_xff":    false,
 		},
 	}
 }
