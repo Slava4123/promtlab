@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { setAccessToken, clearTokens } from "@/api/client"
-import { useAuthStore } from "@/stores/auth-store"
+import { useAuthStore, markSessionHint } from "@/stores/auth-store"
 
 export default function OAuthCallback() {
   const navigate = useNavigate()
@@ -17,6 +17,10 @@ export default function OAuthCallback() {
 
     if (accessToken) {
       setAccessToken(accessToken)
+      // markSessionHint обязателен: без него при reload restoreSession
+      // пропускает ensureFreshToken (решает что сессии нет) и редиректит
+      // OAuth-юзера на /sign-in, хотя refresh cookie в браузере есть.
+      markSessionHint()
       fetchMe()
         .then(() => navigate("/dashboard", { replace: true }))
         .catch(() => { clearTokens(); navigate("/sign-in", { replace: true }) })

@@ -15,7 +15,9 @@ import { setSentryUser, clearSentryUser } from "@/lib/sentry"
 // Фактическая валидность session проверяется backend через cookie.
 const SESSION_HINT_KEY = "pv_has_session"
 
-function markSessionHint() {
+// Экспортируем чтобы OAuth-callback (и любые нестандартные auth-flow)
+// могли пометить сессию после успешной аутентификации.
+export function markSessionHint() {
   try { localStorage.setItem(SESSION_HINT_KEY, "1") } catch { /* quota/disabled — ignore */ }
 }
 function clearSessionHint() {
