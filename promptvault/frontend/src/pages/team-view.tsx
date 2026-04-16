@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, Pencil, Trash2, UserPlus, Users, Loader2 } from "lucide-react"
+import { ArrowLeft, HelpCircle, Pencil, Trash2, UserPlus, Users, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { useTeam, useUpdateTeam, useDeleteTeam, useInviteMember, useTeamInvitations, useCancelInvitation, useUpdateMemberRole, useRemoveMember } from "@/hooks/use-teams"
 import { ApiError } from "@/api/client"
 import { useAuthStore } from "@/stores/auth-store"
 import { RoleBadge } from "@/components/teams/role-badge"
+import { RolePermissionsTable } from "@/components/teams/role-permissions-table"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { MemberList } from "@/components/teams/member-list"
 import { InviteDialog } from "@/components/teams/invite-dialog"
 import type { TeamRole } from "@/api/types"
@@ -181,12 +183,27 @@ export default function TeamView() {
             <h2 className="text-[0.9rem] font-semibold text-foreground">Участники</h2>
             <span className="text-[0.75rem] text-muted-foreground">{team.members.length}</span>
           </div>
-          {isOwner && (
-            <Button variant="brand" size="xs" onClick={() => setInviteOpen(true)}>
-              <UserPlus className="h-3 w-3" />
-              Пригласить
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[0.75rem] text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40">
+                <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                Кто что может
+              </PopoverTrigger>
+              <PopoverContent className="w-[min(560px,calc(100vw-24px))]">
+                <h3 className="mb-1 text-sm font-semibold text-foreground">Роли в команде</h3>
+                <p className="mb-3 text-[0.78rem] leading-relaxed text-muted-foreground">
+                  Права назначаются при приглашении и меняются Владельцем в любой момент.
+                </p>
+                <RolePermissionsTable highlight={team.role} compact />
+              </PopoverContent>
+            </Popover>
+            {isOwner && (
+              <Button variant="brand" size="xs" onClick={() => setInviteOpen(true)}>
+                <UserPlus className="h-3 w-3" />
+                Пригласить
+              </Button>
+            )}
+          </div>
         </div>
 
         <MemberList
