@@ -3,17 +3,14 @@ package auth
 import (
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/big"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"promptvault/internal/infrastructure/config"
@@ -189,132 +186,8 @@ func providerName(p string) string {
 	}
 }
 
-func (s *Service) VerifyEmail(ctx context.Context, userEmail, code string) (*models.User, *TokenPair, error) {
-	user, err := s.users.GetByEmail(ctx, userEmail)
-	if err != nil {
-		return nil, nil, ErrUserNotFound
-	}
-
-	v, err := s.verifications.GetByUserID(ctx, user.ID)
-	if err != nil {
-		return nil, nil, ErrInvalidCode
-	}
-
-	if err := s.verifyCode(ctx, v, code); err != nil {
-		return nil, nil, err
-	}
-
-	user.EmailVerified = true
-	if err := s.users.Update(ctx, user); err != nil {
-		return nil, nil, err
-	}
-
-	if err := s.verifications.DeleteByUserID(ctx, user.ID); err != nil {
-		slog.Error("failed to delete verification after email verify", "user_id", user.ID, "error", err)
-	}
-
-	// Welcome email async — не блокируем verify-flow, если SMTP медленный/упал.
-	// VerifyEmail вызывается один раз на аккаунт (verifications-запись удаляется
-	// выше), поэтому welcome тоже отправится один раз.
-	s.sendWelcomeAsync(user)
-
-	tokens, err := s.issueTokens(ctx, user)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return user, tokens, nil
-}
-
-// sendWelcomeAsync шлёт приветственное письмо в background.
-// No-op если email не настроен или у юзера пустой email (OAuth без email).
-func (s *Service) sendWelcomeAsync(user *models.User) {
-	if s.email == nil || !s.email.Configured() || user.Email == "" {
-		return
-	}
-	s.runBackground(func() {
-		if err := s.email.SendWelcome(user.Email, user.Name, s.frontendURL); err != nil {
-			slog.Warn("welcome email failed", "user_id", user.ID, "error", err)
-		}
-	})
-}
-
-func (s *Service) ResendCode(ctx context.Context, userEmail string) error {
-	user, err := s.users.GetByEmail(ctx, userEmail)
-	if err != nil {
-		return ErrUserNotFound
-	}
-
-	if user.EmailVerified {
-		return nil
-	}
-
-	s.runBackground(func() {
-		if err := s.sendVerificationCode(context.Background(), user); err != nil {
-			slog.Error("resend verification code failed", "user_id", user.ID, "error", err)
-		}
-	})
-	return nil
-}
-
-func (s *Service) sendVerificationCode(ctx context.Context, user *models.User) error {
-	if err := s.verifications.DeleteByUserID(ctx, user.ID); err != nil {
-		slog.Error("failed to delete old verification before sending new code", "user_id", user.ID, "error", err)
-	}
-
-	code, err := generateCode()
-	if err != nil {
-		slog.Error("failed to generate verification code", "user_id", user.ID, "error", err)
-		return err
-	}
-
-	v := &models.EmailVerification{
-		UserID:    user.ID,
-		Code:      code,
-		ExpiresAt: time.Now().Add(VerificationCodeExpiry),
-	}
-
-	if err := s.verifications.Create(ctx, v); err != nil {
-		return err
-	}
-
-	if err := s.email.SendVerificationCode(user.Email, code); err != nil {
-		slog.Error("failed to send verification email", "email", user.Email, "error", err)
-		return err
-	}
-	return nil
-}
-
-// verifyCode проверяет код с constant-time comparison и ограничением попыток.
-func (s *Service) verifyCode(ctx context.Context, v *models.EmailVerification, code string) error {
-	if v.Attempts >= models.MaxVerificationAttempts {
-		if err := s.verifications.DeleteByUserID(ctx, v.UserID); err != nil {
-			slog.Error("failed to delete verification after too many attempts", "user_id", v.UserID, "error", err)
-		}
-		return ErrTooManyAttempts
-	}
-
-	if time.Now().After(v.ExpiresAt) {
-		return ErrExpiredCode
-	}
-
-	if subtle.ConstantTimeCompare([]byte(v.Code), []byte(code)) != 1 {
-		if err := s.verifications.IncrementAttempts(ctx, v.ID); err != nil {
-			return fmt.Errorf("increment verification attempts: %w", err)
-		}
-		return ErrInvalidCode
-	}
-
-	return nil
-}
-
-func generateCode() (string, error) {
-	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
-	if err != nil {
-		return "", fmt.Errorf("generate verification code: %w", err)
-	}
-	return fmt.Sprintf("%06d", n.Int64()), nil
-}
+// Email verification flow (VerifyEmail, ResendCode, sendVerificationCode,
+// verifyCode, sendWelcomeAsync, generateCode) перенесён в email_verify.go (Q-13).
 
 func generateNonce() (string, error) {
 	b := make([]byte, 16)
@@ -782,61 +655,4 @@ func (s *Service) Me(ctx context.Context, userID uint) (*models.User, error) {
 	return user, nil
 }
 
-func (s *Service) ValidateAccessToken(token string) (*Claims, error) {
-	return s.ValidateToken(token, TokenTypeAccess)
-}
-
-func (s *Service) ValidateToken(tokenStr string, expectedType TokenType) (*Claims, error) {
-	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, ErrInvalidToken
-		}
-		return s.secret, nil
-	})
-	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			return nil, ErrExpiredToken
-		}
-		return nil, ErrInvalidToken
-	}
-
-	if !token.Valid || claims.Type != expectedType {
-		return nil, ErrInvalidToken
-	}
-
-	return claims, nil
-}
-
-func (s *Service) generateTokenPair(userID uint, nonce string) (*TokenPair, error) {
-	now := time.Now()
-
-	accessToken, err := s.generateToken(userID, TokenTypeAccess, "", now, s.accessDuration)
-	if err != nil {
-		return nil, err
-	}
-
-	refreshToken, err := s.generateToken(userID, TokenTypeRefresh, nonce, now, s.refreshDuration)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TokenPair{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    int64(s.accessDuration.Seconds()),
-	}, nil
-}
-
-func (s *Service) generateToken(userID uint, tokenType TokenType, nonce string, now time.Time, duration time.Duration) (string, error) {
-	claims := &Claims{
-		UserID: userID,
-		Type:   tokenType,
-		Nonce:  nonce,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(now.Add(duration)),
-			IssuedAt:  jwt.NewNumericDate(now),
-		},
-	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
-}
+// Token helpers (ValidateToken, generateToken*, etc.) перенесены в tokens.go (Q-13).
