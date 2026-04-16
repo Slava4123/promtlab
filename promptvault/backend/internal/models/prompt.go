@@ -15,6 +15,10 @@ type Prompt struct {
 	Model       string         `gorm:"size:100" json:"model,omitempty"`
 	Favorite    bool           `gorm:"default:false" json:"favorite"`
 	UsageCount  int            `gorm:"default:0" json:"usage_count"`
+	// IsPublic / Slug — публичный SEO-URL /p/:slug. Отличается от share-link:
+	// публичный индексируется, share-link — приватный по токену.
+	IsPublic    bool           `gorm:"column:is_public;not null;default:false" json:"is_public"`
+	Slug        string         `gorm:"column:slug;size:120" json:"slug,omitempty"`
 	LastUsedAt  *time.Time     `gorm:"" json:"last_used_at,omitempty"`
 	User        User           `gorm:"foreignKey:UserID" json:"-"`
 	Tags        []Tag            `gorm:"many2many:prompt_tags" json:"tags,omitempty"`

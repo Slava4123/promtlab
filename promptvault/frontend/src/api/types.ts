@@ -48,6 +48,8 @@ export interface Prompt {
   collections: Collection[]
   created_at: string
   updated_at: string
+  is_public: boolean
+  slug?: string
   // newly_unlocked_badges заполняется только в ответах на mutating endpoints
   // (POST/PUT/POST use). Отсутствует в GET responses (omitempty на backend).
   newly_unlocked_badges?: BadgeSummary[]

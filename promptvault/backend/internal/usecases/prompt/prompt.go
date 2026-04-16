@@ -145,6 +145,16 @@ func (s *Service) List(ctx context.Context, filter repo.PromptListFilter) ([]mod
 	return s.prompts.List(ctx, filter)
 }
 
+// GetPublicBySlug — публичное получение промпта по slug (no auth).
+func (s *Service) GetPublicBySlug(ctx context.Context, slug string) (*models.Prompt, error) {
+	return s.prompts.GetPublicBySlug(ctx, slug)
+}
+
+// ListPublic — список публичных промптов (для sitemap).
+func (s *Service) ListPublic(ctx context.Context, limit int) ([]models.Prompt, error) {
+	return s.prompts.ListPublic(ctx, limit)
+}
+
 func (s *Service) Update(ctx context.Context, id, userID uint, in UpdateInput) (*models.Prompt, []badgeuc.Badge, error) {
 	p, err := s.GetByID(ctx, id, userID)
 	if err != nil {
@@ -200,6 +210,20 @@ func (s *Service) Update(ctx context.Context, id, userID uint, in UpdateInput) (
 			}
 		}
 		p.Tags = tags
+	}
+
+	// Public flag + slug generation.
+	// При включении публичности лениво генерим slug если пусто. Slug не меняется
+	// при re-publish, чтобы ссылки не протухали.
+	if in.IsPublic != nil {
+		p.IsPublic = *in.IsPublic
+		if p.IsPublic && p.Slug == "" {
+			title := p.Title
+			if in.Title != nil {
+				title = *in.Title
+			}
+			p.Slug = makeSlug(p.ID, title)
+		}
 	}
 
 	if err := s.prompts.Update(ctx, p); err != nil {

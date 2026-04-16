@@ -61,6 +61,20 @@ func (m *mPromptRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *
 	args := m.Called(ctx, userID, teamID, prefix, limit)
 	return args.Get(0).([]string), args.Error(1)
 }
+func (m *mPromptRepo) GetPublicBySlug(ctx context.Context, slug string) (*models.Prompt, error) {
+	args := m.Called(ctx, slug)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Prompt), args.Error(1)
+}
+func (m *mPromptRepo) ListPublic(ctx context.Context, limit int) ([]models.Prompt, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.Prompt), args.Error(1)
+}
 
 type mCollRepo struct{ mock.Mock }
 

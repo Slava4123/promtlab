@@ -85,6 +85,7 @@ export default function PromptEditor() {
   const [collectionIds, setCollectionIds] = useState<number[]>(preselectedCollectionId ? [preselectedCollectionId] : [])
   const [tagIds, setTagIds] = useState<number[]>([])
   const [changeNote, setChangeNote] = useState("")
+  const [isPublic, setIsPublic] = useState(false)
   const [usePromptModal, setUsePromptModal] = useState<Prompt | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
 
@@ -111,13 +112,14 @@ export default function PromptEditor() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollectionIds(existing.collections?.map(c => c.id) || [])
       setTagIds(existing.tags?.map(t => t.id) || [])
+      setIsPublic(existing.is_public ?? false)
     }
   }, [existing, reset])
 
   const onSubmit = async (data: PromptForm) => {
     try {
       if (isEdit) {
-        await updatePrompt.mutateAsync({ id: promptId, ...data, change_note: changeNote || undefined, collection_ids: collectionIds, tag_ids: tagIds })
+        await updatePrompt.mutateAsync({ id: promptId, ...data, change_note: changeNote || undefined, collection_ids: collectionIds, tag_ids: tagIds, is_public: isPublic })
         setChangeNote("")
         toast.success("Промпт обновлён")
       } else {
@@ -279,6 +281,28 @@ export default function PromptEditor() {
             </label>
             <TagInput selectedTagIds={tagIds} onChange={setTagIds} />
           </div>
+
+          {/* Публичный доступ (только в режиме редактирования — slug генерится по id) */}
+          {isEdit && (
+            <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+                className="mt-0.5 h-4 w-4 cursor-pointer accent-brand"
+              />
+              <span className="flex-1">
+                <span className="font-medium text-foreground">Публичный промпт</span>
+                <span className="ml-2 text-muted-foreground">
+                  {isPublic
+                    ? existing?.slug
+                      ? `Доступен по ссылке /p/${existing.slug}`
+                      : "Будет доступен по публичной ссылке после сохранения"
+                    : "Только вы видите этот промпт"}
+                </span>
+              </span>
+            </label>
+          )}
 
           {/* Заметка к изменению (только в режиме редактирования) */}
           {isEdit && (

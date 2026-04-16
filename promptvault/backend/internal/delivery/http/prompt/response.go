@@ -22,6 +22,8 @@ type PromptResponse struct {
 	Collections    []CollectionResponse `json:"collections"`
 	CreatedAt      time.Time            `json:"created_at"`
 	UpdatedAt      time.Time            `json:"updated_at"`
+	IsPublic       bool                 `json:"is_public"`
+	Slug           string               `json:"slug,omitempty"`
 	// NewlyUnlockedBadges — заполняется в mutating handlers (Create/Update/Favorite/Revert/etc)
 	// после badges.Evaluate. omitempty гарантирует backward-compat: при отсутствии unlocks
 	// поле не появляется в JSON, и старый клиент ничего не заметит.
@@ -72,6 +74,8 @@ func NewPromptResponse(p models.Prompt, pinStatus ...repo.PinStatus) PromptRespo
 		Collections: cols,
 		CreatedAt:   p.CreatedAt,
 		UpdatedAt:   p.UpdatedAt,
+		IsPublic:    p.IsPublic,
+		Slug:        p.Slug,
 	}
 
 	if len(pinStatus) > 0 {

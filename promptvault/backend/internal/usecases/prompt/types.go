@@ -17,6 +17,10 @@ type UpdateInput struct {
 	ChangeNote    string
 	CollectionIDs []uint
 	TagIDs        []uint
+	// IsPublic — если не nil, переключает публичность промпта. При true
+	// автоматически генерируется slug (если пуст). При false slug сохраняется
+	// (чтобы URL не пропадал при повторной публикации).
+	IsPublic *bool
 }
 
 type PinInput struct {

@@ -428,6 +428,12 @@ func (a *App) MountRoutes(r chi.Router) {
 			r.Get("/{token}", a.shareHandler.GetPublic)
 		})
 
+		// public — public prompts по slug (SEO). 60 req/min — типичный seo-crawl rate.
+		r.Route("/public/prompts", func(r chi.Router) {
+			r.Use(byIP(60))
+			r.Get("/{slug}", a.promptHandler.GetPublic)
+		})
+
 		// public — webhooks. T-Bank шлёт 1-5 уведомлений за цикл платежа;
 		// 30 req/min per IP с запасом покрывает retry-поведение банка.
 		// Защита от DoS на публичный endpoint без авторизации.

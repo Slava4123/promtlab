@@ -31,4 +31,11 @@ type PromptRepository interface {
 	LogUsage(ctx context.Context, userID, promptID uint) error
 	ListUsageHistory(ctx context.Context, userID uint, teamID *uint, page, pageSize int) ([]models.PromptUsageLog, int64, error)
 	SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error)
+
+	// GetPublicBySlug возвращает публичный промпт по slug. is_public=true,
+	// deleted_at IS NULL. Используется в GET /api/public/prompts/:slug (без auth).
+	GetPublicBySlug(ctx context.Context, slug string) (*models.Prompt, error)
+
+	// ListPublic — для sitemap.xml. Возвращает (id, slug, updated_at) с LIMIT.
+	ListPublic(ctx context.Context, limit int) ([]models.Prompt, error)
 }

@@ -20,6 +20,7 @@ import VerifyEmail from "@/pages/verify-email"
 import ForgotPassword from "@/pages/forgot-password"
 import Landing from "@/pages/landing"
 import SharedPrompt from "@/pages/shared-prompt"
+import PublicPrompt from "@/pages/public-prompt"
 
 // Lazy-loaded (protected, heavier)
 const Dashboard = lazy(() => import("@/pages/dashboard"))
@@ -102,6 +103,7 @@ function AppRoutes() {
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/s/:token" element={<SharedPrompt />} />
+      <Route path="/p/:slug" element={<PublicPrompt />} />
       <Route path="/legal/extension-privacy" element={<Suspense fallback={<PageFallback />}><ExtensionPrivacy /></Suspense>} />
       <Route path="/legal/terms" element={<Suspense fallback={<PageFallback />}><Terms /></Suspense>} />
       <Route path="/legal/privacy" element={<Suspense fallback={<PageFallback />}><Privacy /></Suspense>} />

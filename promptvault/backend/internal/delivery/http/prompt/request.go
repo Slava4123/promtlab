@@ -20,4 +20,5 @@ type UpdatePromptRequest struct {
 	ChangeNote    string  `json:"change_note" validate:"max=300"`
 	CollectionIDs []uint  `json:"collection_ids"`
 	TagIDs        []uint  `json:"tag_ids"`
+	IsPublic      *bool   `json:"is_public"`
 }

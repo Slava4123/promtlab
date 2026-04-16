@@ -230,3 +230,32 @@ func (r *promptRepo) ListUsageHistory(ctx context.Context, userID uint, teamID *
 
 	return logs, total, err
 }
+
+func (r *promptRepo) GetPublicBySlug(ctx context.Context, slug string) (*models.Prompt, error) {
+	if slug == "" {
+		return nil, repo.ErrNotFound
+	}
+	var p models.Prompt
+	err := r.db.WithContext(ctx).
+		Preload("Tags").Preload("Collections").
+		Where("slug = ? AND is_public = TRUE", slug).
+		First(&p).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, repo.ErrNotFound
+	}
+	return &p, err
+}
+
+func (r *promptRepo) ListPublic(ctx context.Context, limit int) ([]models.Prompt, error) {
+	if limit <= 0 || limit > 10000 {
+		limit = 1000
+	}
+	var out []models.Prompt
+	err := r.db.WithContext(ctx).
+		Select("id, slug, title, updated_at").
+		Where("is_public = TRUE").
+		Order("updated_at DESC").
+		Limit(limit).
+		Find(&out).Error
+	return out, err
+}

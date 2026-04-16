@@ -75,7 +75,7 @@ export function useUpdatePrompt() {
   const qc = useQueryClient()
   const handleBadges = useBadgeUnlocks()
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number; title?: string; content?: string; model?: string; change_note?: string; collection_ids?: number[]; tag_ids?: number[] }) =>
+    mutationFn: ({ id, ...data }: { id: number; title?: string; content?: string; model?: string; change_note?: string; collection_ids?: number[]; tag_ids?: number[]; is_public?: boolean }) =>
       api<Prompt>(`/prompts/${id}`, { method: "PUT", body: JSON.stringify(data) }),
     onSuccess: (data, vars) => {
       // Активные списки + карточка. Коллекции/теги только если они в payload'е

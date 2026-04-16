@@ -171,6 +171,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		ChangeNote:    strings.TrimSpace(req.ChangeNote),
 		CollectionIDs: req.CollectionIDs,
 		TagIDs:        req.TagIDs,
+		IsPublic:      req.IsPublic,
 	})
 	if err != nil {
 		respondError(w, err)
@@ -254,6 +255,23 @@ func (h *Handler) IncrementUsage(w http.ResponseWriter, r *http.Request) {
 		Message:             "ok",
 		NewlyUnlockedBadges: badgehttp.NewBadgeSummaries(newBadges),
 	})
+}
+
+// GetPublic — GET /api/public/prompts/{slug} (no auth).
+// Только is_public=true промпты. Страница /p/:slug на фронте использует этот
+// endpoint. Без pin-статусов — это public view, ничего лично-pinned не возвращаем.
+func (h *Handler) GetPublic(w http.ResponseWriter, r *http.Request) {
+	slug := strings.TrimSpace(chi.URLParam(r, "slug"))
+	if slug == "" {
+		httperr.Respond(w, httperr.BadRequest("slug is required"))
+		return
+	}
+	p, err := h.svc.GetPublicBySlug(r.Context(), slug)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	utils.WriteOK(w, NewPromptResponse(*p))
 }
 
 // GET /api/prompts/{id}/versions
