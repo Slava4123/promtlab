@@ -1,9 +1,20 @@
+import { useMemo, useState } from "react"
 import { Check, Sparkles, Zap, Crown, Loader2, type LucideIcon } from "lucide-react"
 import { PageLayout } from "@/components/layout/page-layout"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePlans, useCheckout, useDowngrade } from "@/hooks/use-subscription"
 import { useAuthStore } from "@/stores/auth-store"
-import type { Plan } from "@/api/types"
+import type { Plan, PlanID } from "@/api/types"
+
+// basePlanId — приводит pro_yearly → pro, max_yearly → max. Нужно для
+// единообразного маппинга иконок/цветов/описаний и для сравнения с текущим
+// планом юзера (чтобы Pro monthly и Pro yearly считались "тем же тарифом"
+// при выборе подходящего таба).
+function basePlanId(id: PlanID): "free" | "pro" | "max" {
+  if (id === "pro" || id === "pro_yearly") return "pro"
+  if (id === "max" || id === "max_yearly") return "max"
+  return "free"
+}
 
 const planIcons: Record<string, LucideIcon> = {
   free: Zap,
@@ -22,6 +33,8 @@ const planDescriptions: Record<string, string> = {
   pro: "Для активной работы с промптами",
   max: "Максимум возможностей для команд",
 }
+
+type Billing = "monthly" | "yearly"
 
 function formatLimit(value: number, suffix: string = ""): string {
   return value === -1 ? "Безлимит" : `${value}${suffix}`
@@ -90,11 +103,42 @@ function ctaLabel(plan: Plan): string {
   return `Получить ${plan.name} за ${perDay}₽/день`
 }
 
+// yearlyAnchor — для yearly планов показываем зачёркнутую цену monthly×12
+// и процент экономии. Если monthly-аналог не найден (unlikely — планы
+// приходят одним списком), возвращаем null и анкор не рендерится.
+function yearlyAnchor(plan: Plan, plans: Plan[]): { wasKop: number; savedPct: number } | null {
+  if (plan.period_days < 300) return null
+  const base = basePlanId(plan.id)
+  const monthly = plans.find((p) => p.id === base)
+  if (!monthly || monthly.price_kop === 0) return null
+  const wasKop = monthly.price_kop * 12
+  if (wasKop <= plan.price_kop) return null
+  const savedPct = Math.round(((wasKop - plan.price_kop) / wasKop) * 100)
+  return { wasKop, savedPct }
+}
+
 export default function Pricing() {
   const { data: plans, isLoading, error } = usePlans()
   const checkout = useCheckout()
   const downgrade = useDowngrade()
-  const currentPlanId = useAuthStore((s) => s.user?.plan_id ?? "free")
+  const currentPlanId = useAuthStore((s) => s.user?.plan_id ?? "free") as PlanID
+
+  // Билинг-цикл: если текущий план юзера yearly — открываем сразу yearly-таб.
+  const [billing, setBilling] = useState<Billing>(() =>
+    currentPlanId.endsWith("_yearly") ? "yearly" : "monthly",
+  )
+
+  // Фильтруем планы под выбранный цикл: free всегда, платные — по period_days.
+  // 365 (yearly) vs 30 (monthly). Пороговое 300 на всякий случай (если когда-то
+  // появятся полугодовые — они будут monthly-like для этого UI).
+  const visiblePlans = useMemo(() => {
+    if (!plans) return []
+    const isYearly = billing === "yearly"
+    return plans.filter((p) => {
+      if (p.price_kop === 0) return true
+      return isYearly ? p.period_days >= 300 : p.period_days < 300
+    })
+  }, [plans, billing])
 
   return (
     <PageLayout
@@ -117,15 +161,54 @@ export default function Pricing() {
 
       {plans && (
         <>
+          {/* Billing toggle: Monthly | Yearly −10% */}
+          <div className="mb-6 flex justify-center">
+            <div
+              role="tablist"
+              aria-label="Период оплаты"
+              className="inline-flex rounded-full border border-border bg-muted/30 p-1 text-[0.8rem]"
+            >
+              <button
+                role="tab"
+                aria-selected={billing === "monthly"}
+                onClick={() => setBilling("monthly")}
+                className={`rounded-full px-4 py-1.5 font-medium transition-colors ${
+                  billing === "monthly"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Ежемесячно
+              </button>
+              <button
+                role="tab"
+                aria-selected={billing === "yearly"}
+                onClick={() => setBilling("yearly")}
+                className={`flex items-center gap-2 rounded-full px-4 py-1.5 font-medium transition-colors ${
+                  billing === "yearly"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Ежегодно
+                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] font-semibold text-emerald-600 dark:text-emerald-400">
+                  −10%
+                </span>
+              </button>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {plans.map((plan) => {
-              const Icon = planIcons[plan.id] ?? Zap
-              const color = planColors[plan.id] ?? "#6366f1"
-              const isPopular = plan.id === "pro"
-              const isBestValue = plan.id === "max"
+            {visiblePlans.map((plan) => {
+              const base = basePlanId(plan.id)
+              const Icon = planIcons[base] ?? Zap
+              const color = planColors[base] ?? "#6366f1"
+              const isPopular = base === "pro"
+              const isBestValue = base === "max"
               const isCurrent = currentPlanId === plan.id
               const features = planFeatures(plan)
               const perDay = dailyPrice(plan.price_kop, plan.period_days)
+              const anchor = yearlyAnchor(plan, plans)
 
               return (
                 <div
@@ -162,7 +245,7 @@ export default function Pricing() {
                         {plan.name}
                       </h3>
                       <p className="text-[0.72rem] text-muted-foreground">
-                        {planDescriptions[plan.id] ?? ""}
+                        {planDescriptions[base] ?? ""}
                       </p>
                     </div>
                   </div>
@@ -173,9 +256,24 @@ export default function Pricing() {
                         {formatPrice(plan.price_kop)} ₽
                       </span>
                       <span className="text-[0.8rem] text-muted-foreground">
-                        / {plan.period_days === 0 ? "навсегда" : "в месяц"}
+                        /{" "}
+                        {plan.period_days === 0
+                          ? "навсегда"
+                          : plan.period_days >= 300
+                            ? "в год"
+                            : "в месяц"}
                       </span>
                     </div>
+                    {anchor && (
+                      <p className="mt-1 text-[0.72rem]">
+                        <span className="text-muted-foreground line-through">
+                          {formatPrice(anchor.wasKop)} ₽
+                        </span>
+                        <span className="ml-2 font-medium text-emerald-600 dark:text-emerald-400">
+                          экономия {anchor.savedPct}%
+                        </span>
+                      </p>
+                    )}
                     {perDay > 0 && (
                       <p className="mt-1 text-[0.72rem] text-muted-foreground">
                         ≈ {perDay}₽ в день — дешевле чашки кофе
