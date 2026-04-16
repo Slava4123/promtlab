@@ -48,6 +48,14 @@ type User struct {
 	ReengagementSentAt   *time.Time `gorm:"column:reengagement_sent_at" json:"-"`
 	QuotaWarningSentOn   *time.Time `gorm:"column:quota_warning_sent_on;type:date" json:"-"`
 
+	// M-7 Referral.
+	// ReferralCode — уникальный 8-символьный код юзера (делится с друзьями).
+	// ReferredBy — код пригласившего, nullable (был ли юзер приглашён).
+	// ReferralRewardedAt — момент выдачи награды пригласившему (idempotency).
+	ReferralCode       string     `gorm:"column:referral_code;size:16;uniqueIndex" json:"referral_code"`
+	ReferredBy         string     `gorm:"column:referred_by;size:16" json:"-"`
+	ReferralRewardedAt *time.Time `gorm:"column:referral_rewarded_at" json:"-"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 

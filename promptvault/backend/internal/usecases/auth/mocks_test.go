@@ -67,6 +67,21 @@ func (m *mockUserRepo) ListInactiveForReengagement(ctx context.Context, inactive
 func (m *mockUserRepo) MarkReengagementSent(ctx context.Context, userID uint) error {
 	return m.Called(ctx, userID).Error(0)
 }
+func (m *mockUserRepo) CountReferredBy(ctx context.Context, code string) (int64, error) {
+	args := m.Called(ctx, code)
+	return args.Get(0).(int64), args.Error(1)
+}
+func (m *mockUserRepo) GetByReferralCode(ctx context.Context, code string) (*models.User, error) {
+	args := m.Called(ctx, code)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+func (m *mockUserRepo) MarkReferralRewarded(ctx context.Context, userID uint) (bool, error) {
+	args := m.Called(ctx, userID)
+	return args.Bool(0), args.Error(1)
+}
 
 // --- LinkedAccountRepository mock ---
 

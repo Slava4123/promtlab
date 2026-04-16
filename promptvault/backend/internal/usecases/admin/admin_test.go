@@ -75,6 +75,13 @@ func (f *fakeUserRepo) ListInactiveForReengagement(_ context.Context, _, _ time.
 func (f *fakeUserRepo) MarkReengagementSent(_ context.Context, _ uint) error {
 	return nil
 }
+func (f *fakeUserRepo) CountReferredBy(_ context.Context, _ string) (int64, error) { return 0, nil }
+func (f *fakeUserRepo) GetByReferralCode(_ context.Context, _ string) (*models.User, error) {
+	return nil, nil
+}
+func (f *fakeUserRepo) MarkReferralRewarded(_ context.Context, _ uint) (bool, error) {
+	return false, nil
+}
 
 type fakeAdminRepo struct {
 	users          []repo.UserSummary

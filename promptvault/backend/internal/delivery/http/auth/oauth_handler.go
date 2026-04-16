@@ -66,6 +66,39 @@ func (h *OAuthHandler) setOAuthCookies(w http.ResponseWriter, state, verifier st
 	})
 }
 
+// maybeSetReferralCookie — если в query есть валидный ?ref=XXXXX, кладём его
+// в HttpOnly-cookie на 5 минут (M-7). Callback прочитает и запишет в ctx.
+// Валидируем — 8 символов alphanumeric, чтобы не таскать мусор.
+func (h *OAuthHandler) maybeSetReferralCookie(w http.ResponseWriter, r *http.Request) {
+	ref := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("ref")))
+	if len(ref) != 8 {
+		return
+	}
+	for _, ch := range ref {
+		if !((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
+			return
+		}
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: "oauth_ref", Value: ref,
+		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
+	})
+}
+
+// popReferralCookie — читает oauth_ref cookie и возвращает код (или "").
+// Cookie сразу очищаем, чтобы не перезаписать реф у следующего OAuth-входа.
+func (h *OAuthHandler) popReferralCookie(w http.ResponseWriter, r *http.Request) string {
+	c, err := r.Cookie("oauth_ref")
+	if err != nil || c.Value == "" {
+		return ""
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: "oauth_ref", Value: "",
+		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+	})
+	return c.Value
+}
+
 func (h *OAuthHandler) getVerifier(r *http.Request) string {
 	c, err := r.Cookie("oauth_verifier")
 	if err != nil {
@@ -184,6 +217,7 @@ func (h *OAuthHandler) GitHubRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setOAuthCookies(w, state, verifier)
+	h.maybeSetReferralCookie(w, r)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
@@ -218,7 +252,8 @@ func (h *OAuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Login flow
-	_, tokens, err := h.oauth.ExchangeGitHub(r.Context(), code, verifier)
+	ctx := authuc.WithReferredBy(r.Context(), h.popReferralCookie(w, r))
+	_, tokens, err := h.oauth.ExchangeGitHub(ctx, code, verifier)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -234,6 +269,7 @@ func (h *OAuthHandler) GoogleRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setOAuthCookies(w, state, verifier)
+	h.maybeSetReferralCookie(w, r)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
@@ -268,7 +304,8 @@ func (h *OAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Login flow
-	_, tokens, err := h.oauth.ExchangeGoogle(r.Context(), code, verifier)
+	ctx := authuc.WithReferredBy(r.Context(), h.popReferralCookie(w, r))
+	_, tokens, err := h.oauth.ExchangeGoogle(ctx, code, verifier)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -284,6 +321,7 @@ func (h *OAuthHandler) YandexRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setOAuthCookies(w, state, verifier)
+	h.maybeSetReferralCookie(w, r)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
@@ -318,7 +356,8 @@ func (h *OAuthHandler) YandexCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Login flow
-	_, tokens, err := h.oauth.ExchangeYandex(r.Context(), code, verifier)
+	ctx := authuc.WithReferredBy(r.Context(), h.popReferralCookie(w, r))
+	_, tokens, err := h.oauth.ExchangeYandex(ctx, code, verifier)
 	if err != nil {
 		respondError(w, err)
 		return

@@ -1,10 +1,11 @@
 package auth
 
 type RegisterRequest struct {
-	Email    string `json:"email" validate:"required,email,max=255"`
-	Password string `json:"password" validate:"required,min=8,max=128"`
-	Name     string `json:"name" validate:"required,min=1,max=100"`
-	Username string `json:"username" validate:"omitempty,min=3,max=30"`
+	Email      string `json:"email" validate:"required,email,max=255"`
+	Password   string `json:"password" validate:"required,min=8,max=128"`
+	Name       string `json:"name" validate:"required,min=1,max=100"`
+	Username   string `json:"username" validate:"omitempty,min=3,max=30"`
+	ReferredBy string `json:"referred_by" validate:"omitempty,alphanum,len=8"`
 }
 
 type LoginRequest struct {

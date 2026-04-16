@@ -101,7 +101,7 @@ func (s *Service) getUser(ctx context.Context, userID uint) (*models.User, error
 	return user, nil
 }
 
-func (s *Service) Register(ctx context.Context, userEmail, password, name, username string) (*models.User, error) {
+func (s *Service) Register(ctx context.Context, userEmail, password, name, username, referredBy string) (*models.User, error) {
 	existing, err := s.users.GetByEmail(ctx, userEmail)
 	if err == nil {
 		accounts, _ := s.linkedAccounts.GetByUserID(ctx, existing.ID)
@@ -158,9 +158,10 @@ func (s *Service) Register(ctx context.Context, userEmail, password, name, usern
 		Name:          name,
 		Username:      username,
 		EmailVerified: false,
+		ReferredBy:    referredBy, // M-7: может быть пустым, сохраняется как есть
 	}
 
-	if err := s.users.Create(ctx, user); err != nil {
+	if err := createUserWithReferralCode(ctx, s.users, user); err != nil {
 		return nil, err
 	}
 

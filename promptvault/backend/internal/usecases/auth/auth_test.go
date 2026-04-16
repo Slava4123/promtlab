@@ -388,7 +388,7 @@ func TestRegister_NewUser(t *testing.T) {
 	users.On("GetByEmail", ctx, "new@example.com").Return(nil, repo.ErrNotFound)
 	users.On("Create", ctx, mock.AnythingOfType("*models.User")).Return(nil)
 
-	result, err := svc.Register(ctx, "new@example.com", "password123", "New User", "")
+	result, err := svc.Register(ctx, "new@example.com", "password123", "New User", "", "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -410,7 +410,7 @@ func TestRegister_ExistingVerifiedEmail(t *testing.T) {
 	users.On("GetByEmail", ctx, "taken@example.com").Return(existing, nil)
 	linked.On("GetByUserID", ctx, uint(1)).Return(nil, repo.ErrNotFound)
 
-	result, err := svc.Register(ctx, "taken@example.com", "password123", "Name", "")
+	result, err := svc.Register(ctx, "taken@example.com", "password123", "Name", "", "")
 
 	assert.Nil(t, result)
 	var emailErr *EmailTakenError
@@ -430,7 +430,7 @@ func TestRegister_ExistingOAuthUser(t *testing.T) {
 		{ID: 1, UserID: 1, Provider: "github", ProviderID: "123"},
 	}, nil)
 
-	result, err := svc.Register(ctx, "oauth@example.com", "password123", "Name", "")
+	result, err := svc.Register(ctx, "oauth@example.com", "password123", "Name", "", "")
 
 	assert.Nil(t, result)
 	var emailErr *EmailTakenError
@@ -449,7 +449,7 @@ func TestRegister_ExistingUnverifiedUser(t *testing.T) {
 	linked.On("GetByUserID", ctx, uint(1)).Return(nil, repo.ErrNotFound)
 	users.On("Update", ctx, mock.AnythingOfType("*models.User")).Return(nil)
 
-	result, err := svc.Register(ctx, "unverified@example.com", "newpass", "New Name", "")
+	result, err := svc.Register(ctx, "unverified@example.com", "newpass", "New Name", "", "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -468,7 +468,7 @@ func TestRegister_DBError(t *testing.T) {
 	users.On("GetByEmail", ctx, "new@example.com").Return(nil, repo.ErrNotFound)
 	users.On("Create", ctx, mock.AnythingOfType("*models.User")).Return(dbErr)
 
-	result, err := svc.Register(ctx, "new@example.com", "password123", "Name", "")
+	result, err := svc.Register(ctx, "new@example.com", "password123", "Name", "", "")
 
 	assert.Nil(t, result)
 	assert.ErrorIs(t, err, dbErr)

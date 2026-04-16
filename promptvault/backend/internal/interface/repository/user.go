@@ -32,4 +32,17 @@ type UserRepository interface {
 
 	// MarkReengagementSent выставляет reengagement_sent_at=now.
 	MarkReengagementSent(ctx context.Context, userID uint) error
+
+	// CountReferredBy — сколько юзеров зарегистрировалось с referred_by = code (M-7).
+	// Используется в GET /api/auth/referral для отображения счётчика приглашённых.
+	CountReferredBy(ctx context.Context, code string) (int64, error)
+
+	// GetByReferralCode находит юзера по его ReferralCode (M-7).
+	// Используется в webhook/activate для выдачи награды рефереру.
+	GetByReferralCode(ctx context.Context, code string) (*models.User, error)
+
+	// MarkReferralRewarded атомарно ставит referral_rewarded_at=now только если
+	// он был NULL. Возвращает true если действительно обновил (idempotency).
+	// Защищает от повторной выдачи награды при повторных платежах того же рефери.
+	MarkReferralRewarded(ctx context.Context, userID uint) (bool, error)
 }

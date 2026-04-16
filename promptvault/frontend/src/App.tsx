@@ -10,6 +10,7 @@ import ProtectedRoute from "@/components/auth/protected-route"
 import AppLayout from "@/components/layout/app-layout"
 import { ApiError } from "@/api/client"
 import { captureException } from "@/lib/sentry"
+import { captureReferralFromURL } from "@/lib/referral"
 
 // Eager-loaded (public, lightweight)
 import SignIn from "@/pages/sign-in"
@@ -87,6 +88,7 @@ function AppRoutes() {
   const restoreSession = useAuthStore((s) => s.restoreSession)
 
   useEffect(() => {
+    captureReferralFromURL()
     restoreSession()
   }, [restoreSession])
 

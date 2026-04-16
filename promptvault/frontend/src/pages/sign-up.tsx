@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
 import { api } from "@/api/client"
+import { readReferralCookie, clearReferralCookie } from "@/lib/referral"
 
 const registerSchema = z.object({
   name: z.string().min(1, "Введите имя").max(100),
@@ -40,10 +41,17 @@ export default function SignUp() {
   const onSubmit = async (data: RegisterForm) => {
     setError("")
     try {
+      const referredBy = readReferralCookie()
       await api("/auth/register", {
         method: "POST",
-        body: JSON.stringify({ email: data.email, password: data.password, name: data.name }),
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+          name: data.name,
+          ...(referredBy ? { referred_by: referredBy } : {}),
+        }),
       })
+      if (referredBy) clearReferralCookie()
       navigate(`/verify-email?email=${encodeURIComponent(data.email)}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка регистрации")

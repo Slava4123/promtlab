@@ -116,3 +116,48 @@ func (r *userRepo) MarkReengagementSent(ctx context.Context, userID uint) error 
 			"updated_at":           now,
 		}).Error
 }
+
+func (r *userRepo) CountReferredBy(ctx context.Context, code string) (int64, error) {
+	if code == "" {
+		return 0, nil
+	}
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("referred_by = ?", code).
+		Count(&count).Error
+	return count, err
+}
+
+func (r *userRepo) GetByReferralCode(ctx context.Context, code string) (*models.User, error) {
+	if code == "" {
+		return nil, repo.ErrNotFound
+	}
+	var user models.User
+	err := r.db.WithContext(ctx).
+		Where("referral_code = ?", code).
+		First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repo.ErrNotFound
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// MarkReferralRewarded — атомарный "compare-and-set": UPDATE с WHERE
+// referral_rewarded_at IS NULL. Возвращает true если RowsAffected=1.
+// Это единственный безопасный путь — несколько webhook'ов могут прийти
+// параллельно при дублировании уведомлений от T-Bank.
+func (r *userRepo) MarkReferralRewarded(ctx context.Context, userID uint) (bool, error) {
+	now := time.Now()
+	res := r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ? AND referral_rewarded_at IS NULL", userID).
+		Updates(map[string]any{
+			"referral_rewarded_at": now,
+			"updated_at":           now,
+		})
+	return res.RowsAffected == 1, res.Error
+}

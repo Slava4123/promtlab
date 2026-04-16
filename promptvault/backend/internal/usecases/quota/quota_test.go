@@ -49,6 +49,13 @@ func (r *fakeUserRepo) ListInactiveForReengagement(context.Context, time.Time, t
 func (r *fakeUserRepo) MarkReengagementSent(context.Context, uint) error {
 	return nil
 }
+func (r *fakeUserRepo) CountReferredBy(context.Context, string) (int64, error) { return 0, nil }
+func (r *fakeUserRepo) GetByReferralCode(context.Context, string) (*models.User, error) {
+	return nil, nil
+}
+func (r *fakeUserRepo) MarkReferralRewarded(context.Context, uint) (bool, error) {
+	return false, nil
+}
 
 type fakePlanRepo struct {
 	plans map[string]*models.SubscriptionPlan

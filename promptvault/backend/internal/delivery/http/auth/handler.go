@@ -73,7 +73,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	user, err := h.auth.Register(r.Context(), req.Email, req.Password, utils.SanitizeString(req.Name), strings.TrimSpace(req.Username))
+	user, err := h.auth.Register(r.Context(), req.Email, req.Password, utils.SanitizeString(req.Name), strings.TrimSpace(req.Username), strings.ToUpper(strings.TrimSpace(req.ReferredBy)))
 	if err != nil {
 		respondError(w, err)
 		return
@@ -447,6 +447,17 @@ func (h *Handler) UnlinkProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteOK(w, map[string]string{"message": "Провайдер отвязан"})
+}
+
+// GET /api/auth/referral (M-7). Возвращает код юзера + счётчик приглашённых.
+func (h *Handler) Referral(w http.ResponseWriter, r *http.Request) {
+	userID := authmw.GetUserID(r.Context())
+	info, err := h.auth.GetReferralInfo(r.Context(), userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	utils.WriteOK(w, info)
 }
 
 // POST /api/auth/logout

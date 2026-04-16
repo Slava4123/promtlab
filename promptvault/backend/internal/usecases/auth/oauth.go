@@ -273,14 +273,16 @@ func (s *OAuthService) upsertOAuthUser(ctx context.Context, provider, providerID
 		return user, tokens, nil
 	}
 
-	// 3. Новый пользователь
+	// 3. Новый пользователь. M-7: referredBy приходит из oauth_ref cookie через
+	// ctx (OAuthHandler кладёт туда значение перед вызовом, если оно есть).
 	user = &models.User{
 		Email:         oauthEmail,
 		Name:          name,
 		AvatarURL:     avatarURL,
 		EmailVerified: true,
+		ReferredBy:    referredByFromCtx(ctx),
 	}
-	if err := s.users.Create(ctx, user); err != nil {
+	if err := createUserWithReferralCode(ctx, s.users, user); err != nil {
 		return nil, nil, err
 	}
 

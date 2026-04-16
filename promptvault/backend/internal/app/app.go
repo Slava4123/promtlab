@@ -470,6 +470,7 @@ func (a *App) MountRoutes(r chi.Router) {
 			r.Delete("/auth/unlink/{provider}", a.authHandler.UnlinkProvider)
 			r.Post("/auth/link/{provider}", a.oauthHandler.InitiateLink)
 			r.Post("/auth/logout", a.authHandler.Logout)
+			r.Get("/auth/referral", a.authHandler.Referral)
 
 			// Search
 			r.Get("/search", a.searchHandler.Search)

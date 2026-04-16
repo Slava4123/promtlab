@@ -21,6 +21,7 @@ import {
 import { APIKeysSection } from "@/components/settings/api-keys-section"
 import { ExtensionPromoSection } from "@/components/settings/extension-promo-section"
 import { SubscriptionSection } from "@/components/subscription/subscription-section"
+import { ReferralSection } from "@/components/settings/referral-section"
 
 // --- Schemas ---
 
@@ -77,6 +78,7 @@ export default function SettingsPage() {
       <PasswordSection key={user.has_password ? "change" : "set"} hasPassword={user.has_password} onUpdate={fetchMe} />
       <LinkedAccountsSection />
       <SubscriptionSection />
+      <ReferralSection />
       <ExtensionPromoSection />
       <APIKeysSection />
       <ThemeSection />
