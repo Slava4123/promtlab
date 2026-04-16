@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useForm, useWatch, type Control } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, Search, ChevronDown, History, Copy, Trash2, Share2 } from "lucide-react"
+import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, History, Copy, Trash2, Share2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { usePrompt, useCreatePrompt, useUpdatePrompt, useIncrementUsage, useDeletePrompt } from "@/hooks/use-prompts"
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { useCollections } from "@/hooks/use-collections"
 import { useWorkspaceStore } from "@/stores/workspace-store"
 import { TagInput } from "@/components/tags/tag-input"
+import { CollectionsCombobox } from "@/components/prompts/collections-combobox"
 import { AIPanel } from "@/components/ai/ai-panel"
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
 import { ShareDialog } from "@/components/prompts/share-dialog"
@@ -83,8 +84,6 @@ export default function PromptEditor() {
   const deletePrompt = useDeletePrompt()
   const [collectionIds, setCollectionIds] = useState<number[]>(preselectedCollectionId ? [preselectedCollectionId] : [])
   const [tagIds, setTagIds] = useState<number[]>([])
-  const [collSearch, setCollSearch] = useState("")
-  const [collExpanded, setCollExpanded] = useState(false)
   const [changeNote, setChangeNote] = useState("")
   const [usePromptModal, setUsePromptModal] = useState<Prompt | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
@@ -263,60 +262,11 @@ export default function PromptEditor() {
                   <span className="ml-auto text-[0.7rem] text-violet-400">{collectionIds.length} выбрано</span>
                 )}
               </label>
-              <div className="rounded-lg border border-border bg-background">
-                {collections && collections.length > 5 && (
-                  <div className="relative px-2.5 pt-2.5 pb-1">
-                    <Search className="absolute left-5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      value={collSearch}
-                      onChange={(e) => { setCollSearch(e.target.value); setCollExpanded(true) }}
-                      placeholder="Найти коллекцию..."
-                      className="h-7 w-full rounded-md bg-muted pl-7 pr-2 text-[0.72rem] text-foreground outline-none placeholder:text-muted-foreground focus:bg-muted/80"
-                    />
-                  </div>
-                )}
-                <div className={`relative flex flex-wrap gap-1.5 px-3 py-2.5 overflow-hidden transition-[max-height] ${collExpanded || collSearch ? "" : "max-h-[72px]"}`}>
-                  {(!collections || collections.length === 0) ? (
-                    <span className="text-[0.8rem] text-muted-foreground">Нет коллекций</span>
-                  ) : collections
-                    .filter((c) => !collSearch || c.name.toLowerCase().includes(collSearch.toLowerCase()))
-                    .map((c) => {
-                      const isSelected = collectionIds.includes(c.id)
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setCollectionIds(prev =>
-                            isSelected ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                          )}
-                          className={`flex items-center gap-1 rounded-md px-2 py-1 text-[0.75rem] font-medium transition-colors ${
-                            isSelected
-                              ? "text-white ring-1"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                          }`}
-                          style={isSelected ? { background: `${c.color}18`, boxShadow: `inset 0 0 0 1px ${c.color}30`, color: c.color } : undefined}
-                        >
-                          {c.name}
-                        </button>
-                      )
-                    })}
-                  {!collExpanded && !collSearch && collections && collections.length > 10 && (
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-background to-transparent" />
-                  )}
-                </div>
-                {collections && collections.length > 10 && !collSearch && (
-                  <div className="px-3 pb-2">
-                    <button
-                      type="button"
-                      onClick={() => setCollExpanded(!collExpanded)}
-                      className="flex items-center gap-1 text-[0.7rem] text-muted-foreground transition-colors hover:text-muted-foreground"
-                    >
-                      <ChevronDown className={`h-3 w-3 transition-transform ${collExpanded ? "rotate-180" : ""}`} />
-                      {collExpanded ? "Свернуть" : `Ещё ${collections.length - 10}+`}
-                    </button>
-                  </div>
-                )}
-              </div>
+              <CollectionsCombobox
+                collections={collections}
+                value={collectionIds}
+                onChange={setCollectionIds}
+              />
             </div>
           </div>
 
