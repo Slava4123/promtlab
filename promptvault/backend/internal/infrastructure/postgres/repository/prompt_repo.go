@@ -60,9 +60,15 @@ func (r *promptRepo) List(ctx context.Context, filter repo.PromptListFilter) ([]
 		q = q.Where("user_id = ? AND team_id IS NULL", filter.UserID)
 	}
 
-	// Коллекция (many-to-many)
+	// Коллекция (many-to-many). P-2: INNER JOIN вместо IN (SELECT ...) —
+	// дубликатов нет благодаря unique constraint (prompt_id, collection_id),
+	// поэтому DISTINCT не нужен. JOIN даёт планировщику больше свободы
+	// (например, использовать индекс на collection_id напрямую).
 	if filter.CollectionID != nil {
-		q = q.Where("id IN (SELECT prompt_id FROM prompt_collections WHERE collection_id = ?)", *filter.CollectionID)
+		q = q.Joins(
+			"INNER JOIN prompt_collections pc ON pc.prompt_id = prompts.id AND pc.collection_id = ?",
+			*filter.CollectionID,
+		)
 	}
 
 	// Избранное
@@ -76,9 +82,15 @@ func (r *promptRepo) List(ctx context.Context, filter repo.PromptListFilter) ([]
 		q = q.Where("title ILIKE ? OR content ILIKE ?", search, search)
 	}
 
-	// Теги
+	// Теги. P-2: EXISTS — семантически правильный semi-join без дубликатов
+	// (если у промпта несколько тегов из фильтра, INNER JOIN дал бы N копий
+	// и потребовал бы DISTINCT, что медленнее). PostgreSQL реализует EXISTS
+	// через semi-join node, потенциально используя индекс на prompt_tags.prompt_id.
 	if len(filter.TagIDs) > 0 {
-		q = q.Where("id IN (SELECT prompt_id FROM prompt_tags WHERE tag_id IN ?)", filter.TagIDs)
+		q = q.Where(
+			"EXISTS (SELECT 1 FROM prompt_tags WHERE prompt_id = prompts.id AND tag_id IN ?)",
+			filter.TagIDs,
+		)
 	}
 
 	// Считаем общее количество
