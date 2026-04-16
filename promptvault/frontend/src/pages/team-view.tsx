@@ -181,7 +181,12 @@ export default function TeamView() {
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
             <h2 className="text-[0.9rem] font-semibold text-foreground">Участники</h2>
-            <span className="text-[0.75rem] text-muted-foreground">{team.members.length}</span>
+            <span
+              className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-[0.7rem] font-medium tabular-nums text-foreground"
+              aria-label={`Всего участников: ${team.members.length}`}
+            >
+              {team.members.length}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Popover>
