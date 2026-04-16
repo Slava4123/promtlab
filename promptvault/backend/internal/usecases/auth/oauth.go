@@ -351,17 +351,34 @@ func (s *OAuthService) fetchGitHubProfile(ctx context.Context, token *oauth2.Tok
 		name = raw.Login
 	}
 
-	email := raw.Email
-	if email == "" {
-		email, _ = s.fetchGitHubEmail(ctx, client)
+	// S-3 defence-in-depth: всегда идём в /user/emails как основной источник,
+	// даже если /user вернул email. Причины:
+	// (1) /user.email может отдать unverified primary email;
+	// (2) attacker может подменить ответ /user при MITM middleware;
+	// (3) email там может быть no-reply@users.noreply.github.com — не настоящий.
+	// /user/emails даёт нам явный флаг Verified.
+	verifiedEmail, err := s.fetchGitHubVerifiedEmail(ctx, client)
+	if err != nil || verifiedEmail == "" {
+		// fallback на /user.email только если не получили ничего — логируем нарушение.
+		if raw.Email != "" {
+			slog.Warn("oauth.github.emails_endpoint_failed_using_user_email", "error", err)
+		}
+		verifiedEmail = raw.Email
 	}
 
 	return &oauthProfile{
 		id:        fmt.Sprintf("%d", raw.ID),
-		email:     email,
+		email:     verifiedEmail,
 		name:      name,
 		avatarURL: raw.AvatarURL,
 	}, nil
+}
+
+// fetchGitHubVerifiedEmail возвращает primary verified email (S-3 defence-in-depth).
+// Переименование из fetchGitHubEmail — подчёркиваем, что метод гарантирует
+// Verified=true, а не просто primary. Если нет ни одного verified — возвращает "".
+func (s *OAuthService) fetchGitHubVerifiedEmail(ctx context.Context, client *http.Client) (string, error) {
+	return s.fetchGitHubEmail(ctx, client)
 }
 
 func (s *OAuthService) fetchGitHubEmail(ctx context.Context, client *http.Client) (string, error) {
@@ -406,13 +423,21 @@ func (s *OAuthService) fetchGoogleProfile(ctx context.Context, token *oauth2.Tok
 	}
 
 	var raw struct {
-		ID      string `json:"id"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Picture string `json:"picture"`
+		ID            string `json:"id"`
+		Email         string `json:"email"`
+		VerifiedEmail bool   `json:"verified_email"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrOAuthProfileFailed, err)
+	}
+
+	// S-3 defence-in-depth: отклоняем unverified Google email'ы. Google помечает
+	// email как verified если доменный провайдер это подтвердил (gmail автоматом,
+	// G Suite — по SPF/DKIM). Unverified = возможно угнанный, не доверяем.
+	if !raw.VerifiedEmail {
+		return nil, fmt.Errorf("%w: google email not verified", ErrOAuthProfileFailed)
 	}
 
 	return &oauthProfile{
