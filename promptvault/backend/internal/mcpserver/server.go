@@ -71,6 +71,7 @@ func NewMCPServer(
 		search:      searchSvc,
 		shares:      shareSvc,
 		quotas:      quotas,
+		cache:       newListCache(30 * time.Second),
 	}
 	tools.register(server)
 

@@ -28,6 +28,7 @@ type toolHandlers struct {
 	search      SearchService
 	shares      ShareService
 	quotas      *quotauc.Service
+	cache       *listCache // P-11: TTL cache для list_collections/list_tags
 }
 
 // checkAndIncrementMCP проверяет MCP-квоту перед write-операцией и инкрементит после.
@@ -45,6 +46,24 @@ func (h *toolHandlers) incrementMCPUsage(ctx context.Context) {
 	if err := h.quotas.IncrementMCPUsage(ctx, authmw.GetUserID(ctx)); err != nil {
 		slog.Error("mcp.quota.increment_failed", "error", err)
 	}
+}
+
+// invalidateCollectionsCache / invalidateTagsCache — вызываются после успешных CUD
+// через MCP, чтобы юзер не видел stale при собственных изменениях (P-11).
+// При CUD через HTTP API у MCP-клиента всё равно будет stale до истечения TTL —
+// это приемлемо для 30с окна.
+func (h *toolHandlers) invalidateCollectionsCache(ctx context.Context) {
+	if h.cache == nil {
+		return
+	}
+	h.cache.InvalidateUser(authmw.GetUserID(ctx), "collections")
+}
+
+func (h *toolHandlers) invalidateTagsCache(ctx context.Context) {
+	if h.cache == nil {
+		return
+	}
+	h.cache.InvalidateUser(authmw.GetUserID(ctx), "tags")
 }
 
 // --- tool input types ---
@@ -516,6 +535,20 @@ func (t *toolHandlers) listCollections(ctx context.Context, _ *sdkmcp.CallToolRe
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
+	teamKey := "nil"
+	if input.TeamID != nil {
+		teamKey = uintToStr(*input.TeamID)
+	}
+	cacheKey := "collections:" + uintToStr(userID) + ":" + teamKey
+
+	if t.cache != nil {
+		if cached, ok := t.cache.Get(cacheKey); ok {
+			logTool(ctx, "list_collections.cache_hit", start, nil)
+			res, err := jsonResult(cached)
+			return res, nil, err
+		}
+	}
+
 	var teamIDs []uint
 	if input.TeamID != nil {
 		teamIDs = []uint{*input.TeamID}
@@ -536,13 +569,31 @@ func (t *toolHandlers) listCollections(ctx context.Context, _ *sdkmcp.CallToolRe
 			PromptCount: c.PromptCount,
 		}
 	}
-	res, err := jsonResult(map[string]any{"collections": result})
+	payload := map[string]any{"collections": result}
+	if t.cache != nil {
+		t.cache.Set(cacheKey, payload)
+	}
+	res, err := jsonResult(payload)
 	return res, nil, err
 }
 
 func (t *toolHandlers) listTags(ctx context.Context, _ *sdkmcp.CallToolRequest, input ListTagsInput) (*sdkmcp.CallToolResult, any, error) {
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
+
+	teamKey := "nil"
+	if input.TeamID != nil {
+		teamKey = uintToStr(*input.TeamID)
+	}
+	cacheKey := "tags:" + uintToStr(userID) + ":" + teamKey
+
+	if t.cache != nil {
+		if cached, ok := t.cache.Get(cacheKey); ok {
+			logTool(ctx, "list_tags.cache_hit", start, nil)
+			res, err := jsonResult(cached)
+			return res, nil, err
+		}
+	}
 
 	tags, err := t.tags.List(ctx, userID, input.TeamID)
 	logTool(ctx, "list_tags", start, err)
@@ -554,7 +605,11 @@ func (t *toolHandlers) listTags(ctx context.Context, _ *sdkmcp.CallToolRequest, 
 	for i, tag := range tags {
 		result[i] = TagResponse{ID: tag.ID, Name: tag.Name, Color: tag.Color}
 	}
-	res, err := jsonResult(map[string]any{"tags": result})
+	payload := map[string]any{"tags": result}
+	if t.cache != nil {
+		t.cache.Set(cacheKey, payload)
+	}
+	res, err := jsonResult(payload)
 	return res, nil, err
 }
 
@@ -669,6 +724,7 @@ func (t *toolHandlers) createTag(ctx context.Context, _ *sdkmcp.CallToolRequest,
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.invalidateTagsCache(ctx)
 	res, err := jsonResult(TagResponse{ID: tag.ID, Name: tag.Name, Color: tag.Color})
 	return res, nil, err
 }
@@ -685,6 +741,7 @@ func (t *toolHandlers) createCollection(ctx context.Context, _ *sdkmcp.CallToolR
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.invalidateCollectionsCache(ctx)
 	res, err := jsonResult(CollectionResponse{
 		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: coll.Color, Icon: coll.Icon,
 	})
@@ -703,6 +760,7 @@ func (t *toolHandlers) deleteCollection(ctx context.Context, _ *sdkmcp.CallToolR
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.invalidateCollectionsCache(ctx)
 	res, err := jsonResult(map[string]string{
 		"status":  "deleted",
 		"message": "Collection deleted. Prompts inside are not affected.",
@@ -877,6 +935,7 @@ func (t *toolHandlers) collectionUpdate(ctx context.Context, _ *sdkmcp.CallToolR
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.invalidateCollectionsCache(ctx)
 	res, err := jsonResult(CollectionResponse{
 		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: coll.Color, Icon: coll.Icon,
 	})
@@ -920,6 +979,7 @@ func (t *toolHandlers) tagDelete(ctx context.Context, _ *sdkmcp.CallToolRequest,
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.invalidateTagsCache(ctx)
 	res, err := jsonResult(map[string]string{
 		"status":  "deleted",
 		"message": "Tag deleted. Prompts are not affected.",
