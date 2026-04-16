@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { ChevronDown, LifeBuoy, Mail, Search, Users } from "lucide-react"
+import { ArrowLeft, ChevronDown, LifeBuoy, Lock, Mail, Search, Users } from "lucide-react"
 import { RolePermissionsTable } from "@/components/teams/role-permissions-table"
+import { useAuthStore } from "@/stores/auth-store"
 
 interface FaqItem {
   question: string
@@ -109,7 +110,31 @@ export default function Help() {
     )
   }, [query])
 
+  // Help доступен и авторизованным, и нет. Кнопка "Назад" ведёт разные места:
+  // авторизованным — в приложение, гостям — на главную.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const backHref = isAuthenticated ? "/dashboard" : "/"
+  const backLabel = isAuthenticated ? "В приложение" : "На главную"
+
   return (
+    <div className="min-h-screen">
+      {/* Верхняя нав-шапка — лого + кнопка назад. Help рендерится вне AppLayout
+          (public route), поэтому навигация своя. */}
+      <div className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+          <Link to={backHref} className="flex items-center gap-2 text-[0.85rem] text-muted-foreground transition-colors hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            {backLabel}
+          </Link>
+          <Link to="/" className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-violet-500/25 to-violet-600/5 ring-1 ring-violet-500/15">
+              <Lock className="h-3.5 w-3.5 text-violet-400" aria-hidden="true" />
+            </div>
+            <span className="text-[0.85rem] font-semibold tracking-tight">ПромтЛаб</span>
+          </Link>
+        </div>
+      </div>
+
     <div className="mx-auto max-w-3xl px-4 py-10">
       <header className="mb-8">
         <div className="flex items-center gap-3">
@@ -218,6 +243,7 @@ export default function Help() {
           .
         </p>
       </footer>
+    </div>
     </div>
   )
 }

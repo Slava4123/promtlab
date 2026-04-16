@@ -45,6 +45,9 @@ export function LandingHeader() {
               {link.label}
             </a>
           ))}
+          <Link to="/help" className="transition-colors hover:text-foreground">
+            Помощь
+          </Link>
         </nav>
 
         {/* Десктоп кнопки */}
@@ -78,6 +81,13 @@ export function LandingHeader() {
                     {link.label}
                   </a>
                 ))}
+                <Link
+                  to="/help"
+                  onClick={handleNavClick}
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Помощь
+                </Link>
                 <hr className="border-border/30" />
                 <Link
                   to="/sign-in"
