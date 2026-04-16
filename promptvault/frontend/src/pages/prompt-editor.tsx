@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useForm, useWatch, type Control } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, History, Copy, Trash2, Share2 } from "lucide-react"
+import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, History, Copy, Trash2, Share2, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 
 import { usePrompt, useCreatePrompt, useUpdatePrompt, useIncrementUsage, useDeletePrompt } from "@/hooks/use-prompts"
@@ -15,6 +15,14 @@ import { CollectionsCombobox } from "@/components/prompts/collections-combobox"
 import { AIPanel } from "@/components/ai/ai-panel"
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
 import { ShareDialog } from "@/components/prompts/share-dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { hasVariables } from "@/lib/template/parse"
 import {
   MAX_PROMPT_CONTENT_LENGTH,
@@ -88,6 +96,8 @@ export default function PromptEditor() {
   const [isPublic, setIsPublic] = useState(false)
   const [usePromptModal, setUsePromptModal] = useState<Prompt | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [noteExpanded, setNoteExpanded] = useState(false)
 
   const {
     register,
@@ -304,8 +314,19 @@ export default function PromptEditor() {
             </label>
           )}
 
-          {/* Заметка к изменению (только в режиме редактирования) */}
-          {isEdit && (
+          {/* Заметка к изменению (collapsible, X-4) — скрываем по умолчанию, большинство
+              юзеров не описывают каждое изменение, и поле занимает визуальный вес зря. */}
+          {isEdit && !noteExpanded && !changeNote && (
+            <button
+              type="button"
+              onClick={() => setNoteExpanded(true)}
+              className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              <History className="h-3 w-3" />
+              Добавить заметку к изменению
+            </button>
+          )}
+          {isEdit && (noteExpanded || changeNote) && (
             <div className="space-y-2">
               <label htmlFor="change_note" className="flex items-center gap-1.5 text-[0.8rem] font-medium text-foreground">
                 <History className="h-3 w-3 text-violet-400/60" />
@@ -330,11 +351,11 @@ export default function PromptEditor() {
           <span>Промпт сохраняется с версионированием — каждое изменение создаёт новую версию</span>
         </div>
 
-        {/* Кнопки */}
+        {/* Кнопки — X-4: primary слева, secondary в DropdownMenu "Ещё". */}
         <div className="flex flex-wrap items-center gap-2.5">
           <Button type="submit" variant="brand" size="sm" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {isEdit ? "Сохранить изменения" : "Создать промпт"}
+            {isEdit ? "Сохранить" : "Создать"}
           </Button>
           <button
             type="button"
@@ -359,54 +380,56 @@ export default function PromptEditor() {
                   toast.error("Не удалось скопировать")
                 }
               }}
-              className="flex h-9 items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 text-[0.8rem] font-medium text-violet-600 transition-colors hover:bg-violet-500/20 hover:text-violet-700 dark:text-violet-300 dark:hover:text-violet-200 sm:ml-auto"
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 text-[0.8rem] font-medium text-violet-600 transition-colors hover:bg-violet-500/20 hover:text-violet-700 dark:text-violet-300 dark:hover:text-violet-200"
             >
               <Copy className="h-3.5 w-3.5" />
               Использовать
             </button>
           )}
           {isEdit && (
-            <button
-              type="button"
-              onClick={() => navigate(`/prompts/${promptId}/versions`)}
-              className={`flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-colors hover:text-violet-400 ${existing ? "" : "ml-auto"}`}
-            >
-              <History className="h-3.5 w-3.5" />
-              История версий
-            </button>
-          )}
-          {isEdit && (
-            <button
-              type="button"
-              onClick={() => setShareOpen(true)}
-              className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-colors hover:text-violet-400"
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              Поделиться
-            </button>
-          )}
-          {isEdit && (
-            <button
-              type="button"
-              disabled={deletePrompt.isPending}
-              onClick={() => {
-                if (deletePrompt.isPending) return
-                deletePrompt.mutate(promptId, {
-                  onSuccess: () => {
-                    toast("Промпт перемещён в корзину")
-                    navigate("/dashboard")
-                  },
-                  onError: (e) => toast.error(e instanceof Error ? e.message : "Ошибка удаления"),
-                })
-              }}
-              className="flex h-9 items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/5 px-4 text-[0.8rem] text-red-600 transition-colors hover:bg-red-500/15 hover:text-red-700 dark:text-red-400/70 dark:hover:text-red-400 disabled:opacity-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Удалить
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="ml-auto flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[0.8rem] text-muted-foreground transition-colors hover:text-foreground">
+                Ещё <MoreHorizontal className="h-3.5 w-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => navigate(`/prompts/${promptId}/versions`)}>
+                  <History className="h-3.5 w-3.5" />
+                  История версий
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShareOpen(true)}>
+                  <Share2 className="h-3.5 w-3.5" />
+                  Поделиться
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Удалить
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </form>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Удалить промпт?"
+        description="Промпт переместится в корзину. Восстановить можно в разделе «Корзина» в течение 30 дней."
+        confirmLabel="Удалить"
+        variant="destructive"
+        isPending={deletePrompt.isPending}
+        onConfirm={() => {
+          deletePrompt.mutate(promptId, {
+            onSuccess: () => {
+              toast("Промпт перемещён в корзину")
+              setDeleteOpen(false)
+              navigate("/dashboard")
+            },
+            onError: (e) => toast.error(e instanceof Error ? e.message : "Ошибка удаления"),
+          })
+        }}
+      />
 
       {usePromptModal && (
         <UsePromptDialog
