@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"hash/fnv"
 	"log/slog"
 	"net"
 	"net/http"
@@ -9,30 +10,67 @@ import (
 	"time"
 )
 
-// Limiter is a generic sliding window rate limiter keyed by any comparable type.
-type Limiter[K comparable] struct {
+// numShards — количество шардов для снижения lock contention под высоким
+// параллелизмом (P-9). 16 — разумный баланс: 16 × mutex + 16 × map overhead
+// незначителен vs. серьёзное снижение contention при сотнях concurrent rps.
+// Должно быть степенью 2 для дешёвого модуло через битовую маску.
+const numShards = 16
+const shardMask = numShards - 1
+
+// shard — отдельная секция limiter'а со своим mutex'ом и map'ом.
+type shard[K comparable] struct {
 	mu      sync.Mutex
-	window  time.Duration
-	limit   int
 	entries map[K][]time.Time
-	stopCh  chan struct{}
+}
+
+// Limiter is a generic sliding window rate limiter keyed by any comparable type.
+//
+// P-9: внутренне sharded на numShards секций. Разные ключи с высокой
+// вероятностью попадают в разные шарды → разные mutex'ы → нет contention.
+// В прежней one-mutex версии при 1000 concurrent rps один долгий lookup мог
+// заблокировать все остальные запросы.
+type Limiter[K comparable] struct {
+	shards [numShards]shard[K]
+	window time.Duration
+	limit  int
+	hash   func(K) uint64
+	stopCh chan struct{}
+}
+
+// UintHash — identity hash для uint-ключей (userID).
+func UintHash(k uint) uint64 { return uint64(k) }
+
+// StringHash — FNV-1a для string-ключей (IP).
+func StringHash(s string) uint64 {
+	h := fnv.New64a()
+	// Write не может ошибиться на []byte.
+	_, _ = h.Write([]byte(s))
+	return h.Sum64()
 }
 
 // NewLimiter creates a new sliding window rate limiter with the given requests-per-minute limit.
-func NewLimiter[K comparable](rpm int) *Limiter[K] {
-	return NewLimiterWithWindow[K](rpm, time.Minute)
+func NewLimiter[K comparable](rpm int, hash func(K) uint64) *Limiter[K] {
+	return NewLimiterWithWindow[K](rpm, time.Minute, hash)
 }
 
 // NewLimiterWithWindow creates a sliding window rate limiter with a custom window duration.
-func NewLimiterWithWindow[K comparable](limit int, window time.Duration) *Limiter[K] {
+func NewLimiterWithWindow[K comparable](limit int, window time.Duration, hash func(K) uint64) *Limiter[K] {
 	l := &Limiter[K]{
-		window:  window,
-		limit:   limit,
-		entries: make(map[K][]time.Time),
-		stopCh:  make(chan struct{}),
+		window: window,
+		limit:  limit,
+		hash:   hash,
+		stopCh: make(chan struct{}),
+	}
+	for i := range l.shards {
+		l.shards[i].entries = make(map[K][]time.Time)
 	}
 	go l.evictLoop()
 	return l
+}
+
+// shardFor возвращает shard для данного ключа через хеш-функцию (конструктор).
+func (l *Limiter[K]) shardFor(key K) *shard[K] {
+	return &l.shards[l.hash(key)&shardMask]
 }
 
 // Close stops the background eviction goroutine.
@@ -40,29 +78,34 @@ func (l *Limiter[K]) Close() {
 	close(l.stopCh)
 }
 
-// evictLoop удаляет устаревшие записи каждые 5 минут.
+// evictLoop удаляет устаревшие записи каждые 5 минут. Проходит по всем шардам
+// по очереди (не лочит все одновременно — чтобы в конце-концов evict не
+// заблокировал весь трафик).
 func (l *Limiter[K]) evictLoop() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			l.mu.Lock()
 			cutoff := time.Now().Add(-l.window)
-			for key, timestamps := range l.entries {
-				valid := timestamps[:0]
-				for _, t := range timestamps {
-					if t.After(cutoff) {
-						valid = append(valid, t)
+			for i := range l.shards {
+				sh := &l.shards[i]
+				sh.mu.Lock()
+				for key, timestamps := range sh.entries {
+					valid := timestamps[:0]
+					for _, t := range timestamps {
+						if t.After(cutoff) {
+							valid = append(valid, t)
+						}
+					}
+					if len(valid) == 0 {
+						delete(sh.entries, key)
+					} else {
+						sh.entries[key] = valid
 					}
 				}
-				if len(valid) == 0 {
-					delete(l.entries, key)
-				} else {
-					l.entries[key] = valid
-				}
+				sh.mu.Unlock()
 			}
-			l.mu.Unlock()
 		case <-l.stopCh:
 			return
 		}
@@ -74,13 +117,14 @@ func (l *Limiter[K]) Allow(key K) bool {
 	if l.limit <= 0 {
 		return true
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	sh := l.shardFor(key)
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
 
 	now := time.Now()
 	cutoff := now.Add(-l.window)
 
-	timestamps := l.entries[key]
+	timestamps := sh.entries[key]
 	valid := timestamps[:0]
 	for _, t := range timestamps {
 		if t.After(cutoff) {
@@ -88,13 +132,13 @@ func (l *Limiter[K]) Allow(key K) bool {
 		}
 	}
 	if len(valid) == 0 {
-		delete(l.entries, key)
+		delete(sh.entries, key)
 	}
 	if len(valid) >= l.limit {
-		l.entries[key] = valid
+		sh.entries[key] = valid
 		return false
 	}
-	l.entries[key] = append(valid, now)
+	sh.entries[key] = append(valid, now)
 	return true
 }
 
@@ -124,7 +168,7 @@ func clientIP(r *http.Request, trustProxy bool) string {
 // ByUserID ограничивает по ID аутентифицированного пользователя (из context).
 // Должен применяться ПОСЛЕ auth middleware, который помещает userID в context.
 func ByUserID(rpm int, getUserID func(r *http.Request) uint) func(http.Handler) http.Handler {
-	rl := NewLimiter[uint](rpm)
+	rl := NewLimiter[uint](rpm, UintHash)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID := getUserID(r)
@@ -149,7 +193,7 @@ func ByUserID(rpm int, getUserID func(r *http.Request) uint) func(http.Handler) 
 // ByIP ограничивает по IP. rpm — макс запросов в минуту.
 // trustProxy должен быть true только за доверенным reverse-proxy (см. clientIP).
 func ByIP(rpm int, trustProxy bool) func(http.Handler) http.Handler {
-	rl := NewLimiter[string](rpm)
+	rl := NewLimiter[string](rpm, StringHash)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := clientIP(r, trustProxy)

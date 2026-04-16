@@ -363,7 +363,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		reminderLoop:         reminderLoop,
 		reengagementLoop:     reengagementLoop,
 		purgeLoop:         purgeLoop,
-		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour),
+		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour, ratelimit.UintHash),
 	}
 }
 

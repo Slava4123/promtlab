@@ -7,5 +7,5 @@ type userLimiter = ratelimit.Limiter[uint]
 
 // newUserLimiter creates a new per-user rate limiter.
 func newUserLimiter(rpm int) *userLimiter {
-	return ratelimit.NewLimiter[uint](rpm)
+	return ratelimit.NewLimiter[uint](rpm, ratelimit.UintHash)
 }

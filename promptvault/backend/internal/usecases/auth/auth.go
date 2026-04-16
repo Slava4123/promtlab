@@ -62,7 +62,7 @@ func NewService(cfg *config.Config, users repo.UserRepository, linkedAccounts re
 		frontendURL:     cfg.Server.FrontendURL,
 		accessDuration:  accessDur,
 		refreshDuration: refreshDur,
-		forgotLimiter:   ratelimit.NewLimiterWithWindow[string](3, 15*time.Minute),
+		forgotLimiter:   ratelimit.NewLimiterWithWindow[string](3, 15*time.Minute, ratelimit.StringHash),
 	}
 }
 
