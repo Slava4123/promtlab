@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { AIAction } from "@/api/types"
+import { DismissibleBanner } from "@/components/hints/dismissible-banner"
 
 interface AIPanelProps {
   content: string
@@ -106,6 +107,14 @@ export function AIPanel({ content, onApply }: AIPanelProps) {
 
       {expanded && (
         <div className="space-y-4 px-4 pb-4">
+          {/* M-13: AI feature hint — показываем только при первом раскрытии панели */}
+          <DismissibleBanner
+            id="ai_button"
+            title="4 режима AI"
+            description="Улучшить (конкретика + структура), Переписать (под стиль), Анализ (оценка промпта), Вариации (3 разных версии)."
+            tone="violet"
+          />
+
           {/* Auto-select model (hidden, single model) */}
           <div className="hidden">
             <ModelSelector value={selectedModel} onChange={(v) => setSelectedModel(v)} />

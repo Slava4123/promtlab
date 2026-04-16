@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { EmptyState } from "@/components/ui/empty-state"
 import { PromptCard, PromptCardSkeleton } from "@/components/prompts/prompt-card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { DismissibleBanner } from "@/components/hints/dismissible-banner"
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
 import { usePrompts, useToggleFavorite, useTogglePin, useIncrementUsage, useDeletePrompt, usePinnedPrompts, useRecentPrompts } from "@/hooks/use-prompts"
 import { useRestoreItem } from "@/hooks/use-trash"
@@ -212,6 +213,22 @@ export default function Dashboard() {
           )}
         </div>
       )}
+
+      {/* M-13: education banners — показываются пока юзер не закроет × */}
+      <DismissibleBanner
+        id="dashboard_extension"
+        title="Расширение для Chrome и Firefox"
+        description="Вставляйте любимые промпты прямо в ChatGPT/Claude/любой веб-чат одной клавишей."
+        cta={{ label: "Открыть в настройках", onClick: () => navigate("/settings") }}
+        tone="violet"
+      />
+      <DismissibleBanner
+        id="dashboard_mcp"
+        title="MCP-сервер для Claude Code и Claude Desktop"
+        description="Сохраняйте промпты из переписки с Claude одной командой и вытягивайте их обратно в любой чат."
+        cta={{ label: "Как подключить", onClick: () => navigate("/settings") }}
+        tone="emerald"
+      />
 
       {/* Pinned section */}
       {pinnedError && (

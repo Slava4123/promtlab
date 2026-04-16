@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api } from "@/api/client"
+import { DismissibleBanner } from "@/components/hints/dismissible-banner"
 
 /**
  * M-7 Referral — секция в /settings. Показывает код юзера, ссылку-приглашение,
@@ -53,6 +54,14 @@ export function ReferralSection() {
       <p className="text-sm text-muted-foreground">
         Поделитесь ссылкой. Когда друг оформит платную подписку — вам продлят Pro на 30 дней.
       </p>
+
+      <DismissibleBanner
+        id="settings_referral"
+        title="Как работает приглашение"
+        description="Отправляете ссылку или код. Друг регистрируется → платит → вам автоматически продлевается Pro. Одно приглашение = +30 дней."
+        tone="amber"
+      />
+
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
