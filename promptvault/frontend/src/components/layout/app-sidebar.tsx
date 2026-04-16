@@ -334,6 +334,8 @@ export function AppSidebar() {
           <button onClick={() => go("/legal/privacy")} className="hover:text-muted-foreground transition-colors">Конфиденциальность</button>
           <span>&middot;</span>
           <button onClick={() => go("/legal/offer")} className="hover:text-muted-foreground transition-colors">Оферта</button>
+          <span>&middot;</span>
+          <button onClick={() => go("/help")} className="hover:text-muted-foreground transition-colors">Помощь</button>
         </div>
       </SidebarFooter>
     </Sidebar>

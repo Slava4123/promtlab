@@ -40,6 +40,7 @@ const History = lazy(() => import("@/pages/history"))
 const Welcome = lazy(() => import("@/pages/welcome"))
 const Changelog = lazy(() => import("@/pages/changelog"))
 const Badges = lazy(() => import("@/pages/badges"))
+const Help = lazy(() => import("@/pages/help"))
 
 // Admin pages
 const AdminLayout = lazy(() => import("@/pages/admin/layout"))
@@ -107,6 +108,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/s/:token" element={<SharedPrompt />} />
       <Route path="/p/:slug" element={<PublicPrompt />} />
+      <Route path="/help" element={<Suspense fallback={<PageFallback />}><Help /></Suspense>} />
       <Route path="/legal/extension-privacy" element={<Suspense fallback={<PageFallback />}><ExtensionPrivacy /></Suspense>} />
       <Route path="/legal/terms" element={<Suspense fallback={<PageFallback />}><Terms /></Suspense>} />
       <Route path="/legal/privacy" element={<Suspense fallback={<PageFallback />}><Privacy /></Suspense>} />
