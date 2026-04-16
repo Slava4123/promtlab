@@ -5,6 +5,7 @@ import { toast } from "sonner"
 
 import { EmptyState } from "@/components/ui/empty-state"
 import { PromptCard, PromptCardSkeleton } from "@/components/prompts/prompt-card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
 import { usePrompts, useToggleFavorite, useTogglePin, useIncrementUsage, useDeletePrompt, usePinnedPrompts, useRecentPrompts } from "@/hooks/use-prompts"
 import { useRestoreItem } from "@/hooks/use-trash"
@@ -36,8 +37,8 @@ export default function Dashboard() {
   }, [search])
 
   const { data: tags } = useTags(teamId)
-  const { data: collections } = useCollections(teamId)
-  const { data: streak } = useStreak()
+  const { data: collections, isLoading: collectionsLoading } = useCollections(teamId)
+  const { data: streak, isLoading: streakLoading } = useStreak()
 
   const {
     data,
@@ -144,46 +145,73 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — показываем skeleton пока грузим промпты/коллекции вместо фальшивых нулей (X-9). */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
           <p className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">Всего</p>
-          <p className="mt-0.5 text-lg font-bold tabular-nums text-foreground">{total}</p>
+          {isLoading ? (
+            <Skeleton className="mt-1 h-5 w-10" />
+          ) : (
+            <p className="mt-0.5 text-lg font-bold tabular-nums text-foreground">{total}</p>
+          )}
         </div>
         <div className="rounded-xl border border-yellow-500/15 bg-yellow-500/[0.03] px-3.5 py-2.5">
           <p className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">Избранное</p>
-          <p className="mt-0.5 text-lg font-bold tabular-nums text-yellow-400">{allItems.filter(p => p.favorite).length}</p>
+          {isLoading ? (
+            <Skeleton className="mt-1 h-5 w-8" />
+          ) : (
+            <p className="mt-0.5 text-lg font-bold tabular-nums text-yellow-400">{allItems.filter(p => p.favorite).length}</p>
+          )}
         </div>
         <div className="rounded-xl border border-violet-500/15 bg-violet-500/[0.03] px-3.5 py-2.5">
           <p className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">Использований</p>
-          <p className="mt-0.5 text-lg font-bold tabular-nums text-violet-400">{usageCount}</p>
+          {isLoading ? (
+            <Skeleton className="mt-1 h-5 w-12" />
+          ) : (
+            <p className="mt-0.5 text-lg font-bold tabular-nums text-violet-400">{usageCount}</p>
+          )}
         </div>
         <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
           <p className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">Коллекции</p>
-          <p className="mt-0.5 text-lg font-bold tabular-nums text-foreground">{collections?.length ?? 0}</p>
+          {collectionsLoading ? (
+            <Skeleton className="mt-1 h-5 w-8" />
+          ) : (
+            <p className="mt-0.5 text-lg font-bold tabular-nums text-foreground">{collections?.length ?? 0}</p>
+          )}
         </div>
       </div>
 
-      {/* Streak */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-orange-500/15 bg-orange-500/[0.03] px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Flame className={`h-5 w-5 text-orange-400${streak?.active_today ? " animate-pulse" : ""}`} />
-          <span className="text-xl font-bold tabular-nums text-orange-400">{streak?.current_streak ?? 0}</span>
-          <span className="text-sm font-medium text-orange-400/80">
-            {(streak?.current_streak ?? 0) === 1 ? "день" : (streak?.current_streak ?? 0) < 5 ? "дня" : "дней"} подряд
-          </span>
+      {/* Streak — skeleton пока грузим, иначе мигает "0 дней подряд" на свежем заходе (X-9). */}
+      {streakLoading ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-orange-500/15 bg-orange-500/[0.03] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Flame className="h-5 w-5 text-orange-400/60" />
+            <Skeleton className="h-6 w-8" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <Skeleton className="h-3 w-48" />
         </div>
-        <span className="text-xs text-muted-foreground">
-          {!streak || streak.current_streak === 0
-            ? "Используйте промпт, чтобы начать серию"
-            : streak.active_today
-              ? streak.current_streak < 7 ? "Так держать!" : "Вы на огне!"
-              : "Используйте промпты, чтобы не потерять серию"}
-        </span>
-        {streak && streak.longest_streak > streak.current_streak && (
-          <span className="ml-auto text-xs text-muted-foreground">Рекорд: {streak.longest_streak}</span>
-        )}
-      </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-orange-500/15 bg-orange-500/[0.03] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Flame className={`h-5 w-5 text-orange-400${streak?.active_today ? " animate-pulse" : ""}`} />
+            <span className="text-xl font-bold tabular-nums text-orange-400">{streak?.current_streak ?? 0}</span>
+            <span className="text-sm font-medium text-orange-400/80">
+              {(streak?.current_streak ?? 0) === 1 ? "день" : (streak?.current_streak ?? 0) < 5 ? "дня" : "дней"} подряд
+            </span>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {!streak || streak.current_streak === 0
+              ? "Используйте промпт, чтобы начать серию"
+              : streak.active_today
+                ? streak.current_streak < 7 ? "Так держать!" : "Вы на огне!"
+                : "Используйте промпты, чтобы не потерять серию"}
+          </span>
+          {streak && streak.longest_streak > streak.current_streak && (
+            <span className="ml-auto text-xs text-muted-foreground">Рекорд: {streak.longest_streak}</span>
+          )}
+        </div>
+      )}
 
       {/* Pinned section */}
       {pinnedError && (
