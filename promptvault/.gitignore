@@ -15,11 +15,9 @@ backend/tmp/
 *.dylib
 
 # Node
-frontend/node_modules/
+node_modules/
 frontend/dist/
-backend/node_modules/
 backend/package-lock.json
-extension/node_modules/
 extension/.output/
 
 # IDE
