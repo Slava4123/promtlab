@@ -64,8 +64,12 @@ func (l *ExpirationLoop) run() {
 	}
 }
 
+// expireBatchMax — защита от бесконечного цикла: максимум expireBatchMax × 100
+// подписок за один тик. Если больше — остальное обработает следующий тик.
+const expireBatchMax = 10
+
 func (l *ExpirationLoop) expire() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	now := time.Now()
@@ -75,12 +79,31 @@ func (l *ExpirationLoop) expire() {
 	// с истёкшим period_end сразу корректно downgrade'илась (если так совпало).
 	l.autoResumePauses(ctx, now)
 
-	subs, err := l.subs.ListExpiring(ctx, now)
-	if err != nil {
-		slog.Error("subscription.expiration.list_failed", "error", err)
-		return
+	// P-4: batched loop. ListExpiring возвращает LIMIT 100; если было ровно 100 —
+	// скорее всего есть ещё. Повторяем до пустого результата или expireBatchMax
+	// итераций (1000 подписок за тик — разумный потолок для 1-часового тика).
+	for batch := 0; batch < expireBatchMax; batch++ {
+		if err := ctx.Err(); err != nil {
+			slog.Warn("subscription.expiration.ctx_cancelled", "batch", batch, "error", err)
+			return
+		}
+		subs, err := l.subs.ListExpiring(ctx, now)
+		if err != nil {
+			slog.Error("subscription.expiration.list_failed", "error", err)
+			return
+		}
+		if len(subs) == 0 {
+			return
+		}
+		l.expireBatch(ctx, subs, now)
+		if len(subs) < 100 {
+			return // последний неполный batch
+		}
 	}
+	slog.Warn("subscription.expiration.batch_cap_reached", "cap", expireBatchMax*100)
+}
 
+func (l *ExpirationLoop) expireBatch(ctx context.Context, subs []models.Subscription, now time.Time) {
 	for _, sub := range subs {
 		// M-9: grace period для past_due подписок, у которых исчерпаны retry.
 		// Даём юзеру ещё GracePeriod (7 дней) обновить карту перед downgrade.

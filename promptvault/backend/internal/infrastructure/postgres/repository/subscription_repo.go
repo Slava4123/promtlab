@@ -46,10 +46,16 @@ func (r *subscriptionRepo) ListExpiring(ctx context.Context, before time.Time) (
 	var subs []models.Subscription
 	// past_due с истёкшим периодом тоже экспайрим — если retry-попытки не помогли,
 	// подписка не должна зависнуть в past_due навечно.
+	// LIMIT 100 (P-4) — защита от OOM и длинной транзакции при массовом истечении
+	// (например, после миграции биллинга или простоя сервиса). Следующий тик
+	// ExpirationLoop добирает остальное через batched while-loop.
+	// Order by current_period_end — обрабатываем самые "просроченные" сначала.
 	err := r.db.WithContext(ctx).
 		Preload("Plan").
 		Where("status IN ? AND current_period_end < ?",
 			[]models.SubscriptionStatus{models.SubStatusActive, models.SubStatusPastDue}, before).
+		Order("current_period_end ASC").
+		Limit(100).
 		Find(&subs).Error
 	return subs, err
 }
