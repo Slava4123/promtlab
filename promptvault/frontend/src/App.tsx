@@ -18,9 +18,12 @@ import SignUp from "@/pages/sign-up"
 import OAuthCallback from "@/pages/oauth-callback"
 import VerifyEmail from "@/pages/verify-email"
 import ForgotPassword from "@/pages/forgot-password"
-import Landing from "@/pages/landing"
 import SharedPrompt from "@/pages/shared-prompt"
 import PublicPrompt from "@/pages/public-prompt"
+
+// P-13: Landing — lazy, он не на hot-path для logged-in юзеров, а initial
+// bundle ценнее держать лёгким (первая загрузка чаще /sign-in или /dashboard).
+const Landing = lazy(() => import("@/pages/landing"))
 
 // Lazy-loaded (protected, heavier)
 const Dashboard = lazy(() => import("@/pages/dashboard"))
@@ -96,7 +99,7 @@ function AppRoutes() {
   return (
     <Routes>
       {/* public */}
-      <Route path="/" element={<Landing />} />
+      <Route path="/" element={<Suspense fallback={<PageFallback />}><Landing /></Suspense>} />
       <Route path="/sign-in" element={<SignIn />} />
       <Route path="/sign-up" element={<SignUp />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
