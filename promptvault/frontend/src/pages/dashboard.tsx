@@ -401,15 +401,23 @@ export default function Dashboard() {
         <EmptyState
           icon={<FileText className="h-7 w-7 text-violet-400/60" />}
           title={debouncedSearch ? "Ничего не найдено" : "Пока нет промптов"}
-          description={debouncedSearch ? "Попробуйте другой запрос" : "Создайте первый промпт для вашей библиотеки"}
+          description={debouncedSearch ? "Попробуйте другой запрос" : "Создайте первый промпт или выберите готовый из каталога шаблонов"}
           action={!debouncedSearch ? (
-            <button
-              onClick={() => navigate("/prompts/new")}
-              className="flex h-11 items-center gap-1.5 rounded-lg bg-violet-600 px-4 text-[0.8rem] font-medium text-white shadow-lg shadow-violet-600/10 transition-[color,background-color,transform,box-shadow] hover:bg-violet-500 active:scale-[0.97]"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Создать промпт
-            </button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button
+                onClick={() => navigate("/prompts/new")}
+                className="flex h-11 items-center gap-1.5 rounded-lg bg-violet-600 px-4 text-[0.8rem] font-medium text-white shadow-lg shadow-violet-600/10 transition-[color,background-color,transform,box-shadow] hover:bg-violet-500 active:scale-[0.97]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Создать промпт
+              </button>
+              <button
+                onClick={() => navigate("/welcome")}
+                className="flex h-11 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[0.8rem] font-medium text-foreground transition-colors hover:bg-muted/50 active:scale-[0.97]"
+              >
+                Выбрать из шаблонов
+              </button>
+            </div>
           ) : undefined}
         />
       ) : (
