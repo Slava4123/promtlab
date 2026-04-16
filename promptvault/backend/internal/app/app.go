@@ -628,6 +628,7 @@ func (a *App) MountRoutes(r chi.Router) {
 			r.Route("/subscription", func(r chi.Router) {
 				r.Get("/", a.subscriptionHandler.GetSubscription)
 				r.Get("/usage", a.subscriptionHandler.GetUsage)
+				r.Get("/downgrade-preview", a.subscriptionHandler.GetDowngradePreview)
 				r.Post("/checkout", a.subscriptionHandler.Checkout)
 				r.Post("/cancel", a.subscriptionHandler.Cancel)
 				r.Post("/pause", a.subscriptionHandler.Pause)

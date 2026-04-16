@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { useAuthStore } from "@/stores/auth-store"
 import {
+  fetchDowngradePreview,
   fetchPlans,
   fetchSubscription,
   fetchUsage,
@@ -57,6 +58,19 @@ export function useUsage() {
   return useQuery({
     queryKey: ["subscription", "usage"],
     queryFn: fetchUsage,
+  })
+}
+
+// useDowngradePreview — lazy-load (enabled=false), вызывается через refetch()
+// прямо перед открытием confirm-dialog на Free. Cache — query key учитывает
+// targetPlanId, staleTime 0, чтобы при повторной попытке юзер видел актуальное.
+export function useDowngradePreview(targetPlanId = "free") {
+  return useQuery({
+    queryKey: ["subscription", "downgrade-preview", targetPlanId],
+    queryFn: () => fetchDowngradePreview(targetPlanId),
+    enabled: false,
+    staleTime: 0,
+    gcTime: 0,
   })
 }
 

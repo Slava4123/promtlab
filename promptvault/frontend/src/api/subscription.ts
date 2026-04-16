@@ -19,6 +19,21 @@ export function fetchUsage(): Promise<UsageSummary> {
   return api<UsageSummary>("/subscription/usage")
 }
 
+export interface DowngradePreview {
+  target_plan_id: string
+  current_plan_id: string
+  over_prompts: number
+  over_collections: number
+  over_teams: number
+  over_shares: number
+}
+
+export function fetchDowngradePreview(targetPlanId = "free"): Promise<DowngradePreview> {
+  return api<DowngradePreview>(
+    `/subscription/downgrade-preview?plan_id=${encodeURIComponent(targetPlanId)}`,
+  )
+}
+
 export function postCheckout(planId: string): Promise<CheckoutResponse> {
   return api<CheckoutResponse>("/subscription/checkout", {
     method: "POST",

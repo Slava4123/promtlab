@@ -325,3 +325,73 @@ func (s *Service) GetUsageSummary(ctx context.Context, userID uint) (*UsageSumma
 		MCPUsesToday: QuotaInfo{Used: mcpUsed, Limit: plan.MaxMCPUsesDaily},
 	}, nil
 }
+
+// DowngradePreview — превышения лимитов целевого плана (M-10).
+// Учитываем только persistent-ресурсы: prompts, collections, teams, share_links.
+// AI/MCP/extension — daily, сбросятся через день, downgrade не блокирует.
+// Поле Over — абсолютное превышение (used - limit), 0 если в пределах.
+type DowngradePreview struct {
+	TargetPlanID  string `json:"target_plan_id"`
+	CurrentPlanID string `json:"current_plan_id"`
+	OverPrompts   int    `json:"over_prompts"`
+	OverCollections int  `json:"over_collections"`
+	OverTeams     int    `json:"over_teams"`
+	OverShares    int    `json:"over_shares"`
+}
+
+// HasOverages возвращает true если хотя бы один ресурс превышает лимит target-плана.
+// Удобно для UI — не нужно разбирать каждое поле отдельно.
+func (p *DowngradePreview) HasOverages() bool {
+	return p.OverPrompts > 0 || p.OverCollections > 0 || p.OverTeams > 0 || p.OverShares > 0
+}
+
+// GetDowngradePreview считает, сколько ресурсов у юзера превышает лимиты
+// target-плана (M-10). Вызывается перед POST /downgrade, чтобы UI показал
+// warning "У вас 55 промптов, на Free лимит 50 — 5 самых старых будут архивированы".
+func (s *Service) GetDowngradePreview(ctx context.Context, userID uint, targetPlanID string) (*DowngradePreview, error) {
+	currentPlanID, _, err := s.getPlan(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	targetPlan, err := s.plans.GetByID(ctx, targetPlanID)
+	if err != nil {
+		return nil, err
+	}
+
+	prompts, err := s.quotas.CountPrompts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	collections, err := s.quotas.CountCollections(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	teams, err := s.quotas.CountTeamsOwned(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	shares, err := s.quotas.CountActiveShareLinks(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	over := func(used int64, limit int) int {
+		if limit == -1 {
+			return 0
+		}
+		diff := int(used) - limit
+		if diff < 0 {
+			return 0
+		}
+		return diff
+	}
+
+	return &DowngradePreview{
+		TargetPlanID:    targetPlan.ID,
+		CurrentPlanID:   currentPlanID,
+		OverPrompts:     over(prompts, targetPlan.MaxPrompts),
+		OverCollections: over(collections, targetPlan.MaxCollections),
+		OverTeams:       over(teams, targetPlan.MaxTeams),
+		OverShares:      over(shares, targetPlan.MaxShareLinks),
+	}, nil
+}

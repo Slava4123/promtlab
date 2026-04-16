@@ -68,6 +68,26 @@ func (h *Handler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	utils.WriteOK(w, NewUsageResponse(summary))
 }
 
+// GetDowngradePreview — GET /api/subscription/downgrade-preview?plan_id=free
+// (M-10). Показывает, сколько ресурсов у юзера превысит лимиты target-плана.
+// По умолчанию target = "free" — основной кейс даунгрейда.
+func (h *Handler) GetDowngradePreview(w http.ResponseWriter, r *http.Request) {
+	userID := authmw.GetUserID(r.Context())
+
+	targetPlan := r.URL.Query().Get("plan_id")
+	if targetPlan == "" {
+		targetPlan = "free"
+	}
+
+	preview, err := h.quotas.GetDowngradePreview(r.Context(), userID, targetPlan)
+	if err != nil {
+		respondError(w, r, err)
+		return
+	}
+
+	utils.WriteOK(w, preview)
+}
+
 // Checkout — POST /api/subscription/checkout.
 // Инициализирует платёж и возвращает URL для оплаты.
 func (h *Handler) Checkout(w http.ResponseWriter, r *http.Request) {

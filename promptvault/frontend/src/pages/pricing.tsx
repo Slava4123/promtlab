@@ -2,7 +2,13 @@ import { useMemo, useState } from "react"
 import { Check, Sparkles, Zap, Crown, Loader2, type LucideIcon } from "lucide-react"
 import { PageLayout } from "@/components/layout/page-layout"
 import { Skeleton } from "@/components/ui/skeleton"
-import { usePlans, useCheckout, useDowngrade } from "@/hooks/use-subscription"
+import { DowngradePreviewDialog } from "@/components/subscription/downgrade-preview-dialog"
+import {
+  useCheckout,
+  useDowngrade,
+  useDowngradePreview,
+  usePlans,
+} from "@/hooks/use-subscription"
 import { useAuthStore } from "@/stores/auth-store"
 import type { Plan, PlanID } from "@/api/types"
 
@@ -127,6 +133,11 @@ export default function Pricing() {
   const [billing, setBilling] = useState<Billing>(() =>
     currentPlanId.endsWith("_yearly") ? "yearly" : "monthly",
   )
+
+  // M-10: downgrade preview. Открываем диалог после refetch — чтобы показать
+  // конкретные warnings до того, как юзер подтвердит.
+  const [downgradeOpen, setDowngradeOpen] = useState(false)
+  const downgradePreview = useDowngradePreview("free")
 
   // Фильтруем планы под выбранный цикл: free всегда, платные — по period_days.
   // 365 (yearly) vs 30 (monthly). Пороговое 300 на всякий случай (если когда-то
@@ -301,7 +312,11 @@ export default function Pricing() {
                     onClick={() => {
                       if (isCurrent) return
                       if (plan.id === "free") {
-                        downgrade.mutate()
+                        // Если юзер уже на Free — ничего не делаем (кнопка disabled),
+                        // иначе показываем preview перед downgrade.
+                        if (currentPlanId === "free") return
+                        setDowngradeOpen(true)
+                        downgradePreview.refetch()
                       } else {
                         checkout.mutate(plan.id)
                       }
@@ -377,6 +392,19 @@ export default function Pricing() {
           </div>
         </>
       )}
+
+      <DowngradePreviewDialog
+        open={downgradeOpen}
+        onOpenChange={setDowngradeOpen}
+        preview={downgradePreview.data}
+        isLoading={downgradePreview.isFetching}
+        isPending={downgrade.isPending}
+        onConfirm={() => {
+          downgrade.mutate(undefined, {
+            onSettled: () => setDowngradeOpen(false),
+          })
+        }}
+      />
     </PageLayout>
   )
 }
