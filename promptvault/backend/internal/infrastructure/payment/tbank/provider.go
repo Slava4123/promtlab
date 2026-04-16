@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -346,5 +347,6 @@ func (p *Provider) VerifyWebhookSignature(params map[string]string, token string
 	hash := sha256.Sum256([]byte(sb.String()))
 	computed := hex.EncodeToString(hash[:])
 
-	return strings.EqualFold(computed, token)
+	// subtle.ConstantTimeCompare — защита от timing side-channel при угадывании Token.
+	return subtle.ConstantTimeCompare([]byte(strings.ToLower(computed)), []byte(strings.ToLower(token))) == 1
 }

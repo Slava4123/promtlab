@@ -109,7 +109,7 @@ export function SubscriptionSection() {
           <div className="flex gap-2">
             {planId === "free" ? (
               <Button size="sm" onClick={() => navigate("/pricing")}>
-                Перейти на Pro
+                Получить Pro за 19₽/день
               </Button>
             ) : (
               !subscription?.cancel_at_period_end && (

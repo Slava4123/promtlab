@@ -19,6 +19,8 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
@@ -203,11 +205,9 @@ func (s *Service) ResetPassword(ctx context.Context, targetID uint) error {
 // ChangeTier устанавливает plan_id для юзера (admin override, без оплаты).
 // Если у юзера есть активная подписка — отменяет её.
 func (s *Service) ChangeTier(ctx context.Context, targetID uint, tier string) error {
-	info, ok := auditsvc.FromContext(ctx)
-	if !ok {
+	if _, ok := auditsvc.FromContext(ctx); !ok {
 		return auditsvc.ErrMissingRequestInfo
 	}
-	_ = info
 
 	// Validate plan exists
 	if s.plans == nil {
@@ -227,9 +227,15 @@ func (s *Service) ChangeTier(ctx context.Context, targetID uint, tier string) er
 
 	before := map[string]any{"plan_id": user.PlanID}
 
-	// Cancel active subscription if exists
+	// Cancel active subscription if exists.
+	// CancelAtPeriodEnd ошибку логируем и прерываемся: иначе plan_id обновится в users,
+	// а старая подписка останется active → billing-конфликт без сигнала админу.
 	if sub, subErr := s.subs.GetActiveByUserID(ctx, targetID); subErr == nil {
-		_ = s.subs.CancelAtPeriodEnd(ctx, sub.ID)
+		if cancelErr := s.subs.CancelAtPeriodEnd(ctx, sub.ID); cancelErr != nil {
+			slog.Error("admin.change_tier.cancel_sub_failed",
+				"target_user_id", targetID, "sub_id", sub.ID, "error", cancelErr)
+			return fmt.Errorf("cancel existing subscription: %w", cancelErr)
+		}
 	}
 
 	// Update user plan

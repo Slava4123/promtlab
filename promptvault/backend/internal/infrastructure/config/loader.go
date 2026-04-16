@@ -59,8 +59,8 @@ func Load() (*Config, error) {
 
 	// Production safety checks
 	if cfg.Server.IsProd() {
-		if cfg.JWT.Secret == "dev-secret-change-me" {
-			return nil, fmt.Errorf("JWT_SECRET must be changed in production")
+		if err := validateProdJWTSecret(cfg.JWT.Secret); err != nil {
+			return nil, err
 		}
 		if cfg.Server.FrontendURL == "http://localhost:5173" {
 			return nil, fmt.Errorf("SERVER_FRONTEND_URL must be configured in production")
@@ -106,6 +106,7 @@ func defaults() map[string]any {
 			"environment":     "development",
 			"allowed_origins": []string{"http://localhost:5173"},
 			"frontend_url":    "http://localhost:5173",
+			"trust_proxy":     false,
 		},
 		"database": map[string]any{
 			"host":           "localhost",
@@ -166,4 +167,26 @@ type confmap map[string]any
 func (c confmap) ReadBytes() ([]byte, error) { return nil, nil }
 func (c confmap) Read() (map[string]any, error) {
 	return map[string]any(c), nil
+}
+
+// validateProdJWTSecret — prod-требования к секрету:
+// не dev-дефолт, длина ≥ 32 байт, без плейсхолдеров CHANGE_ME/PLACEHOLDER.
+// HS256 требует ≥ 32 байт энтропии для защиты от offline brute-force.
+func validateProdJWTSecret(secret string) error {
+	if secret == "" {
+		return fmt.Errorf("JWT_SECRET is required in production")
+	}
+	if secret == "dev-secret-change-me" {
+		return fmt.Errorf("JWT_SECRET must be changed in production")
+	}
+	if len(secret) < 32 {
+		return fmt.Errorf("JWT_SECRET must be at least 32 characters in production (got %d)", len(secret))
+	}
+	upper := strings.ToUpper(secret)
+	for _, placeholder := range []string{"CHANGE_ME", "PLACEHOLDER", "YOUR_SECRET", "REPLACE"} {
+		if strings.Contains(upper, placeholder) {
+			return fmt.Errorf("JWT_SECRET contains placeholder %q — replace with random secret", placeholder)
+		}
+	}
+	return nil
 }

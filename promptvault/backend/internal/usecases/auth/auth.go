@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ type Service struct {
 	verifications   repo.VerificationRepository
 	email           iservice.EmailSender
 	secret          []byte
+	frontendURL     string
 	accessDuration  time.Duration
 	refreshDuration time.Duration
 	backgroundWg    sync.WaitGroup
@@ -57,6 +59,7 @@ func NewService(cfg *config.Config, users repo.UserRepository, linkedAccounts re
 		verifications:   verifications,
 		email:           emailSvc,
 		secret:          []byte(cfg.JWT.Secret),
+		frontendURL:     cfg.Server.FrontendURL,
 		accessDuration:  accessDur,
 		refreshDuration: refreshDur,
 		forgotLimiter:   ratelimit.NewLimiterWithWindow[string](3, 15*time.Minute),
@@ -209,12 +212,30 @@ func (s *Service) VerifyEmail(ctx context.Context, userEmail, code string) (*mod
 		slog.Error("failed to delete verification after email verify", "user_id", user.ID, "error", err)
 	}
 
+	// Welcome email async — не блокируем verify-flow, если SMTP медленный/упал.
+	// VerifyEmail вызывается один раз на аккаунт (verifications-запись удаляется
+	// выше), поэтому welcome тоже отправится один раз.
+	s.sendWelcomeAsync(user)
+
 	tokens, err := s.issueTokens(ctx, user)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return user, tokens, nil
+}
+
+// sendWelcomeAsync шлёт приветственное письмо в background.
+// No-op если email не настроен или у юзера пустой email (OAuth без email).
+func (s *Service) sendWelcomeAsync(user *models.User) {
+	if s.email == nil || !s.email.Configured() || user.Email == "" {
+		return
+	}
+	s.runBackground(func() {
+		if err := s.email.SendWelcome(user.Email, user.Name, s.frontendURL); err != nil {
+			slog.Warn("welcome email failed", "user_id", user.ID, "error", err)
+		}
+	})
 }
 
 func (s *Service) ResendCode(ctx context.Context, userEmail string) error {
@@ -391,7 +412,21 @@ func (s *Service) Login(ctx context.Context, userEmail, password string) (*model
 		return nil, nil, err
 	}
 
+	// TouchLastLogin в background — триггер для re-engagement (M-5d). Ошибку
+	// игнорируем: это не влияет на логин, только на email lifecycle.
+	s.touchLastLoginAsync(user.ID)
+
 	return user, tokens, nil
+}
+
+// touchLastLoginAsync обновляет users.last_login_at в background.
+// Не блокирует response и не фэйлит login если UPDATE упадёт.
+func (s *Service) touchLastLoginAsync(userID uint) {
+	s.runBackground(func() {
+		if err := s.users.TouchLastLogin(context.Background(), userID); err != nil {
+			slog.Warn("auth.touch_last_login.failed", "user_id", userID, "error", err)
+		}
+	})
 }
 
 // InitiateSetPassword — шаг 1: отправляет код подтверждения на email (для OAuth-юзеров без пароля)
@@ -481,19 +516,27 @@ func (s *Service) ForgotPassword(ctx context.Context, userEmail string) error {
 		}
 	}(time.Now())
 
-	// Per-email rate limiting — 3 запроса за 15 минут
+	// Per-email rate limiting — 3 запроса за 15 минут.
+	// Наружу возвращаем nil (не раскрываем rate-limit), но логируем для observability.
 	if !s.forgotLimiter.Allow(userEmail) {
+		slog.Warn("auth.forgot.rate_limited", "email_suffix", emailSuffix(userEmail))
 		return nil
 	}
 
 	user, err := s.users.GetByEmail(ctx, userEmail)
 	if err != nil {
+		// Отличаем "not found" от реальных БД-ошибок — прод-outage не должен быть тихим.
+		if !errors.Is(err, ErrUserNotFound) {
+			slog.Error("auth.forgot.db_error", "error", err)
+		}
 		return nil
 	}
 	if !user.HasPassword() {
+		slog.Info("auth.forgot.no_password", "user_id", user.ID)
 		return nil
 	}
 	if s.email == nil || !s.email.Configured() {
+		slog.Warn("auth.forgot.email_not_configured")
 		return nil
 	}
 	s.runBackground(func() {
@@ -502,6 +545,14 @@ func (s *Service) ForgotPassword(ctx context.Context, userEmail string) error {
 		}
 	})
 	return nil
+}
+
+// emailSuffix — возвращает "@domain" для безопасного логирования без PII.
+func emailSuffix(email string) string {
+	if i := strings.Index(email, "@"); i >= 0 {
+		return email[i:]
+	}
+	return ""
 }
 
 // ResetPassword — проверяет код и устанавливает новый пароль

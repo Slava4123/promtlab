@@ -127,8 +127,10 @@ func (r *subscriptionRepo) ListReadyForRenewal(ctx context.Context, before time.
 }
 
 func (r *subscriptionRepo) ExtendPeriod(ctx context.Context, subID uint, newPeriodEnd time.Time) error {
-	// При успешном продлении сбрасываем retry-счётчики и возвращаем в active
-	// на случай если подписка была past_due (восстановление после retry-успеха).
+	// При успешном продлении сбрасываем retry-счётчики, pre_expire_stage и
+	// возвращаем в active (восстановление после retry-успеха или ручного продления).
+	// Без сброса pre_expire_stage юзер на продлённую подписку не получит
+	// reminder на следующем цикле.
 	return r.db.WithContext(ctx).
 		Model(&models.Subscription{}).
 		Where("id = ?", subID).
@@ -138,6 +140,7 @@ func (r *subscriptionRepo) ExtendPeriod(ctx context.Context, subID uint, newPeri
 			"status":                  models.SubStatusActive,
 			"renewal_attempts":        0,
 			"last_renewal_attempt_at": nil,
+			"pre_expire_stage":        0,
 			"updated_at":              time.Now(),
 		}).Error
 }
@@ -152,5 +155,35 @@ func (r *subscriptionRepo) RecordRenewalFailure(ctx context.Context, subID uint)
 			"renewal_attempts":        gorm.Expr("renewal_attempts + 1"),
 			"last_renewal_attempt_at": now,
 			"updated_at":              now,
+		}).Error
+}
+
+// ListPreExpiring возвращает active подписки с auto_renew=false,
+// у которых period_end попадает в окно (now, upTo], и pre_expire_stage < minStage.
+// Используется ReminderLoop — auto_renew=true юзеры получают retry-уведомления
+// из RenewalLoop, им pre-expire напоминания не нужны.
+// Preload плана — чтобы ReminderLoop мог показать читаемое имя в письме.
+func (r *subscriptionRepo) ListPreExpiring(ctx context.Context, now, upTo time.Time, minStage int16) ([]models.Subscription, error) {
+	var subs []models.Subscription
+	err := r.db.WithContext(ctx).
+		Preload("Plan").
+		Where("status = ?", models.SubStatusActive).
+		Where("auto_renew = ?", false).
+		Where("current_period_end > ?", now).
+		Where("current_period_end <= ?", upTo).
+		Where("pre_expire_stage < ?", minStage).
+		Order("current_period_end ASC").
+		Limit(200).
+		Find(&subs).Error
+	return subs, err
+}
+
+func (r *subscriptionRepo) SetPreExpireStage(ctx context.Context, subID uint, stage int16) error {
+	return r.db.WithContext(ctx).
+		Model(&models.Subscription{}).
+		Where("id = ?", subID).
+		Updates(map[string]any{
+			"pre_expire_stage": stage,
+			"updated_at":       time.Now(),
 		}).Error
 }

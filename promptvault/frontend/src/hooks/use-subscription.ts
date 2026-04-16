@@ -11,6 +11,31 @@ import {
   postSetAutoRenew,
 } from "@/api/subscription"
 
+// CHECKOUT_INTENT_KEY — пометка что юзер хотел upgrade но не был залогинен.
+// После успешного login/register → sign-in.tsx вызывает popCheckoutIntent и
+// сразу начинает checkout, не теряя upsell momentum (M-14).
+const CHECKOUT_INTENT_KEY = "pv_checkout_intent"
+
+export function saveCheckoutIntent(planId: string) {
+  try { sessionStorage.setItem(CHECKOUT_INTENT_KEY, planId) } catch { /* disabled storage */ }
+}
+
+export function popCheckoutIntent(): string | null {
+  try {
+    const v = sessionStorage.getItem(CHECKOUT_INTENT_KEY)
+    sessionStorage.removeItem(CHECKOUT_INTENT_KEY)
+    return v
+  } catch {
+    return null
+  }
+}
+
+function isAuthError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  const msg = err.message.toLowerCase()
+  return msg.includes("сессия истекла") || msg.includes("войдите") || msg.includes("unauthorized")
+}
+
 export function usePlans() {
   return useQuery({
     queryKey: ["plans"],
@@ -42,7 +67,17 @@ export function useCheckout() {
       sessionStorage.setItem("pending_checkout", "true")
       window.location.href = data.payment_url
     },
-    onError: (err: Error) => {
+    onError: (err: Error, planId) => {
+      // Если юзер не залогинен — сохраняем intent и ведём на sign-in,
+      // чтобы после login сразу продолжить checkout (M-14).
+      if (isAuthError(err)) {
+        saveCheckoutIntent(planId)
+        toast.info("Войдите, чтобы оформить подписку")
+        // Используем полный redirect (а не navigate): гарантированно сбрасывает
+        // React Query cache и перехватывает из pricing-page state.
+        window.location.href = `/sign-in?redirect=${encodeURIComponent("/pricing")}`
+        return
+      }
       toast.error(err.message || "Не удалось начать оплату")
     },
   })

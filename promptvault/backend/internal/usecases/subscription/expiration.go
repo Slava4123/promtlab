@@ -68,13 +68,29 @@ func (l *ExpirationLoop) expire() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	subs, err := l.subs.ListExpiring(ctx, time.Now())
+	now := time.Now()
+	subs, err := l.subs.ListExpiring(ctx, now)
 	if err != nil {
 		slog.Error("subscription.expiration.list_failed", "error", err)
 		return
 	}
 
 	for _, sub := range subs {
+		// M-9: grace period для past_due подписок, у которых исчерпаны retry.
+		// Даём юзеру ещё GracePeriod (7 дней) обновить карту перед downgrade.
+		// active без retry (юзер просто отменил или auto_renew=false) — downgrade сразу.
+		if sub.Status == models.SubStatusPastDue && sub.RenewalAttempts >= maxRenewalAttempts {
+			graceUntil := sub.CurrentPeriodEnd.Add(GracePeriod)
+			if now.Before(graceUntil) {
+				slog.Info("subscription.expiration.grace_active",
+					"subscription_id", sub.ID,
+					"user_id", sub.UserID,
+					"grace_until", graceUntil,
+				)
+				continue
+			}
+		}
+
 		if err := l.subs.ExpireAndDowngrade(ctx, sub.ID, sub.UserID); err != nil {
 			slog.Error("subscription.expiration.downgrade_failed",
 				"error", err,

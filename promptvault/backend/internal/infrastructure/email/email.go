@@ -42,6 +42,33 @@ func (s *Service) SendVerificationCode(to, code string) error {
 	)
 }
 
+// SendWelcome — приветственное письмо после подтверждения email.
+// Дружеский тон на "ты". Знакомит с 3 ключевыми фичами чтобы юзер сразу увидел
+// ценность и не забросил аккаунт после регистрации (M-5: D1-retention lift).
+// frontendURL — корень приложения для CTA-ссылок.
+func (s *Service) SendWelcome(to, name, frontendURL string) error {
+	greeting := "Привет"
+	if name != "" {
+		greeting = fmt.Sprintf("Привет, %s", name)
+	}
+	body := fmt.Sprintf(
+		"%s!\r\n\r\n"+
+			"Спасибо, что присоединился к ПромтЛаб — месту, где твои AI-промпты перестают теряться в заметках.\r\n\r\n"+
+			"Вот с чего стоит начать:\r\n\r\n"+
+			"• Создай первый промпт — %s/prompts/new\r\n"+
+			"• Попробуй AI-улучшение — внутри редактора есть кнопка «Улучшить через AI» — Claude сделает твой промпт конкретнее\r\n"+
+			"• Подключи Chrome-расширение — вставляй промпты в ChatGPT/Claude/Gemini в два клика\r\n\r\n"+
+			"Если что-то непонятно — пиши на %s, отвечу лично.\r\n\r\n"+
+			"Слава, создатель ПромтЛаб",
+		greeting, frontendURL, supportEmail,
+	)
+	return s.send(to, "Добро пожаловать в ПромтЛаб 👋", body)
+}
+
+// supportEmail — адрес поддержки для welcome/transactional писем. Pinning на константу
+// чтобы не требовать новую конфигурацию и не раскидывать по коду.
+const supportEmail = "slava0gpt@gmail.com"
+
 func (s *Service) SendPasswordResetCode(to, code string) error {
 	return s.send(to,
 		"Сброс пароля — ПромтЛаб",
@@ -72,18 +99,124 @@ func (s *Service) SendTeamInvitation(to, teamName, inviterName string) error {
 
 // SendRenewalFailed уведомляет юзера о неудачной попытке автопродления.
 // Причины обычно: недостаточно средств, карта истекла, банк-эмитент отклонил.
-// endsAt — момент когда подписка истечёт если продления не произойдёт.
-// frontendURL — корень приложения для ссылки «Обновить карту».
-func (s *Service) SendRenewalFailed(to, planName string, endsAt time.Time, frontendURL string) error {
+// attempt/maxAttempts — номер попытки для информативного текста
+// («попытка 1 из 3» снижает тревожность, «последняя попытка» призывает к действию).
+// graceUntil — если задано, после исчерпания retry доступ сохраняется до этой даты (M-9).
+func (s *Service) SendRenewalFailed(to, planName string, attempt, maxAttempts int, endsAt time.Time, graceUntil *time.Time, frontendURL string) error {
+	var body string
+	subject := fmt.Sprintf("Не удалось продлить подписку %s — ПромтЛаб", planName)
+
+	switch {
+	case graceUntil != nil:
+		// Последняя попытка провалилась — grace period до downgrade.
+		subject = fmt.Sprintf("Подписка %s: требуется действие — ПромтЛаб", planName)
+		body = fmt.Sprintf(
+			"Мы сделали %d попытки списания за подписку ПромтЛаб %s — все неуспешные.\r\n\r\n"+
+				"Ваш доступ сохраняется до %s. После этой даты аккаунт перейдёт на Free план, если карта не будет обновлена.\r\n\r\n"+
+				"Обновить способ оплаты: %s/settings\r\n\r\n"+
+				"Созданные промпты и коллекции при переходе на Free сохранятся — но часть возможностей ограничится.",
+			maxAttempts, planName, graceUntil.Format("02.01.2006"), frontendURL,
+		)
+	case attempt >= maxAttempts:
+		body = fmt.Sprintf(
+			"Последняя попытка списания за подписку ПромтЛаб %s не удалась (%d из %d).\r\n\r\n"+
+				"Возможные причины: недостаточно средств, карта истекла или банк отклонил списание.\r\n\r\n"+
+				"Подписка действует до %s. Обновите способ оплаты, чтобы не потерять доступ: %s/settings",
+			planName, attempt, maxAttempts, endsAt.Format("02.01.2006"), frontendURL,
+		)
+	default:
+		body = fmt.Sprintf(
+			"Не удалось продлить подписку ПромтЛаб %s (попытка %d из %d).\r\n\r\n"+
+				"Возможные причины: недостаточно средств, карта истекла или банк отклонил списание.\r\n\r\n"+
+				"Подписка остаётся активной до %s. Мы автоматически попробуем списать ещё раз через 24 часа.\r\n\r\n"+
+				"Обновить способ оплаты можно в настройках: %s/settings",
+			planName, attempt, maxAttempts, endsAt.Format("02.01.2006"), frontendURL,
+		)
+	}
+	return s.send(to, subject, body)
+}
+
+// SendReengagement — письмо для юзеров, не заходивших 14+ дней (M-5d).
+// Напоминает о ценности, не давит на продажу. Один раз в 30 дней на юзера.
+func (s *Service) SendReengagement(to, name, frontendURL string) error {
+	greeting := "Привет"
+	if name != "" {
+		greeting = fmt.Sprintf("Привет, %s", name)
+	}
 	body := fmt.Sprintf(
-		"Не удалось продлить подписку ПромтЛаб %s.\r\n\r\n"+
-			"Возможные причины: недостаточно средств, карта истекла или банк отклонил списание.\r\n\r\n"+
-			"Подписка остаётся активной до %s. Мы автоматически попробуем списать ещё раз через 24 часа.\r\n\r\n"+
-			"Обновить способ оплаты можно в настройках: %s/settings\r\n\r\n"+
-			"Если ничего не делать после 3 неуспешных попыток, подписка будет переведена на Free план.",
-		planName, endsAt.Format("02.01.2006"), frontendURL,
+		"%s!\r\n\r\n"+
+			"Давно не видели тебя в ПромтЛаб. Всё в порядке?\r\n\r\n"+
+			"Если есть хотя бы один полезный промпт, который ты часто используешь — держи ссылку на библиотеку:\r\n%s/dashboard\r\n\r\n"+
+			"А если помнишь — у нас есть:\r\n"+
+			"• AI-улучшение промптов одним кликом\r\n"+
+			"• Chrome-расширение для вставки в ChatGPT\r\n"+
+			"• MCP-сервер — работа с промптами прямо из Claude Desktop\r\n\r\n"+
+			"Если что-то не устраивает — напиши на %s, разберусь лично. Если отписка — ответь этим письмом с «unsubscribe».",
+		greeting, frontendURL, supportEmail,
 	)
-	return s.send(to, fmt.Sprintf("Не удалось продлить подписку %s — ПромтЛаб", planName), body)
+	return s.send(to, "Давно не видели тебя — ПромтЛаб", body)
+}
+
+// SendQuotaWarning — предупреждение когда юзер достиг 80% квоты (M-5c).
+// quotaType: "ai_total" (Free — одноразово) / "ai_daily" (Pro/Max — сегодня).
+// used/limit — текущий счётчик, frontendURL — для CTA на /pricing.
+func (s *Service) SendQuotaWarning(to, name, quotaType string, used, limit int, frontendURL string) error {
+	greeting := "Привет"
+	if name != "" {
+		greeting = fmt.Sprintf("Привет, %s", name)
+	}
+	var subject, body string
+	switch quotaType {
+	case "ai_total":
+		// Free: 4 из 5 запросов за всю жизнь аккаунта — жёсткий апсейл-момент.
+		subject = "Остался 1 AI-запрос — ПромтЛаб"
+		body = fmt.Sprintf(
+			"%s!\r\n\r\n"+
+				"Ты использовал %d из %d AI-запросов на Free. Остался всего %d — потом AI-улучшение промптов станет недоступно.\r\n\r\n"+
+				"На Pro — 10 запросов каждый день (300 в месяц), за 599₽ в месяц — меньше 20₽ в день.\r\n\r\n"+
+				"Оформить: %s/pricing",
+			greeting, used, limit, limit-used, frontendURL,
+		)
+	default: // ai_daily
+		subject = "80% дневной квоты AI исчерпано — ПромтЛаб"
+		body = fmt.Sprintf(
+			"%s!\r\n\r\n"+
+				"Ты уже использовал %d из %d AI-запросов сегодня — осталось %d.\r\n\r\n"+
+				"Если лимит заканчивается слишком быстро — посмотри Max: 15 запросов в день, 13990₽ в год.\r\n\r\n"+
+				"Посмотреть: %s/pricing",
+			greeting, used, limit, limit-used, frontendURL,
+		)
+	}
+	return s.send(to, subject, body)
+}
+
+// SendPreExpireReminder — напоминание о скором окончании подписки (M-5b).
+// Отправляется из ReminderLoop за 3 и 1 день до period_end для юзеров с
+// auto_renew=false (ручное продление). daysLeft — 3 или 1, от этого зависит
+// тон письма ("продли заранее" vs "последний шанс").
+func (s *Service) SendPreExpireReminder(to, planName string, daysLeft int, endsAt time.Time, frontendURL string) error {
+	var subject, body string
+	switch {
+	case daysLeft <= 1:
+		subject = fmt.Sprintf("Подписка %s истекает завтра — ПромтЛаб", planName)
+		body = fmt.Sprintf(
+			"Твоя подписка ПромтЛаб %s истекает уже завтра (%s).\r\n\r\n"+
+				"После этой даты аккаунт перейдёт на Free — 50 промптов, 3 коллекции, 5 AI-запросов всего.\r\n\r\n"+
+				"Чтобы сохранить доступ — продли подписку: %s/pricing\r\n\r\n"+
+				"Все промпты останутся на месте, просто часть возможностей станет ограничена.",
+			planName, endsAt.Format("02.01.2006"), frontendURL,
+		)
+	default:
+		subject = fmt.Sprintf("Подписка %s истекает через %d дня — ПромтЛаб", planName, daysLeft)
+		body = fmt.Sprintf(
+			"Привет!\r\n\r\n"+
+				"Твоя подписка ПромтЛаб %s истекает через %d дня (%s).\r\n\r\n"+
+				"Если хочешь сохранить доступ — продли заранее: %s/pricing\r\n\r\n"+
+				"Если нет — не переживай, промпты не удалятся, просто переключимся на Free лимиты.",
+			planName, daysLeft, endsAt.Format("02.01.2006"), frontendURL,
+		)
+	}
+	return s.send(to, subject, body)
 }
 
 // SendSubscriptionExpired уведомляет о переводе на Free после исчерпания

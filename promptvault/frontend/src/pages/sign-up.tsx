@@ -68,12 +68,15 @@ export default function SignUp() {
           <Label htmlFor="name" className="text-foreground">Имя</Label>
           <Input
             id="name"
+            autoComplete="name"
             placeholder="Ваше имя"
+            aria-invalid={!!errors.name}
+            aria-describedby={errors.name ? "name-error" : undefined}
             className="border-border bg-card focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             {...register("name")}
           />
           {errors.name && (
-            <p className="text-sm text-destructive">{errors.name.message}</p>
+            <p id="name-error" className="text-sm text-destructive">{errors.name.message}</p>
           )}
         </div>
 
@@ -82,12 +85,15 @@ export default function SignUp() {
           <Input
             id="email"
             type="email"
+            autoComplete="email"
             placeholder="you@example.com"
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "email-error" : undefined}
             className="border-border bg-card focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             {...register("email")}
           />
           {errors.email && (
-            <p className="text-sm text-destructive">{errors.email.message}</p>
+            <p id="email-error" className="text-sm text-destructive">{errors.email.message}</p>
           )}
         </div>
 
@@ -97,7 +103,10 @@ export default function SignUp() {
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
               placeholder="Минимум 8 символов"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
               className="border-border bg-card pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
               {...register("password")}
             />
@@ -112,7 +121,7 @@ export default function SignUp() {
             </button>
           </div>
           {errors.password && (
-            <p className="text-sm text-destructive">{errors.password.message}</p>
+            <p id="password-error" className="text-sm text-destructive">{errors.password.message}</p>
           )}
         </div>
 
@@ -122,9 +131,11 @@ export default function SignUp() {
             <Input
               id="confirmPassword"
               type={showConfirm ? "text" : "password"}
+              autoComplete="new-password"
               placeholder="Повторите пароль"
+              aria-invalid={!!errors.confirmPassword}
+              aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
               className="border-border bg-card pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
-              onPaste={(e) => e.preventDefault()}
               {...register("confirmPassword")}
             />
             <button
@@ -138,7 +149,7 @@ export default function SignUp() {
             </button>
           </div>
           {errors.confirmPassword && (
-            <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
+            <p id="confirmPassword-error" className="text-sm text-destructive">{errors.confirmPassword.message}</p>
           )}
         </div>
 
@@ -151,7 +162,7 @@ export default function SignUp() {
           {isSubmitting ? "Регистрация..." : "Зарегистрироваться"}
         </Button>
 
-        <p className="mt-3 text-center text-[0.7rem] text-muted-foreground/60">
+        <p className="mt-3 text-center text-[0.7rem] text-muted-foreground">
           Регистрируясь, вы принимаете{" "}
           <Link to="/legal/terms" className="underline hover:text-foreground">условия использования</Link>
           {" "}и{" "}

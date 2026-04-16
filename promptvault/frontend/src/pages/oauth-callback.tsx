@@ -1,5 +1,7 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { toast } from "sonner"
+import * as Sentry from "@sentry/react"
 import { setAccessToken, clearTokens } from "@/api/client"
 import { useAuthStore, markSessionHint } from "@/stores/auth-store"
 
@@ -23,7 +25,12 @@ export default function OAuthCallback() {
       markSessionHint()
       fetchMe()
         .then(() => navigate("/dashboard", { replace: true }))
-        .catch(() => { clearTokens(); navigate("/sign-in", { replace: true }) })
+        .catch((err: unknown) => {
+          clearTokens()
+          Sentry.captureException(err, { tags: { area: "oauth-callback" } })
+          toast.error(err instanceof Error ? err.message : "Не удалось завершить вход. Попробуйте снова.")
+          navigate("/sign-in", { replace: true })
+        })
     } else {
       navigate("/sign-in", { replace: true })
     }

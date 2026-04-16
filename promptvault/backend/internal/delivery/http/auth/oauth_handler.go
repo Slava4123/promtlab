@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -57,11 +58,11 @@ func (h *OAuthHandler) redirectWithTokens(w http.ResponseWriter, r *http.Request
 func (h *OAuthHandler) setOAuthCookies(w http.ResponseWriter, state, verifier string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "oauth_state", Value: state,
-		Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 300,
+		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name: "oauth_verifier", Value: verifier,
-		Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 300,
+		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
 	})
 }
 
@@ -103,7 +104,7 @@ func (h *OAuthHandler) InitiateLink(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		Name: "oauth_link", Value: h.signLinkCookie(userID),
-		Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 300,
+		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
 	})
 
 	utils.WriteOK(w, map[string]string{"redirect_url": authURL})
@@ -331,7 +332,9 @@ func (h *OAuthHandler) validateState(r *http.Request) error {
 		return authuc.ErrOAuthStateMismatch
 	}
 	state := r.URL.Query().Get("state")
-	if state == "" || state != cookie.Value {
+	// Constant-time compare — defence-in-depth; state 32 байта рандома,
+	// timing attack тяжёлая, но != может leak'ать префикс при high-sample.
+	if state == "" || subtle.ConstantTimeCompare([]byte(state), []byte(cookie.Value)) != 1 {
 		return authuc.ErrOAuthStateMismatch
 	}
 	return nil

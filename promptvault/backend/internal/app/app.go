@@ -60,6 +60,7 @@ import (
 	searchuc "promptvault/internal/usecases/search"
 	streakuc "promptvault/internal/usecases/streak"
 	shareuc "promptvault/internal/usecases/share"
+	engagementuc "promptvault/internal/usecases/engagement"
 	subscriptionuc "promptvault/internal/usecases/subscription"
 	starteruc "promptvault/internal/usecases/starter"
 	taguc "promptvault/internal/usecases/tag"
@@ -166,6 +167,8 @@ type App struct {
 	purgeLoop         *trashuc.PurgeLoop
 	expirationLoop    *subscriptionuc.ExpirationLoop
 	renewalLoop       *subscriptionuc.RenewalLoop
+	reminderLoop      *subscriptionuc.ReminderLoop
+	reengagementLoop  *engagementuc.ReengagementLoop
 	feedbackRL        *ratelimit.Limiter[uint]
 }
 
@@ -187,6 +190,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	planRepo := pgrepo.NewPlanRepository(db)
 	quotaRepo := pgrepo.NewQuotaRepository(db)
 	quotaSvc := quotauc.NewService(planRepo, quotaRepo, userRepo)
+	quotaSvc.SetEmailNotifier(emailSvc, cfg.Server.FrontendURL)
 
 	// Teams
 	teamRepo := pgrepo.NewTeamRepository(db)
@@ -297,6 +301,12 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		paymentProvider, subNotifier, &cfg.Payment,
 		1*time.Hour, 48*time.Hour,
 	)
+	// reminderLoop — pre-expire напоминания для auto_renew=false подписок (M-5b).
+	// Тикер 6ч: окна 3/1 день ловятся с запасом, спама нет (stage-флаг).
+	reminderLoop := subscriptionuc.NewReminderLoop(subscriptionRepo, userRepo, subNotifier, 6*time.Hour)
+
+	// reengagementLoop — письмо юзерам неактивным 14+ дней (M-5d). Раз в день.
+	reengagementLoop := engagementuc.NewReengagementLoop(userRepo, emailSvc, cfg.Server.FrontendURL, 24*time.Hour)
 
 	// Feedback
 	feedbackRepo := pgrepo.NewFeedbackRepository(db)
@@ -350,6 +360,8 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		mcpServer:            mcpSrv,
 		expirationLoop:       expirationLoop,
 		renewalLoop:          renewalLoop,
+		reminderLoop:         reminderLoop,
+		reengagementLoop:     reengagementLoop,
 		purgeLoop:         purgeLoop,
 		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour),
 	}
@@ -359,6 +371,8 @@ func (a *App) StartBackground() {
 	a.purgeLoop.Start()
 	a.expirationLoop.Start()
 	a.renewalLoop.Start()
+	a.reminderLoop.Start()
+	a.reengagementLoop.Start()
 }
 
 // Shutdown waits for background tasks to complete.
@@ -366,6 +380,8 @@ func (a *App) Shutdown(timeout time.Duration) {
 	a.purgeLoop.Stop()
 	a.expirationLoop.Stop()
 	a.renewalLoop.Stop()
+	a.reminderLoop.Stop()
+	a.reengagementLoop.Stop()
 	a.feedbackRL.Close()
 	a.authSvc.WaitBackground(timeout)
 }
@@ -375,9 +391,16 @@ func (a *App) MountRoutes(r chi.Router) {
 	// Префикс токена определяет путь валидации.
 	authMiddleware := authmw.CombinedAuth(a.tokenValidator, a.apiKeyValidator)
 
+	// byIP — shortcut с глобальным trust_proxy флагом. Без доверенного reverse-proxy
+	// (nginx с real_ip_header) XFF/X-Real-IP могут быть подделаны клиентом → обход rate-limit.
+	trustProxy := a.cfg.Server.TrustProxy
+	byIP := func(rpm int) func(http.Handler) http.Handler {
+		return ratelimit.ByIP(rpm, trustProxy)
+	}
+
 	// MCP endpoint (outside /api, with pre-auth IP rate limit)
 	if a.mcpServer != nil {
-		mcpHandler := ratelimit.ByIP(120)(a.mcpServer.Handler())
+		mcpHandler := byIP(120)(a.mcpServer.Handler())
 		r.Method(http.MethodPost, "/mcp", mcpHandler)
 		r.Method(http.MethodGet, "/mcp", mcpHandler)
 		r.Method(http.MethodDelete, "/mcp", mcpHandler)
@@ -387,13 +410,13 @@ func (a *App) MountRoutes(r chi.Router) {
 	r.Route("/api", func(r chi.Router) {
 		// public — plans (rate limited: 60 req/min per IP)
 		r.Route("/plans", func(r chi.Router) {
-			r.Use(ratelimit.ByIP(60))
+			r.Use(byIP(60))
 			r.Get("/", a.subscriptionHandler.ListPlans)
 		})
 
 		// public — share links (rate limited: 60 req/min per IP)
 		r.Route("/s", func(r chi.Router) {
-			r.Use(ratelimit.ByIP(60))
+			r.Use(byIP(60))
 			r.Get("/{token}", a.shareHandler.GetPublic)
 		})
 
@@ -405,13 +428,13 @@ func (a *App) MountRoutes(r chi.Router) {
 		// с чужого IP. Пустой список — middleware no-op (dev/pre-prod).
 		r.Route("/webhooks", func(r chi.Router) {
 			r.Use(ipallowlist.New(a.cfg.Payment.WebhookAllowedIPs, a.cfg.Payment.WebhookTrustXFF))
-			r.Use(ratelimit.ByIP(30))
+			r.Use(byIP(30))
 			r.Post("/tbank", a.webhookHandler.TBank)
 		})
 
 		// public — auth (rate limited: 20 req/min per IP)
 		r.Route("/auth", func(r chi.Router) {
-			r.Use(ratelimit.ByIP(20))
+			r.Use(byIP(20))
 			r.Post("/register", a.authHandler.Register)
 			r.Post("/login", a.authHandler.Login)
 			r.Post("/verify-totp", a.authHandler.VerifyTOTP)
@@ -437,7 +460,7 @@ func (a *App) MountRoutes(r chi.Router) {
 			// ошибки внутри protected handlers атрибутировались к конкретному
 			// юзеру в GlitchTip UI. No-op если Sentry не инициализирован.
 			r.Use(sentrymw.UserContext)
-			r.Use(ratelimit.ByIP(60))
+			r.Use(byIP(60))
 			r.Get("/auth/me", a.authHandler.Me)
 			r.Post("/auth/set-password/initiate", a.authHandler.InitiateSetPassword)
 			r.Post("/auth/set-password/confirm", a.authHandler.ConfirmSetPassword)

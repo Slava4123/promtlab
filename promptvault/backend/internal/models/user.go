@@ -36,8 +36,20 @@ type User struct {
 	TokenNonce            string     `gorm:"size:64" json:"-"`
 	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at,omitempty"`
 	LastChangelogSeenAt   *time.Time `json:"last_changelog_seen_at,omitempty"`
-	CreatedAt             time.Time  `json:"created_at"`
-	UpdatedAt             time.Time  `json:"updated_at"`
+
+	// Email lifecycle tracking (M-5).
+	// WelcomeSentAt — чтобы повторный verify не отправил welcome дважды.
+	// LastLoginAt — триггер для re-engagement email (M-5d).
+	// ReengagementSentAt — чтобы не слать re-engagement чаще раза в 30 дней.
+	// QuotaWarningSentOn — DATE: последний день когда отправили 80%-warning.
+	//   Сравниваем с today (user tz) чтобы не спамить повторно внутри суток.
+	WelcomeSentAt        *time.Time `gorm:"column:welcome_sent_at" json:"-"`
+	LastLoginAt          *time.Time `gorm:"column:last_login_at" json:"-"`
+	ReengagementSentAt   *time.Time `gorm:"column:reengagement_sent_at" json:"-"`
+	QuotaWarningSentOn   *time.Time `gorm:"column:quota_warning_sent_on;type:date" json:"-"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	LinkedAccounts []LinkedAccount `gorm:"foreignKey:UserID" json:"linked_accounts,omitempty"`
 }

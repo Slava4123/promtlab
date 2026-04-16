@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"golang.org/x/oauth2"
@@ -242,6 +243,7 @@ func (s *OAuthService) upsertOAuthUser(ctx context.Context, provider, providerID
 		if err != nil {
 			return nil, nil, err
 		}
+		s.touchLastLogin(user.ID)
 		return user, tokens, nil
 	}
 
@@ -267,6 +269,7 @@ func (s *OAuthService) upsertOAuthUser(ctx context.Context, provider, providerID
 		if err != nil {
 			return nil, nil, err
 		}
+		s.touchLastLogin(user.ID)
 		return user, tokens, nil
 	}
 
@@ -293,8 +296,19 @@ func (s *OAuthService) upsertOAuthUser(ctx context.Context, provider, providerID
 	if err != nil {
 		return nil, nil, err
 	}
+	s.touchLastLogin(user.ID)
 
 	return user, tokens, nil
+}
+
+// touchLastLogin обновляет users.last_login_at в background — триггер для
+// re-engagement (M-5d). Ошибку игнорируем: lifecycle-метрика, не критична.
+func (s *OAuthService) touchLastLogin(userID uint) {
+	go func() {
+		if err := s.users.TouchLastLogin(context.Background(), userID); err != nil {
+			slog.Warn("oauth.touch_last_login.failed", "user_id", userID, "error", err)
+		}
+	}()
 }
 
 // --- Profile fetchers ---

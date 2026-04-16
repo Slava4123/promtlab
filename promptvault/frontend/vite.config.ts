@@ -28,6 +28,40 @@ export default defineConfig({
     // 2. sentry-cli загружает maps в GlitchTip по артефактам release
     // 3. GlitchTip матчит maps к stack traces через release + file name
     sourcemap: "hidden",
+    rollupOptions: {
+      output: {
+        // Code splitting: выносим тяжёлые vendor-пакеты в отдельные chunks.
+        // Цель — landing/login-страницы тянут только core, остальное грузится
+        // при навигации в app (P-7). Замеряй bundle через `npm run build`.
+        // Vite 8 / Rolldown требует ManualChunksFunction вместо объекта.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined
+          if (id.includes("/react-router-dom/") || id.includes("/react-router/") ||
+              id.includes("/react/") || id.includes("/react-dom/") ||
+              id.includes("/scheduler/")) {
+            return "vendor-react"
+          }
+          if (id.includes("/@tanstack/react-query")) return "vendor-query"
+          if (id.includes("/@sentry/")) return "vendor-sentry"
+          if (id.includes("/react-hook-form/") || id.includes("/@hookform/") || id.includes("/zod/")) {
+            return "vendor-forms"
+          }
+          if (id.includes("/@base-ui/") || id.includes("/cmdk/") || id.includes("/sonner/") ||
+              id.includes("/class-variance-authority/") || id.includes("/clsx/") ||
+              id.includes("/tailwind-merge/") || id.includes("/tw-animate-css/")) {
+            return "vendor-ui"
+          }
+          if (id.includes("/lucide-react/")) return "vendor-icons"
+          if (id.includes("/react-markdown/") || id.includes("/remark-") || id.includes("/rehype-")) {
+            return "vendor-markdown"
+          }
+          if (id.includes("/react-diff-viewer-continued/") || id.includes("/diff/")) {
+            return "vendor-diff"
+          }
+          return undefined
+        },
+      },
+    },
   },
   test: {
     globals: true,

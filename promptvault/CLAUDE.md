@@ -226,7 +226,9 @@ backend/internal/
 - `ADMIN.md` — bootstrap админа, TOTP 2FA, audit log, admin actions
 - `SENTRY_NEXT_STEPS.md` — GlitchTip self-hosted setup, source maps
 - `MCP.md`, `MCP-PUBLISHING.md` — MCP-интеграция и публикация
-- `EXTENSION_ROADMAP.md` — планы браузерного расширения
+- `LAUNCH_PLAN.md`, `RELEASE_READINESS.md` — план запуска и готовность
+- `SUBSCRIPTION_PLAN.md` — модель подписок и quota enforcement
+- `ANTHROPIC_CONNECTORS_TODO.md` — интеграция Anthropic connectors
 
 ## Admin Panel (кратко)
 

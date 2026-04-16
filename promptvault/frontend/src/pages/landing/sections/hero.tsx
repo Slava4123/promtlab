@@ -121,7 +121,7 @@ export function HeroSection() {
             Подробнее
           </a>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground/60">
+        <p className="mt-3 text-xs text-muted-foreground">
           {hero.note}
         </p>
       </FadeIn>

@@ -2,8 +2,10 @@ package quota
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
+	iservice "promptvault/internal/interface/service"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 )
@@ -12,14 +14,27 @@ import (
 // Все Check* методы возвращают *QuotaExceededError при превышении лимита
 // или nil, если действие разрешено.
 type Service struct {
-	plans  repo.PlanRepository
-	quotas repo.QuotaRepository
-	users  repo.UserRepository
+	plans       repo.PlanRepository
+	quotas      repo.QuotaRepository
+	users       repo.UserRepository
+	email       iservice.EmailSender
+	frontendURL string
 }
 
 func NewService(plans repo.PlanRepository, quotas repo.QuotaRepository, users repo.UserRepository) *Service {
 	return &Service{plans: plans, quotas: quotas, users: users}
 }
+
+// SetEmailNotifier — опциональный setter для quota-warning email (M-5c).
+// Если email==nil или Configured()==false → maybeSendQuotaWarning no-op'ит.
+// Отдельный метод (не в NewService) — чтобы не ломать сигнатуру тестов.
+func (s *Service) SetEmailNotifier(email iservice.EmailSender, frontendURL string) {
+	s.email = email
+	s.frontendURL = frontendURL
+}
+
+// quotaWarningThreshold — доля использования, при достижении которой шлём email.
+const quotaWarningThreshold = 0.8
 
 // getPlan загружает план юзера. PlanRepository кэширован (5 мин TTL),
 // UserRepository — PK lookup (микросекунды).
@@ -172,7 +187,78 @@ func (s *Service) CheckMCPQuota(ctx context.Context, userID uint) error {
 }
 
 func (s *Service) IncrementAIUsage(ctx context.Context, userID uint) error {
-	return s.quotas.IncrementDailyUsage(ctx, userID, time.Now(), FeatureAI)
+	if err := s.quotas.IncrementDailyUsage(ctx, userID, time.Now(), FeatureAI); err != nil {
+		return err
+	}
+	// Проверка на 80% квоты и email делается в background, чтобы не блокировать
+	// AI-запрос. Ошибки swallow'им — warning email некритичен.
+	go s.maybeSendAIQuotaWarning(userID)
+	return nil
+}
+
+// maybeSendAIQuotaWarning — если юзер пересёк 80% AI-квоты и ему ещё не отправляли
+// warning сегодня (или никогда для ai_total), шлём email (M-5c).
+// Выполняется в background; ctx — context.Background() чтобы не отменился при
+// завершении parent-request.
+func (s *Service) maybeSendAIQuotaWarning(userID uint) {
+	if s.email == nil || !s.email.Configured() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil || user == nil || user.Email == "" {
+		return
+	}
+	plan, err := s.plans.GetByID(ctx, user.PlanID)
+	if err != nil || plan == nil {
+		return
+	}
+	// Безлимитный план или 0 — warning не нужен.
+	if plan.MaxAIRequestsDaily <= 0 {
+		return
+	}
+
+	var used int
+	var quotaType string
+	if plan.AIRequestsIsTotal {
+		used, err = s.quotas.GetTotalUsage(ctx, userID, FeatureAI)
+		quotaType = "ai_total"
+	} else {
+		used, err = s.quotas.GetDailyUsage(ctx, userID, time.Now(), FeatureAI)
+		quotaType = "ai_daily"
+	}
+	if err != nil {
+		return
+	}
+
+	// Порог 80% — и не выше limit (иначе это quota exceeded, а не warning).
+	if float64(used) < float64(plan.MaxAIRequestsDaily)*quotaWarningThreshold || used >= plan.MaxAIRequestsDaily {
+		return
+	}
+
+	// Не слать повторно в тот же день. Для ai_total — никогда повторно:
+	// quota_warning_sent_on не nil → уже слали.
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	if user.QuotaWarningSentOn != nil {
+		sent := user.QuotaWarningSentOn.UTC().Truncate(24 * time.Hour)
+		if quotaType == "ai_total" {
+			// Для total — один email на всю жизнь квоты.
+			return
+		}
+		if !sent.Before(today) {
+			return
+		}
+	}
+
+	if err := s.email.SendQuotaWarning(user.Email, user.Name, quotaType, used, plan.MaxAIRequestsDaily, s.frontendURL); err != nil {
+		slog.Warn("quota.warning.email_failed", "user_id", userID, "error", err)
+		return
+	}
+	if err := s.users.SetQuotaWarningSentOn(ctx, userID, today); err != nil {
+		slog.Warn("quota.warning.mark_sent_failed", "user_id", userID, "error", err)
+	}
 }
 
 func (s *Service) IncrementExtensionUsage(ctx context.Context, userID uint) error {

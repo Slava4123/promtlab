@@ -58,6 +58,14 @@ type SubscriptionRepository interface {
 	// в past_due (если была active), инкрементирует renewal_attempts и ставит
 	// last_renewal_attempt_at=now. Используется renewLoop при ошибке Init/Charge.
 	RecordRenewalFailure(ctx context.Context, subID uint) error
+
+	// ListPreExpiring — active подписки с auto_renew=false, у которых period_end
+	// в диапазоне (now, upTo] и pre_expire_stage < minStage. Используется
+	// ReminderLoop для выбора кому отправить pre-expire напоминание (M-5b).
+	ListPreExpiring(ctx context.Context, now, upTo time.Time, minStage int16) ([]models.Subscription, error)
+
+	// SetPreExpireStage выставляет pre_expire_stage — защита от спама в ReminderLoop.
+	SetPreExpireStage(ctx context.Context, subID uint, stage int16) error
 }
 
 // PaymentRepository — управление платежами.

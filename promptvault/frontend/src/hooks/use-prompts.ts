@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query"
 import { api, apiVoid } from "@/api/client"
 import { captureException } from "@/lib/sentry"
 import type { Prompt, PaginatedResponse, PinResult, IncrementUsageResponse } from "@/api/types"
@@ -10,6 +10,17 @@ interface PromptFilters {
   collection_id?: number
   tag_ids?: number[]
   team_id?: number | null
+}
+
+type PromptsPage = PaginatedResponse<Prompt>
+type PromptsInfiniteData = InfiniteData<PromptsPage>
+
+// Предикат инвалидации/оптимистичных апдейтов: только главный grid /prompts,
+// не побочные queries (["prompts","pinned"], ["prompts","recent"]).
+const isMainPromptsQuery = (queryKey: unknown): boolean => {
+  if (!Array.isArray(queryKey)) return true
+  const second = queryKey[1]
+  return second !== "pinned" && second !== "recent"
 }
 
 const PAGE_SIZE = 18
@@ -26,7 +37,7 @@ export function usePrompts(filters: PromptFilters = {}) {
       if (filters.collection_id) params.set("collection_id", String(filters.collection_id))
       if (filters.tag_ids?.length) params.set("tag_ids", filters.tag_ids.join(","))
       if (filters.team_id) params.set("team_id", String(filters.team_id))
-      return api<PaginatedResponse<Prompt>>(`/prompts?${params.toString()}`)
+      return api<PromptsPage>(`/prompts?${params.toString()}`)
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
@@ -49,10 +60,12 @@ export function useCreatePrompt() {
     mutationFn: (data: { title: string; content: string; model?: string; team_id?: number | null; collection_ids?: number[]; tag_ids?: number[] }) =>
       api<Prompt>("/prompts", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["prompts"] })
-      qc.invalidateQueries({ queryKey: ["collections"] })
-      qc.invalidateQueries({ queryKey: ["tags"] })
-      qc.invalidateQueries({ queryKey: ["streak"] })
+      // Узкая инвалидация: только активные списки. Коллекции/теги
+      // могли измениться (счётчики), поэтому трогаем их тоже.
+      qc.invalidateQueries({ queryKey: ["prompts"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["collections"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["tags"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["streak"], refetchType: "active" })
       handleBadges(data.newly_unlocked_badges)
     },
   })
@@ -65,12 +78,18 @@ export function useUpdatePrompt() {
     mutationFn: ({ id, ...data }: { id: number; title?: string; content?: string; model?: string; change_note?: string; collection_ids?: number[]; tag_ids?: number[] }) =>
       api<Prompt>(`/prompts/${id}`, { method: "PUT", body: JSON.stringify(data) }),
     onSuccess: (data, vars) => {
-      qc.invalidateQueries({ queryKey: ["prompts"] })
+      // Активные списки + карточка. Коллекции/теги только если они в payload'е
+      // (could change), streak обновится если это первое использование в день.
+      qc.invalidateQueries({ queryKey: ["prompts"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["prompt", vars.id] })
-      qc.invalidateQueries({ queryKey: ["collections"] })
-      qc.invalidateQueries({ queryKey: ["collection"] })
-      qc.invalidateQueries({ queryKey: ["tags"] })
-      qc.invalidateQueries({ queryKey: ["streak"] })
+      if (vars.collection_ids !== undefined) {
+        qc.invalidateQueries({ queryKey: ["collections"], refetchType: "active" })
+        qc.invalidateQueries({ queryKey: ["collection"], refetchType: "active" })
+      }
+      if (vars.tag_ids !== undefined) {
+        qc.invalidateQueries({ queryKey: ["tags"], refetchType: "active" })
+      }
+      qc.invalidateQueries({ queryKey: ["streak"], refetchType: "active" })
       handleBadges(data.newly_unlocked_badges)
     },
   })
@@ -81,12 +100,12 @@ export function useDeletePrompt() {
   return useMutation({
     mutationFn: (id: number) => apiVoid(`/prompts/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prompts"] })
-      qc.invalidateQueries({ queryKey: ["collections"] })
-      qc.invalidateQueries({ queryKey: ["collection"] })
-      qc.invalidateQueries({ queryKey: ["tags"] })
-      qc.invalidateQueries({ queryKey: ["trash"] })
-      qc.invalidateQueries({ queryKey: ["trash-count"] })
+      qc.invalidateQueries({ queryKey: ["prompts"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["collections"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["collection"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["tags"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["trash"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["trash-count"], refetchType: "active" })
     },
   })
 }
@@ -97,9 +116,9 @@ export function useIncrementUsage() {
   return useMutation({
     mutationFn: (id: number) => api<IncrementUsageResponse>(`/prompts/${id}/use`, { method: "POST" }),
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["prompts"] })
-      qc.invalidateQueries({ queryKey: ["prompts", "recent"] })
-      qc.invalidateQueries({ queryKey: ["streak"] })
+      qc.invalidateQueries({ queryKey: ["prompts"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["prompts", "recent"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["streak"], refetchType: "active" })
       handleBadges(data.newly_unlocked_badges)
     },
     onError: (err) => {
@@ -139,19 +158,16 @@ export function useTogglePin() {
         body: JSON.stringify({ team_wide: teamWide }),
       }),
     onMutate: async ({ id, teamWide = false }) => {
-      // Only cancel/update infinite queries (main grid), not pinned/recent
-      await qc.cancelQueries({ queryKey: ["prompts"], type: "all", predicate: (q) => !Array.isArray(q.queryKey) || (q.queryKey[1] !== "pinned" && q.queryKey[1] !== "recent") })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const prev = qc.getQueriesData<any>({ queryKey: ["prompts"], predicate: (q) => !Array.isArray(q.queryKey) || (q.queryKey[1] !== "pinned" && q.queryKey[1] !== "recent") })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      qc.setQueriesData<any>({ queryKey: ["prompts"], predicate: (q) => !Array.isArray(q.queryKey) || (q.queryKey[1] !== "pinned" && q.queryKey[1] !== "recent") }, (old: any) => {
+      const filter = { queryKey: ["prompts"] as const, predicate: (q: { queryKey: unknown }) => isMainPromptsQuery(q.queryKey) }
+      await qc.cancelQueries({ ...filter, type: "all" })
+      const prev = qc.getQueriesData<PromptsInfiniteData>(filter)
+      qc.setQueriesData<PromptsInfiniteData>(filter, (old) => {
         if (!old?.pages) return old
         return {
           ...old,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          pages: old.pages.map((page: any) => ({
+          pages: old.pages.map((page) => ({
             ...page,
-            items: page.items.map((p: Prompt) =>
+            items: page.items.map((p) =>
               p.id === id
                 ? {
                     ...p,
@@ -173,7 +189,9 @@ export function useTogglePin() {
       }
     },
     onSettled: (_data, _err, { id }) => {
-      qc.invalidateQueries({ queryKey: ["prompts"] })
+      // После оптимистик-апдейта background-rollup только для активных страниц,
+      // чтобы sync с сервером без лавины рефетчей неактивных фильтров.
+      qc.invalidateQueries({ queryKey: ["prompts"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["prompt", id] })
     },
   })
@@ -184,18 +202,16 @@ export function useToggleFavorite() {
   return useMutation({
     mutationFn: (id: number) => api<Prompt>(`/prompts/${id}/favorite`, { method: "POST" }),
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ["prompts"] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const prev = qc.getQueriesData<any>({ queryKey: ["prompts"] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      qc.setQueriesData<any>({ queryKey: ["prompts"] }, (old: any) => {
+      const filter = { queryKey: ["prompts"] as const }
+      await qc.cancelQueries(filter)
+      const prev = qc.getQueriesData<PromptsInfiniteData>(filter)
+      qc.setQueriesData<PromptsInfiniteData>(filter, (old) => {
         if (!old?.pages) return old
         return {
           ...old,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          pages: old.pages.map((page: any) => ({
+          pages: old.pages.map((page) => ({
             ...page,
-            items: page.items.map((p: Prompt) =>
+            items: page.items.map((p) =>
               p.id === id ? { ...p, favorite: !p.favorite } : p
             ),
           })),
@@ -211,7 +227,7 @@ export function useToggleFavorite() {
       }
     },
     onSettled: (_data, _err, id) => {
-      qc.invalidateQueries({ queryKey: ["prompts"] })
+      qc.invalidateQueries({ queryKey: ["prompts"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["prompt", id] })
     },
   })

@@ -105,7 +105,7 @@ func (s *Service) Checkout(ctx context.Context, in CheckoutInput) (*CheckoutResu
 
 	// Phase 1: сохраняем Payment ДО Init — plan_id в ProviderData гарантирует
 	// активацию правильного плана, даже если у двух планов совпадают цены.
-	providerData, err := json.Marshal(map[string]string{"plan_id": plan.ID})
+	providerData, err := json.Marshal(PaymentProviderData{PlanID: plan.ID})
 	if err != nil {
 		return nil, fmt.Errorf("subscription.checkout: marshal provider_data: %w", err)
 	}
@@ -432,9 +432,7 @@ func extractPlanID(pay *models.Payment) (string, error) {
 	if len(pay.ProviderData) == 0 {
 		return "", fmt.Errorf("provider_data пуст для payment %d", pay.ID)
 	}
-	var data struct {
-		PlanID string `json:"plan_id"`
-	}
+	var data PaymentProviderData
 	if err := json.Unmarshal(pay.ProviderData, &data); err != nil {
 		return "", fmt.Errorf("unmarshal provider_data: %w", err)
 	}
@@ -446,14 +444,17 @@ func extractPlanID(pay *models.Payment) (string, error) {
 
 // isRenewalPayment проверяет флаг "renewal" в ProviderData. true — платёж создан
 // renewLoop (не первый checkout юзера), значит надо ExtendPeriod, а не Activate.
+// Ошибку unmarshal логируем, чтобы не маскировать битый JSONB (Q-4).
 func isRenewalPayment(pay *models.Payment) bool {
 	if len(pay.ProviderData) == 0 {
 		return false
 	}
-	var data struct {
-		Renewal string `json:"renewal"`
+	var data PaymentProviderData
+	if err := json.Unmarshal(pay.ProviderData, &data); err != nil {
+		slog.Error("subscription.is_renewal.unmarshal_failed",
+			"payment_id", pay.ID, "error", err)
+		return false
 	}
-	_ = json.Unmarshal(pay.ProviderData, &data)
 	return data.Renewal == "true"
 }
 

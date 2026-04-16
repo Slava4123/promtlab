@@ -254,7 +254,7 @@ export default function SharedPrompt() {
 
       {/* Footer */}
       <footer className="border-t border-border/30 py-6">
-        <div className="mx-auto max-w-4xl px-4 text-center text-xs text-muted-foreground/60 sm:px-6">
+        <div className="mx-auto max-w-4xl px-4 text-center text-xs text-muted-foreground sm:px-6">
           <Link to="/" className="transition-colors hover:text-violet-400">ПромтЛаб</Link>
           {" "}· Управление AI-промптами
         </div>

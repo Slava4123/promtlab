@@ -63,6 +63,18 @@ func (f *fakeUserRepo) Update(_ context.Context, user *models.User) error {
 	f.users[user.ID] = user
 	return nil
 }
+func (f *fakeUserRepo) SetQuotaWarningSentOn(_ context.Context, _ uint, _ time.Time) error {
+	return nil
+}
+func (f *fakeUserRepo) TouchLastLogin(_ context.Context, _ uint) error {
+	return nil
+}
+func (f *fakeUserRepo) ListInactiveForReengagement(_ context.Context, _, _ time.Time, _ int) ([]models.User, error) {
+	return nil, nil
+}
+func (f *fakeUserRepo) MarkReengagementSent(_ context.Context, _ uint) error {
+	return nil
+}
 
 type fakeAdminRepo struct {
 	users          []repo.UserSummary

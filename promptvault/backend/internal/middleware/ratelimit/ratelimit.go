@@ -98,19 +98,21 @@ func (l *Limiter[K]) Allow(key K) bool {
 	return true
 }
 
-// clientIP извлекает реальный IP клиента.
-// Берёт первый IP из X-Forwarded-For (установленный ближайшим прокси),
-// иначе использует RemoteAddr.
-func clientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		// Первый IP в цепочке — реальный клиент (если прокси доверенный)
-		ip := strings.TrimSpace(strings.SplitN(fwd, ",", 2)[0])
-		if ip != "" {
-			return ip
+// clientIP извлекает IP клиента. При trustProxy=true читает X-Forwarded-For
+// (первый IP в цепочке) и X-Real-IP — только если backend за доверенным reverse-proxy,
+// который затирает incoming-значения этих заголовков. Иначе клиент может подделать
+// XFF и обойти rate-limit, ставя на каждый запрос новое значение.
+func clientIP(r *http.Request, trustProxy bool) string {
+	if trustProxy {
+		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+			ip := strings.TrimSpace(strings.SplitN(fwd, ",", 2)[0])
+			if ip != "" {
+				return ip
+			}
 		}
-	}
-	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return strings.TrimSpace(ip)
+		if ip := r.Header.Get("X-Real-IP"); ip != "" {
+			return strings.TrimSpace(ip)
+		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -145,11 +147,12 @@ func ByUserID(rpm int, getUserID func(r *http.Request) uint) func(http.Handler) 
 }
 
 // ByIP ограничивает по IP. rpm — макс запросов в минуту.
-func ByIP(rpm int) func(http.Handler) http.Handler {
+// trustProxy должен быть true только за доверенным reverse-proxy (см. clientIP).
+func ByIP(rpm int, trustProxy bool) func(http.Handler) http.Handler {
 	rl := NewLimiter[string](rpm)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := clientIP(r)
+			ip := clientIP(r, trustProxy)
 			if !rl.Allow(ip) {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Retry-After", "60")

@@ -39,7 +39,7 @@ export function BetaBannerSection() {
               </Button>
             </div>
 
-            <p className="mt-4 text-xs text-muted-foreground/40">
+            <p className="mt-4 text-xs text-muted-foreground">
               {betaBanner.footer}
             </p>
           </div>

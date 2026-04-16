@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -68,4 +69,50 @@ func (r *userRepo) SearchUsers(ctx context.Context, query string, limit int) ([]
 
 func (r *userRepo) Update(ctx context.Context, user *models.User) error {
 	return r.db.WithContext(ctx).Save(user).Error
+}
+
+func (r *userRepo) SetQuotaWarningSentOn(ctx context.Context, userID uint, date time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]any{
+			"quota_warning_sent_on": date,
+			"updated_at":            time.Now(),
+		}).Error
+}
+
+func (r *userRepo) TouchLastLogin(ctx context.Context, userID uint) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]any{
+			"last_login_at": now,
+			"updated_at":    now,
+		}).Error
+}
+
+func (r *userRepo) ListInactiveForReengagement(ctx context.Context, inactiveBefore, sentBefore time.Time, limit int) ([]models.User, error) {
+	var users []models.User
+	err := r.db.WithContext(ctx).
+		Where("email_verified = TRUE").
+		Where("status = ?", models.StatusActive).
+		Where("email <> ''").
+		Where("last_login_at IS NOT NULL AND last_login_at < ?", inactiveBefore).
+		Where("reengagement_sent_at IS NULL OR reengagement_sent_at < ?", sentBefore).
+		Order("last_login_at ASC").
+		Limit(limit).
+		Find(&users).Error
+	return users, err
+}
+
+func (r *userRepo) MarkReengagementSent(ctx context.Context, userID uint) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]any{
+			"reengagement_sent_at": now,
+			"updated_at":           now,
+		}).Error
 }

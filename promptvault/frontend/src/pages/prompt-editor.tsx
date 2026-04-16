@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch, type Control } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, Search, ChevronDown, History, Copy, Trash2, Share2 } from "lucide-react"
@@ -15,15 +15,56 @@ import { AIPanel } from "@/components/ai/ai-panel"
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
 import { ShareDialog } from "@/components/prompts/share-dialog"
 import { hasVariables } from "@/lib/template/parse"
+import {
+  MAX_PROMPT_CONTENT_LENGTH,
+  MAX_PROMPT_TITLE_LENGTH,
+  MAX_CHANGE_NOTE_LENGTH,
+  CONTENT_LENGTH_WARNING,
+  CONTENT_LENGTH_DANGER,
+} from "@/lib/constants"
 import type { Prompt } from "@/api/types"
 
 const promptSchema = z.object({
-  title: z.string().min(1, "Введите название").max(300),
-  content: z.string().min(1, "Введите содержимое промпта").max(10000, "Максимум 10 000 символов"),
+  title: z.string().min(1, "Введите название").max(MAX_PROMPT_TITLE_LENGTH),
+  content: z
+    .string()
+    .min(1, "Введите содержимое промпта")
+    .max(MAX_PROMPT_CONTENT_LENGTH, `Максимум ${MAX_PROMPT_CONTENT_LENGTH.toLocaleString("ru-RU")} символов`),
   model: z.string().max(100).optional(),
 })
 
 type PromptForm = z.infer<typeof promptSchema>
+
+// CharCounter — изолированная подписка на content через useWatch.
+// Без этого watch("content") в родителе ре-рендерил бы весь editor (~400 строк)
+// на каждое нажатие клавиши — см. P-8.
+function CharCounter({ control }: { control: Control<PromptForm> }) {
+  const value = useWatch({ control, name: "content" }) ?? ""
+  const len = value.length
+  const cls = len > CONTENT_LENGTH_DANGER
+    ? "text-red-400"
+    : len > CONTENT_LENGTH_WARNING
+      ? "text-amber-400"
+      : "text-muted-foreground"
+  return (
+    <span className={`text-[0.7rem] tabular-nums ${cls}`}>
+      {len.toLocaleString("ru-RU")}/{MAX_PROMPT_CONTENT_LENGTH.toLocaleString("ru-RU")}
+    </span>
+  )
+}
+
+// AIPanelConnected — изолирует live content-подписку внутри отдельного компонента,
+// чтобы родительский PromptEditor не ререндерился каждое нажатие клавиши.
+function AIPanelConnected({
+  control,
+  onApply,
+}: {
+  control: Control<PromptForm>
+  onApply: (text: string, note: string) => void
+}) {
+  const content = useWatch({ control, name: "content" }) ?? ""
+  return <AIPanel content={content} onApply={onApply} />
+}
 
 export default function PromptEditor() {
   const navigate = useNavigate()
@@ -52,16 +93,15 @@ export default function PromptEditor() {
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<PromptForm>({
     resolver: zodResolver(promptSchema),
   })
 
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const contentValue = watch("content") || ""
-
+  // Синхронизируем загруженные с сервера данные в локальное state формы.
+  // Это legitimate sync external async data (prompt приходит от TanStack Query).
   useEffect(() => {
     if (existing) {
       reset({
@@ -69,6 +109,7 @@ export default function PromptEditor() {
         content: existing.content,
         model: existing.model || "",
       })
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollectionIds(existing.collections?.map(c => c.id) || [])
       setTagIds(existing.tags?.map(t => t.id) || [])
     }
@@ -91,9 +132,12 @@ export default function PromptEditor() {
     }
   }
 
-  // Keep a stable ref to onSubmit so the Ctrl+Enter effect doesn't re-subscribe every render
+  // Keep a stable ref to onSubmit so the Ctrl+Enter effect doesn't re-subscribe every render.
+  // Ref обновляется в useEffect, чтобы не мутировать .current во время рендера (react-hooks/refs).
   const onSubmitRef = useRef(onSubmit)
-  onSubmitRef.current = onSubmit
+  useEffect(() => {
+    onSubmitRef.current = onSubmit
+  }, [onSubmit])
 
   // Ctrl+Enter to submit
   useEffect(() => {
@@ -120,7 +164,9 @@ export default function PromptEditor() {
       {/* Header */}
       <div className="mb-8 flex items-center gap-3">
         <button
+          type="button"
           onClick={() => navigate(-1)}
+          aria-label="Назад"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -150,11 +196,13 @@ export default function PromptEditor() {
             <input
               id="title"
               placeholder="Например: Генерация README для проекта"
+              aria-invalid={!!errors.title}
+              aria-describedby={errors.title ? "title-error" : undefined}
               className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
               {...register("title")}
             />
             {errors.title && (
-              <p className="text-[0.75rem] text-red-400">{errors.title.message}</p>
+              <p id="title-error" className="text-[0.75rem] text-red-400">{errors.title.message}</p>
             )}
           </div>
 
@@ -164,26 +212,26 @@ export default function PromptEditor() {
               <label htmlFor="content" className="text-[0.8rem] font-medium text-foreground">
                 Промпт
               </label>
-              <span className={`text-[0.7rem] tabular-nums ${contentValue.length > 9000 ? "text-red-400" : contentValue.length > 7500 ? "text-amber-400" : "text-muted-foreground"}`}>
-                {contentValue.length.toLocaleString("ru-RU")}/10 000
-              </span>
+              <CharCounter control={control} />
             </div>
             <textarea
               id="content"
               rows={16}
-              maxLength={10000}
+              maxLength={MAX_PROMPT_CONTENT_LENGTH}
               placeholder="Введите текст промпта...&#10;&#10;Совет: будьте конкретны и используйте примеры для лучших результатов"
+              aria-invalid={!!errors.content}
+              aria-describedby={errors.content ? "content-error" : undefined}
               className="flex w-full min-h-[280px] resize-y rounded-lg border border-border bg-background px-3.5 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
               {...register("content")}
             />
             {errors.content && (
-              <p className="text-[0.75rem] text-red-400">{errors.content.message}</p>
+              <p id="content-error" className="text-[0.75rem] text-red-400">{errors.content.message}</p>
             )}
           </div>
 
           {/* AI-панель */}
-          <AIPanel
-            content={contentValue}
+          <AIPanelConnected
+            control={control}
             onApply={(text, note) => {
               setValue("content", text)
               setChangeNote(note)
@@ -294,7 +342,7 @@ export default function PromptEditor() {
                 id="change_note"
                 value={changeNote}
                 onChange={(e) => setChangeNote(e.target.value)}
-                maxLength={300}
+                maxLength={MAX_CHANGE_NOTE_LENGTH}
                 placeholder="Что изменилось? Например: улучшил формулировку"
                 className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
               />

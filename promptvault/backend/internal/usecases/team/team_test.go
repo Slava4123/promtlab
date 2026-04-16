@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -146,6 +147,22 @@ func (m *mockUserRepo) SearchUsers(ctx context.Context, query string, limit int)
 }
 func (m *mockUserRepo) Update(ctx context.Context, user *models.User) error {
 	return m.Called(ctx, user).Error(0)
+}
+func (m *mockUserRepo) SetQuotaWarningSentOn(ctx context.Context, userID uint, date time.Time) error {
+	return m.Called(ctx, userID, date).Error(0)
+}
+func (m *mockUserRepo) TouchLastLogin(ctx context.Context, userID uint) error {
+	return m.Called(ctx, userID).Error(0)
+}
+func (m *mockUserRepo) ListInactiveForReengagement(ctx context.Context, inactiveBefore, sentBefore time.Time, limit int) ([]models.User, error) {
+	args := m.Called(ctx, inactiveBefore, sentBefore, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.User), args.Error(1)
+}
+func (m *mockUserRepo) MarkReengagementSent(ctx context.Context, userID uint) error {
+	return m.Called(ctx, userID).Error(0)
 }
 
 // ===================== Helpers =====================

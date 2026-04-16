@@ -181,7 +181,7 @@ export default function Dashboard() {
               : "Используйте промпты, чтобы не потерять серию"}
         </span>
         {streak && streak.longest_streak > streak.current_streak && (
-          <span className="ml-auto text-xs text-muted-foreground/60">Рекорд: {streak.longest_streak}</span>
+          <span className="ml-auto text-xs text-muted-foreground">Рекорд: {streak.longest_streak}</span>
         )}
       </div>
 

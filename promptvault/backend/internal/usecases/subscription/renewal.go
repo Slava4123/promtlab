@@ -29,7 +29,10 @@ const (
 // Email нельзя требовать обязательным (юзер мог зарегистрироваться через OAuth
 // без верификации email) — поэтому интерфейс, а реализация проверяет доступность.
 type RenewalNotifier interface {
-	NotifyRenewalFailed(to, planName string, endsAt time.Time) error
+	// NotifyRenewalFailed — отправляется на каждую из N попыток списания.
+	// attempt — номер попытки (1..maxRenewalAttempts), graceUntil — опциональный
+	// дедлайн grace period после последней неудачи (nil если grace ещё не применён).
+	NotifyRenewalFailed(to, planName string, attempt, maxAttempts int, endsAt time.Time, graceUntil *time.Time) error
 }
 
 // RenewalLoop пытается продлить подписки за `lookahead` до окончания периода
@@ -138,7 +141,7 @@ func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) er
 	}
 	orderID := fmt.Sprintf("renew_%d_%s", sub.UserID, idemKey[:12])
 
-	providerData, _ := json.Marshal(map[string]string{"plan_id": plan.ID, "renewal": "true"})
+	providerData, _ := json.Marshal(PaymentProviderData{PlanID: plan.ID, Renewal: "true"})
 	pay := &models.Payment{
 		UserID:         sub.UserID,
 		SubscriptionID: &sub.ID,
@@ -163,7 +166,11 @@ func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) er
 		CustomerKey: fmt.Sprintf("%d", sub.UserID),
 	})
 	if err != nil {
-		_ = l.pays.UpdateStatus(ctx, pay.ID, models.PaymentFailed)
+		if statusErr := l.pays.UpdateStatus(ctx, pay.ID, models.PaymentFailed); statusErr != nil {
+			// Zombie-платёж: status остался pending, но Init фэйлился — reconcile потребуется вручную.
+			slog.Error("subscription.renewal.update_status_failed_after_init",
+				"payment_id", pay.ID, "user_id", sub.UserID, "error", statusErr)
+		}
 		l.handleFailure(ctx, sub, plan, "init failed")
 		return fmt.Errorf("init: %w", err)
 	}
@@ -177,7 +184,12 @@ func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) er
 		RebillID:  sub.RebillId,
 	})
 	if err != nil {
-		_ = l.pays.UpdateStatus(ctx, pay.ID, models.PaymentFailed)
+		if statusErr := l.pays.UpdateStatus(ctx, pay.ID, models.PaymentFailed); statusErr != nil {
+			// Важно для audit — ExternalID уже ушёл в T-Bank, повторный Charge на него невозможен.
+			slog.Error("subscription.renewal.update_status_failed_after_charge",
+				"payment_id", pay.ID, "external_id", initResult.ExternalID,
+				"user_id", sub.UserID, "error", statusErr)
+		}
 		l.handleFailure(ctx, sub, plan, "charge failed")
 		return fmt.Errorf("charge: %w", err)
 	}
@@ -192,23 +204,28 @@ func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) er
 	return nil
 }
 
-// handleFailure — общая обработка неудачи Init/Charge: фиксирует попытку в БД,
-// шлёт email только при первой неудаче (attempts = 0 → станет 1 после update),
-// чтобы не спамить на каждом retry.
-func (l *RenewalLoop) handleFailure(ctx context.Context, sub *models.Subscription, plan *models.SubscriptionPlan, reason string) {
-	wasFirstAttempt := sub.RenewalAttempts == 0
+// GracePeriod — насколько дольше current_period_end продлеваем доступ,
+// если все retries провалились. Даёт юзеру шанс обновить карту/вернуть средства
+// и не прерывает его workflow внезапно (M-9).
+const GracePeriod = 7 * 24 * time.Hour
 
+// handleFailure — общая обработка неудачи Init/Charge: фиксирует попытку в БД
+// и шлёт email на каждую из maxRenewalAttempts попыток (разный текст по attempt),
+// чтобы юзер знал о прогрессе retry, а не узнавал о проблеме только после downgrade.
+func (l *RenewalLoop) handleFailure(ctx context.Context, sub *models.Subscription, plan *models.SubscriptionPlan, reason string) {
 	if err := l.subs.RecordRenewalFailure(ctx, sub.ID); err != nil {
 		slog.Error("subscription.renewal.record_failure_failed",
 			"sub_id", sub.ID, "user_id", sub.UserID, "error", err)
 		return
 	}
 
+	attempt := sub.RenewalAttempts + 1 // после RecordRenewalFailure это текущая попытка
 	slog.Warn("subscription.renewal.failure_recorded",
 		"sub_id", sub.ID, "user_id", sub.UserID, "reason", reason,
-		"attempts_before", sub.RenewalAttempts, "period_end", sub.CurrentPeriodEnd)
+		"attempt", attempt, "max_attempts", maxRenewalAttempts,
+		"period_end", sub.CurrentPeriodEnd)
 
-	if !wasFirstAttempt || l.notifier == nil {
+	if l.notifier == nil {
 		return
 	}
 	user, err := l.users.GetByID(ctx, sub.UserID)
@@ -220,7 +237,14 @@ func (l *RenewalLoop) handleFailure(ctx context.Context, sub *models.Subscriptio
 		}
 		return
 	}
-	if err := l.notifier.NotifyRenewalFailed(user.Email, plan.Name, sub.CurrentPeriodEnd); err != nil {
+	// graceUntil: nil для первых N-1 попыток. На последней — показываем юзеру
+	// конкретный дедлайн обновить карту, до которого доступ ещё сохранён.
+	var graceUntil *time.Time
+	if attempt >= maxRenewalAttempts {
+		t := sub.CurrentPeriodEnd.Add(GracePeriod)
+		graceUntil = &t
+	}
+	if err := l.notifier.NotifyRenewalFailed(user.Email, plan.Name, attempt, maxRenewalAttempts, sub.CurrentPeriodEnd, graceUntil); err != nil {
 		slog.Warn("subscription.renewal.notify_email_failed",
 			"sub_id", sub.ID, "user_id", sub.UserID, "error", err)
 	}

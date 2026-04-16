@@ -77,6 +77,19 @@ function formatPrice(priceKop: number): string {
   return (priceKop / 100).toLocaleString("ru-RU")
 }
 
+// dailyPrice — цена в рублях за день для anchor-копи в CTA/ROI блоке.
+function dailyPrice(priceKop: number, periodDays: number): number {
+  if (priceKop === 0 || periodDays === 0) return 0
+  return Math.round(priceKop / 100 / periodDays)
+}
+
+// ctaLabel — value-ориентированный CTA вместо generic "Перейти на Pro".
+function ctaLabel(plan: Plan): string {
+  if (plan.price_kop === 0) return "Остаться на Free"
+  const perDay = dailyPrice(plan.price_kop, plan.period_days)
+  return `Получить ${plan.name} за ${perDay}₽/день`
+}
+
 export default function Pricing() {
   const { data: plans, isLoading, error } = usePlans()
   const checkout = useCheckout()
@@ -109,8 +122,10 @@ export default function Pricing() {
               const Icon = planIcons[plan.id] ?? Zap
               const color = planColors[plan.id] ?? "#6366f1"
               const isPopular = plan.id === "pro"
+              const isBestValue = plan.id === "max"
               const isCurrent = currentPlanId === plan.id
               const features = planFeatures(plan)
+              const perDay = dailyPrice(plan.price_kop, plan.period_days)
 
               return (
                 <div
@@ -124,6 +139,11 @@ export default function Pricing() {
                   {isPopular && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-3 py-0.5 text-[0.7rem] font-medium text-white">
                       Популярный
+                    </div>
+                  )}
+                  {isBestValue && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-3 py-0.5 text-[0.7rem] font-medium text-white">
+                      Лучшая цена
                     </div>
                   )}
 
@@ -156,6 +176,11 @@ export default function Pricing() {
                         / {plan.period_days === 0 ? "навсегда" : "в месяц"}
                       </span>
                     </div>
+                    {perDay > 0 && (
+                      <p className="mt-1 text-[0.72rem] text-muted-foreground">
+                        ≈ {perDay}₽ в день — дешевле чашки кофе
+                      </p>
+                    )}
                   </div>
 
                   <ul className="mb-6 flex-1 space-y-2.5">
@@ -201,12 +226,46 @@ export default function Pricing() {
                     ) : checkout.isPending || downgrade.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      `Перейти на ${plan.name}`
+                      ctaLabel(plan)
                     )}
                   </button>
                 </div>
               )
             })}
+          </div>
+
+          <div className="mt-8 rounded-2xl border border-border bg-card/50 p-6">
+            <h2 className="mb-3 text-[0.95rem] font-semibold text-foreground">
+              Как ПромтЛаб Pro сравнивается с ChatGPT Plus?
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-border/60 p-3">
+                <p className="mb-1 text-[0.7rem] uppercase tracking-wide text-muted-foreground">ChatGPT Plus</p>
+                <p className="text-lg font-semibold text-foreground">~1 800 ₽/мес</p>
+                <p className="mt-1 text-[0.72rem] text-muted-foreground">
+                  $20 + сложности оплаты из РФ
+                </p>
+              </div>
+              <div
+                className="rounded-lg border p-3"
+                style={{ borderColor: `${planColors.pro}50`, background: `${planColors.pro}08` }}
+              >
+                <p className="mb-1 text-[0.7rem] uppercase tracking-wide" style={{ color: planColors.pro }}>
+                  ПромтЛаб Pro
+                </p>
+                <p className="text-lg font-semibold text-foreground">599 ₽/мес</p>
+                <p className="mt-1 text-[0.72rem] text-muted-foreground">
+                  В 3× дешевле + MCP + расширение + AI-улучшение
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 p-3">
+                <p className="mb-1 text-[0.7rem] uppercase tracking-wide text-muted-foreground">Экономия</p>
+                <p className="text-lg font-semibold text-emerald-500">~1 200 ₽/мес</p>
+                <p className="mt-1 text-[0.72rem] text-muted-foreground">
+                  14 400 ₽ в год — полтора месяца Max
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="text-center">

@@ -74,6 +74,11 @@ type Subscription struct {
 	LastRenewalAttemptAt *time.Time `gorm:"column:last_renewal_attempt_at" json:"last_renewal_attempt_at,omitempty"`
 	RenewalAttempts      int        `gorm:"column:renewal_attempts;not null;default:0" json:"renewal_attempts"`
 
+	// PreExpireStage — какое pre-expire напоминание уже отправлено:
+	//   0 — не отправляли, 1 — 3-day reminder, 2 — 1-day reminder.
+	// Сбрасывается в 0 при ExtendPeriod (успешное продление).
+	PreExpireStage int16 `gorm:"column:pre_expire_stage;not null;default:0" json:"-"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 

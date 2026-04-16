@@ -124,12 +124,17 @@ export async function api<T>(
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Ошибка запроса" }))
 
-    // Quota exceeded (402) — показываем глобальный upgrade dialog
+    // Quota exceeded (402) — показываем глобальный upgrade dialog.
+    // Backend кладёт в body: quota_type, used, limit, plan, upgrade_url (см. errors.RespondQuotaError).
     if (res.status === 402) {
       const { useQuotaStore } = await import("@/stores/quota-store")
-      useQuotaStore
-        .getState()
-        .show(body.quota_type || "unknown", body.error || "Лимит исчерпан")
+      useQuotaStore.getState().show({
+        quotaType: body.quota_type || "unknown",
+        message: body.error || "Лимит исчерпан",
+        used: typeof body.used === "number" ? body.used : undefined,
+        limit: typeof body.limit === "number" ? body.limit : undefined,
+        plan: typeof body.plan === "string" ? body.plan : undefined,
+      })
     }
 
     const apiError = new ApiError(body.error || `Ошибка сервера (${res.status})`, res.status)

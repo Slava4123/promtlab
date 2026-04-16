@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
 import { useAuthStore } from "@/stores/auth-store"
+import { popCheckoutIntent, useCheckout } from "@/hooks/use-subscription"
 
 const loginSchema = z.object({
   email: z.email("Введите корректный email"),
@@ -28,6 +29,7 @@ export default function SignIn() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
   const verifyTOTP = useAuthStore((s) => s.verifyTOTP)
+  const checkout = useCheckout()
   const [error, setError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [totpStep, setTotpStep] = useState<TOTPStep | null>(null)
@@ -42,12 +44,23 @@ export default function SignIn() {
     resolver: zodResolver(loginSchema),
   })
 
+  // После успешного login — если был saved checkout intent, запускаем checkout сразу (M-14).
+  const resumeAfterLogin = () => {
+    const pending = popCheckoutIntent()
+    if (pending) {
+      checkout.mutate(pending)
+      return true
+    }
+    return false
+  }
+
   const onSubmit = async (data: LoginForm) => {
     setError("")
     try {
       const result = await login(data.email, data.password)
       switch (result.kind) {
         case "ok":
+          if (resumeAfterLogin()) return
           navigate("/dashboard")
           return
         case "totp_required":
@@ -75,8 +88,9 @@ export default function SignIn() {
     try {
       const result = await verifyTOTP(totpStep.preAuthToken, totpCode)
       if (result.used_backup_code) {
-        // Опционально можно показать toast; для MVP — tihий redirect.
+        // Опционально можно показать toast; для MVP — тихий redirect.
       }
+      if (resumeAfterLogin()) return
       navigate("/admin/users")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Неверный код")
@@ -215,27 +229,33 @@ export default function SignIn() {
           <Input
             id="email"
             type="email"
+            autoComplete="email"
             placeholder="you@example.com"
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "email-error" : undefined}
             className="border-foreground/[0.08] bg-foreground/[0.06] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
             {...register("email")}
           />
           {errors.email && (
-            <p className="text-sm text-destructive">{errors.email.message}</p>
+            <p id="email-error" className="text-sm text-destructive">{errors.email.message}</p>
           )}
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" className="text-foreground">Пароль</Label>
-            <a href="/forgot-password" className="rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground hover:bg-muted min-h-[44px] flex items-center" tabIndex={-1}>
+            <Link to="/forgot-password" className="rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground hover:bg-muted min-h-[44px] flex items-center">
               Забыли пароль?
-            </a>
+            </Link>
           </div>
           <div className="relative">
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
               placeholder="••••••••"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
               className="border-foreground/[0.08] bg-foreground/[0.06] pr-10 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
               {...register("password")}
             />
@@ -250,7 +270,7 @@ export default function SignIn() {
             </button>
           </div>
           {errors.password && (
-            <p className="text-sm text-destructive">{errors.password.message}</p>
+            <p id="password-error" className="text-sm text-destructive">{errors.password.message}</p>
           )}
         </div>
 
