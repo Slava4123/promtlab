@@ -169,6 +169,7 @@ type App struct {
 	renewalLoop       *subscriptionuc.RenewalLoop
 	reminderLoop      *subscriptionuc.ReminderLoop
 	reengagementLoop  *engagementuc.ReengagementLoop
+	streakReminderLoop *engagementuc.StreakReminderLoop
 	feedbackRL        *ratelimit.Limiter[uint]
 }
 
@@ -308,6 +309,10 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	// reengagementLoop — письмо юзерам неактивным 14+ дней (M-5d). Раз в день.
 	reengagementLoop := engagementuc.NewReengagementLoop(userRepo, emailSvc, cfg.Server.FrontendURL, 24*time.Hour)
 
+	// streakReminderLoop — "не сломай серию" для юзеров со streak > 3 (M-16).
+	// Тик раз в день; внутри check today и skip если уже отправляли.
+	streakReminderLoop := engagementuc.NewStreakReminderLoop(streakRepo, userRepo, emailSvc, cfg.Server.FrontendURL, 24*time.Hour)
+
 	// Feedback
 	feedbackRepo := pgrepo.NewFeedbackRepository(db)
 	feedbackSvc := feedbackuc.NewService(feedbackRepo)
@@ -362,6 +367,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		renewalLoop:          renewalLoop,
 		reminderLoop:         reminderLoop,
 		reengagementLoop:     reengagementLoop,
+		streakReminderLoop:   streakReminderLoop,
 		purgeLoop:         purgeLoop,
 		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour, ratelimit.UintHash),
 	}
@@ -373,6 +379,7 @@ func (a *App) StartBackground() {
 	a.renewalLoop.Start()
 	a.reminderLoop.Start()
 	a.reengagementLoop.Start()
+	a.streakReminderLoop.Start()
 }
 
 // Shutdown waits for background tasks to complete.
@@ -382,6 +389,7 @@ func (a *App) Shutdown(timeout time.Duration) {
 	a.renewalLoop.Stop()
 	a.reminderLoop.Stop()
 	a.reengagementLoop.Stop()
+	a.streakReminderLoop.Stop()
 	a.feedbackRL.Close()
 	a.authSvc.WaitBackground(timeout)
 }

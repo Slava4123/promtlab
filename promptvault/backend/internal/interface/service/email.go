@@ -16,4 +16,6 @@ type EmailSender interface {
 	SendQuotaWarning(to, name, quotaType string, used, limit int, frontendURL string) error
 	// SendReengagement — letter для юзеров неактивных 14+ дней (M-5d).
 	SendReengagement(to, name, frontendURL string) error
+	// SendStreakReminder — "не сломай серию" когда streak > 3 и сегодня 0 промптов (M-16).
+	SendStreakReminder(to, name string, currentStreak int, frontendURL string) error
 }

@@ -50,3 +50,24 @@ func (r *streakRepo) GetByUserID(ctx context.Context, userID uint) (*models.User
 	}
 	return &streak, err
 }
+
+func (r *streakRepo) ListAtRisk(ctx context.Context, todayUTC string, minStreak int) ([]models.UserStreak, error) {
+	var out []models.UserStreak
+	// At-risk: current_streak > minStreak (что-то стоящее сохранять),
+	// last_active_date < today (сегодня ещё не заходили),
+	// reminder_sent_on IS NULL OR < today (не слали сегодня).
+	err := r.db.WithContext(ctx).
+		Where("current_streak > ?", minStreak).
+		Where("last_active_date < ?::date", todayUTC).
+		Where("reminder_sent_on IS NULL OR reminder_sent_on < ?::date", todayUTC).
+		Limit(500).
+		Find(&out).Error
+	return out, err
+}
+
+func (r *streakRepo) MarkReminderSent(ctx context.Context, userID uint, todayUTC string) error {
+	return r.db.WithContext(ctx).
+		Model(&models.UserStreak{}).
+		Where("user_id = ?", userID).
+		Update("reminder_sent_on", todayUTC).Error
+}

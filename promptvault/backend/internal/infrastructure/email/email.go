@@ -157,6 +157,24 @@ func (s *Service) SendReengagement(to, name, frontendURL string) error {
 	return s.send(to, "Давно не видели тебя — ПромтЛаб", body)
 }
 
+// SendStreakReminder — "не сломай серию" (M-16). Отправляется раз в день юзерам
+// со streak > 3, которые сегодня ещё не зашли. Фокус на потерях, не на продаже.
+func (s *Service) SendStreakReminder(to, name string, currentStreak int, frontendURL string) error {
+	greeting := "Привет"
+	if name != "" {
+		greeting = fmt.Sprintf("Привет, %s", name)
+	}
+	body := fmt.Sprintf(
+		"%s!\r\n\r\n"+
+			"У тебя серия — %d дней подряд. Сегодня ещё не заходил — серия может прерваться.\r\n\r\n"+
+			"Используй один промпт, чтобы продолжить: %s/dashboard\r\n\r\n"+
+			"Если серии больше не интересны — закрой напоминание × в приложении, и мы не будем беспокоить.",
+		greeting, currentStreak, frontendURL,
+	)
+	subject := fmt.Sprintf("Серия %d дней под угрозой — ПромтЛаб", currentStreak)
+	return s.send(to, subject, body)
+}
+
 // SendQuotaWarning — предупреждение когда юзер достиг 80% квоты (M-5c).
 // quotaType: "ai_total" (Free — одноразово) / "ai_daily" (Pro/Max — сегодня).
 // used/limit — текущий счётчик, frontendURL — для CTA на /pricing.
