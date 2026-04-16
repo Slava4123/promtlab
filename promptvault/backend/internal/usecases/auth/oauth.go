@@ -109,7 +109,7 @@ func (s *OAuthService) ExchangeGitHub(ctx context.Context, code, verifier string
 
 	token, err := s.githubCfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", ErrOAuthExchangeFailed, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrOAuthExchangeFailed, err)
 	}
 
 	profile, err := s.fetchGitHubProfile(ctx, token)
@@ -127,7 +127,7 @@ func (s *OAuthService) ExchangeGoogle(ctx context.Context, code, verifier string
 
 	token, err := s.googleCfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", ErrOAuthExchangeFailed, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrOAuthExchangeFailed, err)
 	}
 
 	profile, err := s.fetchGoogleProfile(ctx, token)
@@ -145,7 +145,7 @@ func (s *OAuthService) ExchangeYandex(ctx context.Context, code, verifier string
 
 	token, err := s.yandexCfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", ErrOAuthExchangeFailed, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrOAuthExchangeFailed, err)
 	}
 
 	profile, err := s.fetchYandexProfile(ctx, token)
@@ -164,7 +164,7 @@ func (s *OAuthService) LinkGitHub(ctx context.Context, userID uint, code, verifi
 	}
 	token, err := s.githubCfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrOAuthExchangeFailed, err)
+		return fmt.Errorf("%w: %w", ErrOAuthExchangeFailed, err)
 	}
 	profile, err := s.fetchGitHubProfile(ctx, token)
 	if err != nil {
@@ -179,7 +179,7 @@ func (s *OAuthService) LinkGoogle(ctx context.Context, userID uint, code, verifi
 	}
 	token, err := s.googleCfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrOAuthExchangeFailed, err)
+		return fmt.Errorf("%w: %w", ErrOAuthExchangeFailed, err)
 	}
 	profile, err := s.fetchGoogleProfile(ctx, token)
 	if err != nil {
@@ -194,7 +194,7 @@ func (s *OAuthService) LinkYandex(ctx context.Context, userID uint, code, verifi
 	}
 	token, err := s.yandexCfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrOAuthExchangeFailed, err)
+		return fmt.Errorf("%w: %w", ErrOAuthExchangeFailed, err)
 	}
 	profile, err := s.fetchYandexProfile(ctx, token)
 	if err != nil {
@@ -325,7 +325,7 @@ func (s *OAuthService) fetchGitHubProfile(ctx context.Context, token *oauth2.Tok
 
 	resp, err := client.Get("https://api.github.com/user")
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrOAuthProfileFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrOAuthProfileFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -341,7 +341,7 @@ func (s *OAuthService) fetchGitHubProfile(ctx context.Context, token *oauth2.Tok
 		AvatarURL string `json:"avatar_url"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrOAuthProfileFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrOAuthProfileFailed, err)
 	}
 
 	name := raw.Name
@@ -395,7 +395,7 @@ func (s *OAuthService) fetchGoogleProfile(ctx context.Context, token *oauth2.Tok
 
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrOAuthProfileFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrOAuthProfileFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -410,7 +410,7 @@ func (s *OAuthService) fetchGoogleProfile(ctx context.Context, token *oauth2.Tok
 		Picture string `json:"picture"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrOAuthProfileFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrOAuthProfileFailed, err)
 	}
 
 	return &oauthProfile{
@@ -426,7 +426,7 @@ func (s *OAuthService) fetchYandexProfile(ctx context.Context, token *oauth2.Tok
 
 	resp, err := client.Get("https://login.yandex.ru/info?format=json")
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrOAuthProfileFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrOAuthProfileFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -443,7 +443,7 @@ func (s *OAuthService) fetchYandexProfile(ctx context.Context, token *oauth2.Tok
 		IsAvatarEmpty   bool   `json:"is_avatar_empty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrOAuthProfileFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrOAuthProfileFailed, err)
 	}
 
 	name := raw.DisplayName
