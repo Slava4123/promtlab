@@ -158,7 +158,7 @@ export default function AppLayout() {
                                   <p className="text-[0.78rem] font-medium text-foreground truncate">{inv.team_name}</p>
                                 </div>
                                 <p className="text-[0.7rem] text-muted-foreground mb-2">
-                                  {inv.inviter_name} приглашает вас как <RoleBadge role={inv.role} />
+                                  {inv.inviter_name} приглашает вас как <RoleBadge role={inv.role} interactive={false} />
                                 </p>
                                 <div className="flex gap-2">
                                   <button

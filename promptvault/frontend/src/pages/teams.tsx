@@ -123,7 +123,7 @@ export default function Teams() {
                   <Users className="h-4 w-4 text-brand-muted-foreground" />
                 </div>
                 <div className="flex items-center gap-1">
-                  <RoleBadge role={t.role} />
+                  <RoleBadge role={t.role} interactive={false} />
                   {t.role === "owner" && (
                     <div className="flex gap-1 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                       <button

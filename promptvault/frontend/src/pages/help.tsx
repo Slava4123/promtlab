@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { ChevronDown, LifeBuoy, Mail, Search } from "lucide-react"
+import { ChevronDown, LifeBuoy, Mail, Search, Users } from "lucide-react"
+import { RolePermissionsTable } from "@/components/teams/role-permissions-table"
 
 interface FaqItem {
   question: string
@@ -87,6 +88,16 @@ export default function Help() {
   const [query, setQuery] = useState("")
   const [openIdx, setOpenIdx] = useState<number | null>(null)
 
+  // Scroll to hash anchor (например /help#team-roles из popover'а в RoleBadge).
+  // useEffect после render гарантирует что section уже в DOM.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const hash = window.location.hash.slice(1)
+    if (!hash) return
+    const el = document.getElementById(hash)
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return FAQ
@@ -166,6 +177,21 @@ export default function Help() {
           })}
         </ul>
       )}
+
+      <section id="team-roles" className="mt-10 scroll-mt-20">
+        <div className="mb-3 flex items-center gap-2">
+          <Users className="h-5 w-5 text-violet-400" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-foreground">Роли в команде</h2>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          В командах три роли. Права назначаются владельцем при приглашении или меняются позже.
+        </p>
+        <RolePermissionsTable />
+        <p className="mt-3 text-[0.78rem] text-muted-foreground">
+          Команду можно удалить только от имени Владельца. Если Владелец покидает команду,
+          он должен сначала передать роль другому участнику.
+        </p>
+      </section>
 
       <footer className="mt-10 rounded-xl border border-border bg-muted/20 px-4 py-4 text-sm">
         <p className="text-foreground">Нужна ещё помощь?</p>

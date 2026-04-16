@@ -191,7 +191,7 @@ function DesktopUserTable({
                 </div>
               </td>
               <td className="px-3 py-2">
-                <RoleBadge role={u.role} />
+                <RoleBadge role={u.role} interactive={false} />
               </td>
               <td className="px-3 py-2">
                 <StatusBadge status={u.status} />
@@ -236,7 +236,7 @@ function MobileUserList({
                 {u.username && ` · @${u.username}`}
               </div>
               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                <RoleBadge role={u.role} />
+                <RoleBadge role={u.role} interactive={false} />
                 <StatusBadge status={u.status} />
                 <span className="text-[0.65rem] text-muted-foreground">
                   {new Date(u.created_at).toLocaleDateString("ru-RU")}
