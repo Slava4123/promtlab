@@ -195,7 +195,12 @@ func (s *Service) Downgrade(ctx context.Context, userID uint) error {
 }
 
 // Cancel помечает активную подписку для отмены в конце текущего периода.
+// Если передан Reason — пишет его в subscription_cancellations (M-6b exit survey).
+// Ошибка записи Reason не блокирует отмену — логируется и swallow'ится.
 func (s *Service) Cancel(ctx context.Context, in CancelInput) error {
+	if !IsValidCancelReason(in.Reason) {
+		return ErrInvalidCancelReason
+	}
 	sub, err := s.subs.GetActiveByUserID(ctx, in.UserID)
 	if err != nil {
 		slog.Warn("subscription.cancel.no_subscription", "user_id", in.UserID)
@@ -207,7 +212,97 @@ func (s *Service) Cancel(ctx context.Context, in CancelInput) error {
 		return fmt.Errorf("subscription.cancel: %w", err)
 	}
 
-	slog.Info("subscription.cancel.scheduled", "user_id", in.UserID, "sub_id", sub.ID, "period_end", sub.CurrentPeriodEnd)
+	if in.Reason != "" {
+		rec := &models.SubscriptionCancellation{
+			UserID:         in.UserID,
+			SubscriptionID: sub.ID,
+			PlanID:         sub.PlanID,
+			Reason:         in.Reason,
+			OtherText:      in.Other,
+			CancelledAt:    time.Now(),
+		}
+		if err := s.subs.RecordCancellation(ctx, rec); err != nil {
+			// Не фейлим flow — отмена уже зафиксирована, потеря reason для аналитики допустима.
+			slog.Error("subscription.cancel.record_reason_failed", "user_id", in.UserID, "error", err)
+		}
+	}
+
+	slog.Info("subscription.cancel.scheduled",
+		"user_id", in.UserID, "sub_id", sub.ID, "period_end", sub.CurrentPeriodEnd, "reason", in.Reason)
+	return nil
+}
+
+// Pause ставит подписку на паузу на N месяцев (M-6). Работает только для платных
+// активных подписок. В период паузы user.PlanID='free' (квоты падают на Free-лимиты),
+// при Resume — восстанавливается.
+//
+// В течение паузы current_period_end НЕ меняется — мы сохраняем момент входа
+// (paused_at), чтобы при Resume вычислить remaining и сдвинуть period_end вперёд.
+func (s *Service) Pause(ctx context.Context, in PauseInput) error {
+	if in.Months < 1 || in.Months > 3 {
+		return ErrInvalidPauseMonths
+	}
+	sub, err := s.subs.GetActiveByUserID(ctx, in.UserID)
+	if err != nil {
+		return ErrNoActiveSubscription
+	}
+	if sub.Status == models.SubStatusPaused {
+		return ErrSubscriptionPaused
+	}
+	if sub.Status != models.SubStatusActive {
+		return ErrSubscriptionNotPausable
+	}
+	// Паузить имеет смысл только платный план; для free пауза бессмысленна,
+	// а для past_due блокируем до разрешения биллингового состояния.
+	plan, err := s.plans.GetByID(ctx, sub.PlanID)
+	if err != nil || plan == nil || plan.PriceKop <= 0 {
+		return ErrSubscriptionNotPausable
+	}
+
+	now := time.Now()
+	pausedUntil := now.AddDate(0, in.Months, 0)
+
+	if err := s.subs.Pause(ctx, sub.ID, in.UserID, now, pausedUntil); err != nil {
+		slog.Error("subscription.pause.failed", "user_id", in.UserID, "sub_id", sub.ID, "error", err)
+		return fmt.Errorf("subscription.pause: %w", err)
+	}
+	slog.Info("subscription.pause.scheduled",
+		"user_id", in.UserID, "sub_id", sub.ID, "months", in.Months, "paused_until", pausedUntil)
+	return nil
+}
+
+// Resume досрочно возобновляет приостановленную подписку (M-6).
+// Новый period_end = now + (old_period_end - paused_at) — юзер не теряет
+// оставшиеся дни оплаченного периода.
+func (s *Service) Resume(ctx context.Context, userID uint) error {
+	sub, err := s.subs.GetActiveByUserID(ctx, userID)
+	if err != nil {
+		return ErrNoActiveSubscription
+	}
+	if sub.Status != models.SubStatusPaused {
+		return ErrSubscriptionNotPaused
+	}
+	if sub.PausedAt == nil {
+		// Защитная ветка: status=paused без paused_at — corrupted state.
+		// Логируем и используем now (лучше чем панить юзера).
+		slog.Error("subscription.resume.missing_paused_at", "user_id", userID, "sub_id", sub.ID)
+		pausedAt := sub.CurrentPeriodEnd // fallback: 0 remaining
+		sub.PausedAt = &pausedAt
+	}
+
+	now := time.Now()
+	remaining := sub.CurrentPeriodEnd.Sub(*sub.PausedAt)
+	if remaining < 0 {
+		remaining = 0 // на всякий случай — не продлеваем в прошлое
+	}
+	newEnd := now.Add(remaining)
+
+	if err := s.subs.Resume(ctx, sub.ID, userID, now, newEnd); err != nil {
+		slog.Error("subscription.resume.failed", "user_id", userID, "sub_id", sub.ID, "error", err)
+		return fmt.Errorf("subscription.resume: %w", err)
+	}
+	slog.Info("subscription.resume.completed",
+		"user_id", userID, "sub_id", sub.ID, "new_period_end", newEnd)
 	return nil
 }
 

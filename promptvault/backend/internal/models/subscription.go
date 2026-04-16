@@ -44,6 +44,7 @@ type SubscriptionStatus string
 const (
 	SubStatusActive    SubscriptionStatus = "active"
 	SubStatusPastDue   SubscriptionStatus = "past_due" // reserved for v2 auto-renewal
+	SubStatusPaused    SubscriptionStatus = "paused"   // M-6: добровольная пауза 1-3 мес
 	SubStatusCancelled SubscriptionStatus = "cancelled"
 	SubStatusExpired   SubscriptionStatus = "expired"
 )
@@ -79,11 +80,33 @@ type Subscription struct {
 	// Сбрасывается в 0 при ExtendPeriod (успешное продление).
 	PreExpireStage int16 `gorm:"column:pre_expire_stage;not null;default:0" json:"-"`
 
+	// PausedAt — момент входа в pause (M-6). NULL если подписка не на паузе.
+	// При Resume: remaining = current_period_end - paused_at; new_end = now + remaining.
+	// PausedUntil — запланированная дата авто-возобновления. ExpirationLoop
+	// резюмит подписку автоматически, когда paused_until < now().
+	PausedAt    *time.Time `gorm:"column:paused_at" json:"paused_at,omitempty"`
+	PausedUntil *time.Time `gorm:"column:paused_until" json:"paused_until,omitempty"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
 	Plan SubscriptionPlan `gorm:"foreignKey:PlanID" json:"plan,omitzero"`
 }
+
+// SubscriptionCancellation — запись об отмене подписки с причиной (M-6b exit survey).
+// Append-only — если юзер после Resume снова Cancel, создаётся новая запись.
+type SubscriptionCancellation struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	UserID         uint      `gorm:"not null" json:"user_id"`
+	SubscriptionID uint      `gorm:"not null" json:"subscription_id"`
+	PlanID         string    `gorm:"size:20;not null" json:"plan_id"`
+	Reason         string    `gorm:"size:30;not null" json:"reason"`
+	OtherText      string    `gorm:"type:text;not null;default:''" json:"other_text"`
+	CancelledAt    time.Time `gorm:"not null;default:now()" json:"cancelled_at"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func (SubscriptionCancellation) TableName() string { return "subscription_cancellations" }
 
 // PaymentStatus — статус платежа.
 type PaymentStatus string

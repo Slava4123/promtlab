@@ -436,8 +436,15 @@ export interface BadgeListResponse {
 
 // Subscription / Billing
 
-export type PlanID = "free" | "pro" | "max"
-export type SubscriptionStatus = "active" | "past_due" | "cancelled" | "expired"
+export type PlanID = "free" | "pro" | "max" | "pro_yearly" | "max_yearly"
+export type SubscriptionStatus = "active" | "past_due" | "paused" | "cancelled" | "expired"
+
+export type CancelReason =
+  | "too_expensive"
+  | "not_using"
+  | "missing_feature"
+  | "found_alternative"
+  | "other"
 
 export interface Plan {
   id: PlanID
@@ -467,6 +474,8 @@ export interface Subscription {
   cancel_at_period_end: boolean
   cancelled_at?: string
   auto_renew: boolean
+  paused_at?: string
+  paused_until?: string
   plan: Plan
 }
 

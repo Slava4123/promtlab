@@ -8,7 +8,10 @@ import {
   postCheckout,
   postCancelSubscription,
   postDowngrade,
+  postPauseSubscription,
+  postResumeSubscription,
   postSetAutoRenew,
+  type CancelSubscriptionInput,
 } from "@/api/subscription"
 
 // CHECKOUT_INTENT_KEY — пометка что юзер хотел upgrade но не был залогинен.
@@ -87,7 +90,7 @@ export function useCancelSubscription() {
   const qc = useQueryClient()
   const fetchMe = useAuthStore((s) => s.fetchMe)
   return useMutation({
-    mutationFn: postCancelSubscription,
+    mutationFn: (input?: CancelSubscriptionInput) => postCancelSubscription(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["subscription"] })
       qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
@@ -96,6 +99,40 @@ export function useCancelSubscription() {
     },
     onError: (err: Error) => {
       toast.error(err.message || "Не удалось отменить подписку")
+    },
+  })
+}
+
+export function usePauseSubscription() {
+  const qc = useQueryClient()
+  const fetchMe = useAuthStore((s) => s.fetchMe)
+  return useMutation({
+    mutationFn: (months: 1 | 2 | 3) => postPauseSubscription(months),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscription"] })
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
+      fetchMe()
+      toast.success("Подписка приостановлена")
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Не удалось приостановить подписку")
+    },
+  })
+}
+
+export function useResumeSubscription() {
+  const qc = useQueryClient()
+  const fetchMe = useAuthStore((s) => s.fetchMe)
+  return useMutation({
+    mutationFn: postResumeSubscription,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscription"] })
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
+      fetchMe()
+      toast.success("Подписка возобновлена")
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Не удалось возобновить подписку")
     },
   })
 }

@@ -66,6 +66,26 @@ type SubscriptionRepository interface {
 
 	// SetPreExpireStage выставляет pre_expire_stage — защита от спама в ReminderLoop.
 	SetPreExpireStage(ctx context.Context, subID uint, stage int16) error
+
+	// Pause переводит подписку в paused и downgrade'ит user.plan_id в "free"
+	// в одной транзакции (M-6). pausedAt = now, pausedUntil = now + N*30d.
+	// current_period_end НЕ меняется — при Resume вычисляется remaining.
+	Pause(ctx context.Context, subID, userID uint, pausedAt, pausedUntil time.Time) error
+
+	// Resume переводит paused→active, восстанавливает user.plan_id = sub.plan_id
+	// и сдвигает current_period_end вперёд на величину замороженного остатка
+	// (remaining = old_period_end - paused_at; new_end = resume_now + remaining).
+	// Очищает paused_at и paused_until.
+	Resume(ctx context.Context, subID, userID uint, resumeAt, newPeriodEnd time.Time) error
+
+	// ListExpiredPauses возвращает paused подписки с paused_until < before.
+	// ExpirationLoop авто-резюмит их, чтобы не держать подписку на паузе вечно.
+	ListExpiredPauses(ctx context.Context, before time.Time) ([]models.Subscription, error)
+
+	// RecordCancellation записывает причину отмены в subscription_cancellations
+	// (M-6b exit survey). Append-only: если юзер снова Cancel после Resume —
+	// создаётся новая запись.
+	RecordCancellation(ctx context.Context, c *models.SubscriptionCancellation) error
 }
 
 // PaymentRepository — управление платежами.

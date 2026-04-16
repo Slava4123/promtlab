@@ -26,6 +26,12 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 		httperr.RespondWithRequest(w, r, httperr.New(http.StatusBadGateway, err.Error(), err))
 	case errors.Is(err, subscriptionuc.ErrInvalidWebhookSignature):
 		httperr.Respond(w, httperr.Forbidden(err.Error()))
+	case errors.Is(err, subscriptionuc.ErrSubscriptionNotPausable),
+		errors.Is(err, subscriptionuc.ErrSubscriptionPaused),
+		errors.Is(err, subscriptionuc.ErrSubscriptionNotPaused),
+		errors.Is(err, subscriptionuc.ErrInvalidPauseMonths),
+		errors.Is(err, subscriptionuc.ErrInvalidCancelReason):
+		httperr.Respond(w, httperr.Conflict(err.Error()))
 	default:
 		httperr.RespondWithRequest(w, r, httperr.Internal(err))
 	}

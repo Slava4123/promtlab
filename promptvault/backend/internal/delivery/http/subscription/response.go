@@ -67,6 +67,8 @@ type SubscriptionResponse struct {
 	CancelAtPeriodEnd  bool          `json:"cancel_at_period_end"`
 	CancelledAt        *time.Time    `json:"cancelled_at,omitempty"`
 	AutoRenew          bool          `json:"auto_renew"`
+	PausedAt           *time.Time    `json:"paused_at,omitempty"`
+	PausedUntil        *time.Time    `json:"paused_until,omitempty"`
 	Plan               *PlanResponse `json:"plan,omitempty"`
 	CreatedAt          time.Time     `json:"created_at"`
 }
@@ -85,6 +87,8 @@ func NewSubscriptionResponse(s *models.Subscription) *SubscriptionResponse {
 		CancelAtPeriodEnd:  s.CancelAtPeriodEnd,
 		CancelledAt:        s.CancelledAt,
 		AutoRenew:          s.AutoRenew,
+		PausedAt:           s.PausedAt,
+		PausedUntil:        s.PausedUntil,
 		CreatedAt:          s.CreatedAt,
 	}
 	if s.Plan.ID != "" {

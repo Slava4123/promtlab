@@ -187,3 +187,77 @@ func (r *subscriptionRepo) SetPreExpireStage(ctx context.Context, subID uint, st
 			"updated_at":       time.Now(),
 		}).Error
 }
+
+// Pause — M-6. Атомарно: sub.status=paused + paused_at/paused_until + user.plan_id=free.
+// Защита от race: WHERE status='active' — если кто-то уже поменял (например, expiration
+// опередил), UPDATE вернёт 0 rows и мы получим ErrSubscriptionNotActive.
+func (r *subscriptionRepo) Pause(ctx context.Context, subID, userID uint, pausedAt, pausedUntil time.Time) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&models.Subscription{}).
+			Where("id = ? AND status = ?", subID, models.SubStatusActive).
+			Updates(map[string]any{
+				"status":       models.SubStatusPaused,
+				"paused_at":    pausedAt,
+				"paused_until": pausedUntil,
+				"updated_at":   pausedAt,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Model(&models.User{}).
+			Where("id = ?", userID).
+			Update("plan_id", "free").Error
+	})
+}
+
+// Resume — M-6. Обратная операция: paused→active, current_period_end=newPeriodEnd,
+// user.plan_id восстанавливается из sub.plan_id. Защита от race: WHERE status='paused'.
+func (r *subscriptionRepo) Resume(ctx context.Context, subID, userID uint, resumeAt, newPeriodEnd time.Time) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var sub models.Subscription
+		if err := tx.Where("id = ? AND status = ?", subID, models.SubStatusPaused).
+			First(&sub).Error; err != nil {
+			return err
+		}
+		res := tx.Model(&models.Subscription{}).
+			Where("id = ? AND status = ?", subID, models.SubStatusPaused).
+			Updates(map[string]any{
+				"status":               models.SubStatusActive,
+				"current_period_end":   newPeriodEnd,
+				"paused_at":            nil,
+				"paused_until":         nil,
+				"pre_expire_stage":     0, // сбрасываем — новый период
+				"updated_at":           resumeAt,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Model(&models.User{}).
+			Where("id = ?", userID).
+			Update("plan_id", sub.PlanID).Error
+	})
+}
+
+// ListExpiredPauses — M-6. paused подписки с истёкшим paused_until. ExpirationLoop
+// авто-резюмит их (чтобы не держать юзера на паузе вечно при сбое auto-resume).
+// LIMIT 100 — в следующий тик добираем остальное.
+func (r *subscriptionRepo) ListExpiredPauses(ctx context.Context, before time.Time) ([]models.Subscription, error) {
+	var subs []models.Subscription
+	err := r.db.WithContext(ctx).
+		Where("status = ? AND paused_until IS NOT NULL AND paused_until <= ?", models.SubStatusPaused, before).
+		Order("paused_until ASC").
+		Limit(100).
+		Find(&subs).Error
+	return subs, err
+}
+
+// RecordCancellation — M-6b. Append-only запись в subscription_cancellations.
+func (r *subscriptionRepo) RecordCancellation(ctx context.Context, c *models.SubscriptionCancellation) error {
+	return r.db.WithContext(ctx).Create(c).Error
+}

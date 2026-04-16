@@ -1,24 +1,49 @@
 import { useState } from "react"
-import { AlertCircle, CreditCard, ExternalLink } from "lucide-react"
+import { AlertCircle, CreditCard, ExternalLink, PauseCircle } from "lucide-react"
 import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlanBadge } from "./plan-badge"
 import { UsageMeters } from "./usage-meters"
-import { useSubscription, useUsage, useCancelSubscription, useSetAutoRenew } from "@/hooks/use-subscription"
+import { PauseDialog } from "./pause-dialog"
+import { CancelDialog } from "./cancel-dialog"
+import {
+  useSubscription,
+  useUsage,
+  useCancelSubscription,
+  usePauseSubscription,
+  useResumeSubscription,
+  useSetAutoRenew,
+} from "@/hooks/use-subscription"
 import { useAuthStore } from "@/stores/auth-store"
+import type { PlanID } from "@/api/types"
+
+function formatDateRu(iso: string): string {
+  return new Date(iso).toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  })
+}
 
 export function SubscriptionSection() {
   const navigate = useNavigate()
-  const planId = useAuthStore((s) => s.user?.plan_id ?? "free") as "free" | "pro" | "max"
+  const planId = useAuthStore((s) => s.user?.plan_id ?? "free") as PlanID
   const { data: subscription, isLoading: subLoading } = useSubscription()
   const { data: usage, isLoading: usageLoading } = useUsage()
   const cancelMutation = useCancelSubscription()
+  const pauseMutation = usePauseSubscription()
+  const resumeMutation = useResumeSubscription()
   const autoRenewMutation = useSetAutoRenew()
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [pauseOpen, setPauseOpen] = useState(false)
 
   const isLoading = subLoading || usageLoading
+  const isPaused = subscription?.status === "paused"
+  const isActivePaid =
+    subscription?.status === "active" &&
+    subscription?.plan?.price_kop !== undefined &&
+    subscription.plan.price_kop > 0
 
   return (
     <section className="space-y-4">
@@ -77,14 +102,36 @@ export function SubscriptionSection() {
 
           {subscription?.cancel_at_period_end && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-              Подписка будет отменена{" "}
-              {new Date(subscription.current_period_end).toLocaleDateString(
-                "ru-RU",
-              )}
+              Подписка будет отменена {formatDateRu(subscription.current_period_end)}
             </div>
           )}
 
-          {subscription && !subscription.cancel_at_period_end && (
+          {isPaused && subscription?.paused_until && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-start gap-3 rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200"
+            >
+              <PauseCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div>
+                  <span className="font-medium">Подписка приостановлена.</span>{" "}
+                  Возобновим автоматически {formatDateRu(subscription.paused_until)}.
+                  Оставшиеся дни сохранятся.
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => resumeMutation.mutate()}
+                  disabled={resumeMutation.isPending}
+                >
+                  Возобновить сейчас
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {subscription && !subscription.cancel_at_period_end && !isPaused && (
             <label className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3 text-sm">
               <input
                 type="checkbox"
@@ -106,16 +153,23 @@ export function SubscriptionSection() {
 
           {usage && <UsageMeters usage={usage} />}
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {planId === "free" ? (
               <Button size="sm" onClick={() => navigate("/pricing")}>
                 Получить Pro за 19₽/день
               </Button>
             ) : (
-              !subscription?.cancel_at_period_end && (
-                <Button variant="outline" size="sm" onClick={() => setCancelOpen(true)}>
-                  Отменить подписку
-                </Button>
+              !subscription?.cancel_at_period_end && !isPaused && (
+                <>
+                  {isActivePaid && (
+                    <Button variant="outline" size="sm" onClick={() => setPauseOpen(true)}>
+                      Приостановить
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => setCancelOpen(true)}>
+                    Отменить подписку
+                  </Button>
+                </>
               )
             )}
             <Button variant="ghost" size="sm" onClick={() => navigate("/pricing")}>
@@ -125,19 +179,26 @@ export function SubscriptionSection() {
         </div>
       )}
 
-      <ConfirmDialog
+      <CancelDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
-        title="Отменить подписку?"
-        description="Вы сохраните доступ до конца оплаченного периода. После этого аккаунт перейдёт на бесплатный план."
-        confirmLabel="Отменить подписку"
-        variant="destructive"
-        onConfirm={() => {
-          cancelMutation.mutate(undefined, {
+        onConfirm={(input) => {
+          cancelMutation.mutate(input, {
             onSettled: () => setCancelOpen(false),
           })
         }}
         isPending={cancelMutation.isPending}
+      />
+
+      <PauseDialog
+        open={pauseOpen}
+        onOpenChange={setPauseOpen}
+        onConfirm={(months) => {
+          pauseMutation.mutate(months, {
+            onSettled: () => setPauseOpen(false),
+          })
+        }}
+        isPending={pauseMutation.isPending}
       />
     </section>
   )

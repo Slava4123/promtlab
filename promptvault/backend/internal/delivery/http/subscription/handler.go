@@ -92,11 +92,62 @@ func (h *Handler) Checkout(w http.ResponseWriter, r *http.Request) {
 }
 
 // Cancel — POST /api/subscription/cancel.
-// Помечает подписку для отмены в конце текущего периода.
+// Помечает подписку для отмены в конце текущего периода. Принимает опциональную
+// причину отмены для exit-survey (M-6b); reason и other_text игнорируются, если
+// body пустой (backward compat со старыми клиентами).
 func (h *Handler) Cancel(w http.ResponseWriter, r *http.Request) {
 	userID := authmw.GetUserID(r.Context())
 
-	if err := h.svc.Cancel(r.Context(), subscriptionuc.CancelInput{UserID: userID}); err != nil {
+	// Body опционален: пустой запрос = cancel без причины. Игнорируем ошибку
+	// парсинга, только если body действительно пустой (Content-Length==0).
+	req := CancelRequest{}
+	if r.ContentLength > 0 {
+		parsed, err := utils.DecodeAndValidate[CancelRequest](r, h.validate)
+		if err != nil {
+			httperr.Respond(w, httperr.BadRequest(err.Error()))
+			return
+		}
+		req = parsed
+	}
+
+	if err := h.svc.Cancel(r.Context(), subscriptionuc.CancelInput{
+		UserID: userID,
+		Reason: req.Reason,
+		Other:  req.OtherText,
+	}); err != nil {
+		respondError(w, r, err)
+		return
+	}
+
+	utils.WriteNoContent(w)
+}
+
+// Pause — POST /api/subscription/pause. M-6. Body: {months: 1|2|3}.
+func (h *Handler) Pause(w http.ResponseWriter, r *http.Request) {
+	userID := authmw.GetUserID(r.Context())
+
+	req, err := utils.DecodeAndValidate[PauseRequest](r, h.validate)
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest(err.Error()))
+		return
+	}
+
+	if err := h.svc.Pause(r.Context(), subscriptionuc.PauseInput{
+		UserID: userID,
+		Months: req.Months,
+	}); err != nil {
+		respondError(w, r, err)
+		return
+	}
+
+	utils.WriteNoContent(w)
+}
+
+// Resume — POST /api/subscription/resume. M-6. Досрочное возобновление.
+func (h *Handler) Resume(w http.ResponseWriter, r *http.Request) {
+	userID := authmw.GetUserID(r.Context())
+
+	if err := h.svc.Resume(r.Context(), userID); err != nil {
 		respondError(w, r, err)
 		return
 	}

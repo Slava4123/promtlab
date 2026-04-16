@@ -1,5 +1,6 @@
 import { api, publicApi } from "./client"
 import type {
+  CancelReason,
   Plan,
   Subscription,
   UsageSummary,
@@ -25,8 +26,28 @@ export function postCheckout(planId: string): Promise<CheckoutResponse> {
   })
 }
 
-export function postCancelSubscription(): Promise<void> {
-  return api<void>("/subscription/cancel", { method: "POST" })
+export interface CancelSubscriptionInput {
+  reason?: CancelReason
+  other_text?: string
+}
+
+export function postCancelSubscription(input?: CancelSubscriptionInput): Promise<void> {
+  const body = input?.reason ? JSON.stringify({
+    reason: input.reason,
+    other_text: input.reason === "other" ? input.other_text ?? "" : undefined,
+  }) : undefined
+  return api<void>("/subscription/cancel", { method: "POST", body })
+}
+
+export function postPauseSubscription(months: 1 | 2 | 3): Promise<void> {
+  return api<void>("/subscription/pause", {
+    method: "POST",
+    body: JSON.stringify({ months }),
+  })
+}
+
+export function postResumeSubscription(): Promise<void> {
+  return api<void>("/subscription/resume", { method: "POST" })
 }
 
 export function postDowngrade(): Promise<void> {
