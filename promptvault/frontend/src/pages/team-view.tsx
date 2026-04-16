@@ -185,9 +185,13 @@ export default function TeamView() {
           </div>
           <div className="flex items-center gap-2">
             <Popover>
-              <PopoverTrigger className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[0.75rem] text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40">
+              <PopoverTrigger
+                className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2 text-[0.75rem] text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 sm:px-3"
+                aria-label="Справка о ролях"
+                title="Кто что может"
+              >
                 <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                Кто что может
+                <span className="hidden sm:inline">Кто что может</span>
               </PopoverTrigger>
               <PopoverContent className="w-[min(560px,calc(100vw-24px))]">
                 <h3 className="mb-1 text-sm font-semibold text-foreground">Роли в команде</h3>

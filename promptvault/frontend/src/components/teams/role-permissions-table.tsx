@@ -73,8 +73,8 @@ export function RolePermissionsTable({ highlight, compact = false }: RolePermiss
   const rowCls = compact ? "py-1.5 text-[0.75rem]" : "py-2 text-[0.82rem]"
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <table className="w-full border-collapse">
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full min-w-[360px] border-collapse">
         <thead className="bg-muted/40">
           <tr>
             <th
