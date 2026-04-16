@@ -19,6 +19,37 @@ const getTransform = (dir: Direction, distance: number) => {
   }
 }
 
+// P-12: Shared IntersectionObserver.
+// На лендинге ~20 секций используют useFadeInView — каждый создавал свой
+// IntersectionObserver. Один разделяемый observer экономит память и CPU
+// (browser-side callback батч-обрабатывает все элементы).
+//
+// threshold запекаем в ключ observer'а — разные пороги требуют отдельного
+// observer'а по спецификации IntersectionObserverInit. На практике почти
+// всё зовётся с threshold=0.15, так что обычно будет один observer на весь lifetime.
+type Callback = (entry: IntersectionObserverEntry) => void
+const observers = new Map<number, IntersectionObserver>()
+const callbacks = new WeakMap<Element, Callback>()
+
+function getObserver(threshold: number): IntersectionObserver {
+  // Дискретизируем threshold до 2 знаков — избегаем миллионов observer'ов
+  // при случайных float-дрейфах, оставаясь достаточно точными для анимаций.
+  const key = Math.round(threshold * 100) / 100
+  let obs = observers.get(key)
+  if (obs) return obs
+  obs = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const cb = callbacks.get(entry.target)
+        if (cb) cb(entry)
+      }
+    },
+    { threshold: key },
+  )
+  observers.set(key, obs)
+  return obs
+}
+
 export function useFadeInView(
   opts: FadeInViewOptions = {},
 ): [RefObject<HTMLDivElement | null>, CSSProperties] {
@@ -29,17 +60,20 @@ export function useFadeInView(
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true)
-          obs.disconnect()
-        }
-      },
-      { threshold },
-    )
+    const obs = getObserver(threshold)
+    const cb: Callback = (entry) => {
+      if (entry.isIntersecting) {
+        setVisible(true)
+        callbacks.delete(el)
+        obs.unobserve(el)
+      }
+    }
+    callbacks.set(el, cb)
     obs.observe(el)
-    return () => obs.disconnect()
+    return () => {
+      callbacks.delete(el)
+      obs.unobserve(el)
+    }
   }, [threshold])
 
   const style: CSSProperties = {
