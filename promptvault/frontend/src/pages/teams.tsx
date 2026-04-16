@@ -102,7 +102,7 @@ export default function Teams() {
         <EmptyState
           icon={<Users className="h-7 w-7 text-brand-muted-foreground/60" />}
           title="Пока нет команд"
-          description="В команде все промпты, коллекции и теги общие: меняет один — видят все. Есть роли owner/editor/viewer."
+          description="В команде все промпты, коллекции и теги общие: меняет один — видят все. Есть роли Владелец / Редактор / Читатель."
           action={
             <Button variant="brand" size="sm" onClick={openCreate}>
               <Plus className="h-3.5 w-3.5" />
