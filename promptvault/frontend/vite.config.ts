@@ -3,8 +3,25 @@ import { defineConfig } from "vitest/config"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 
+// Vite по умолчанию отдаёт статику из public/ с Content-Type без charset.
+// Для UTF-8 текстов (llms.txt, *.md, robots.txt) браузер угадывает кодировку
+// и для кириллицы получает mojibake. Принудительно ставим charset=utf-8.
+const utf8TextPlugin = {
+  name: "utf8-text-charset",
+  configureServer(server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void }, next: () => void) => void) => void } }) {
+    server.middlewares.use((req, res, next) => {
+      const url = req.url?.split("?")[0] ?? ""
+      if (url.endsWith(".txt") || url.endsWith(".md")) {
+        const type = url.endsWith(".md") ? "text/markdown" : "text/plain"
+        res.setHeader("Content-Type", `${type}; charset=utf-8`)
+      }
+      next()
+    })
+  },
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), utf8TextPlugin],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

@@ -1,0 +1,23 @@
+# ПромтЛаб (PromptLab)
+
+> Self-hosted менеджер AI-промптов с версионированием, командной работой,
+> Chrome-расширением и MCP-сервером для Claude, Cursor, Windsurf.
+> Российский сервис, размещение на VPS в РФ.
+
+ПромтЛаб реализует [Model Context Protocol](https://modelcontextprotocol.io/) —
+ваши промпты, коллекции и теги доступны прямо в AI-клиентах через MCP-сервер.
+
+Эти ресурсы предназначены для AI-агентов и LLM-tools. Все ссылки ниже —
+markdown-зеркала страниц сайта, готовые к загрузке без выполнения JavaScript.
+
+## Документация
+
+- [MCP-сервер: подключение и tools](https://promtlabs.ru/help/mcp.md): Полная инструкция по подключению ПромтЛаб как MCP-сервера к Claude Code, Claude Desktop, Cursor, Windsurf. 24 tools (чтение/запись/удаление), resources, prompts, ролевые ограничения, примеры запросов, лимиты и troubleshooting.
+
+## Полный контекст одним файлом
+
+- [llms-full.txt](https://promtlabs.ru/llms-full.txt): Все публичные документы, склеенные в один markdown — удобно для одной загрузки в LLM-context.
+
+## Optional
+
+- [Главная страница (HTML)](https://promtlabs.ru/): Описание продукта, тарифы, скриншоты. Полностью JS-rendered, для AI-агентов малополезна — используйте markdown-ссылки выше.

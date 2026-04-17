@@ -6,3 +6,11 @@ Disallow: /settings
 Disallow: /prompts/
 Disallow: /collections
 Disallow: /teams
+
+# AI-friendly resources (llms.txt standard, https://llmstxt.org)
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /help/
+
+# Sitemap для поисковиков (Yandex Webmaster, Google Search Console)
+Sitemap: https://promtlabs.ru/sitemap.xml
