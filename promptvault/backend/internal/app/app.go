@@ -411,13 +411,18 @@ func (a *App) MountRoutes(r chi.Router) {
 
 	// SEO endpoints (outside /api): /sitemap.xml для поисковиков. Rate-limit 60/IP —
 	// типичный crawl-rate для bot-ов, защита от DoS на статичный список.
-	r.With(byIP(60)).Get("/sitemap.xml", a.seoHandler.Sitemap)
+	// HEAD регистрируем явно: Google Search Console + Yandex Webmaster проверяют
+	// sitemap через HEAD перед GET. Без HEAD получают 405 → «Недопустимый адрес».
+	r.With(byIP(60)).Method(http.MethodGet, "/sitemap.xml", http.HandlerFunc(a.seoHandler.Sitemap))
+	r.With(byIP(60)).Method(http.MethodHead, "/sitemap.xml", http.HandlerFunc(a.seoHandler.Sitemap))
 
 	// /p/{slug} — server-rendered HTML. nginx роутит сюда ТОЛЬКО bot-UA
 	// (Yandexbot/Googlebot/Telegram/VK/...). Обычные юзеры получают SPA.
 	// Без bot-routing этот endpoint всё равно будет отдаваться по прямому
 	// curl/wget запросу — это OK (валидный HTML, индексируется).
-	r.With(byIP(60)).Get("/p/{slug}", a.seoHandler.PromptHTML)
+	// HEAD аналогично — соц-парсеры превью часто HEAD-ят перед GET.
+	r.With(byIP(60)).Method(http.MethodGet, "/p/{slug}", http.HandlerFunc(a.seoHandler.PromptHTML))
+	r.With(byIP(60)).Method(http.MethodHead, "/p/{slug}", http.HandlerFunc(a.seoHandler.PromptHTML))
 
 	// MCP endpoint (outside /api, with pre-auth IP rate limit)
 	if a.mcpServer != nil {
@@ -449,9 +454,12 @@ func (a *App) MountRoutes(r chi.Router) {
 
 		// OG-image generation для социальных превью (Telegram/VK/Twitter Cards).
 		// ETag-cache 24h: 99% запросов после прогрева — 304 Not Modified без рендера.
+		// HEAD: соц-парсеры (Twitter Card validator и т.д.) проверяют размер
+		// картинки HEAD-запросом перед GET — без поддержки получают 405.
 		r.Route("/og/prompts", func(r chi.Router) {
 			r.Use(byIP(60))
-			r.Get("/{slug}", a.seoHandler.OGImage)
+			r.Method(http.MethodGet, "/{slug}", http.HandlerFunc(a.seoHandler.OGImage))
+			r.Method(http.MethodHead, "/{slug}", http.HandlerFunc(a.seoHandler.OGImage))
 		})
 
 		// public — webhooks. T-Bank шлёт 1-5 уведомлений за цикл платежа;
