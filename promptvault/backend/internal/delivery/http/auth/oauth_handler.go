@@ -75,7 +75,9 @@ func (h *OAuthHandler) maybeSetReferralCookie(w http.ResponseWriter, r *http.Req
 		return
 	}
 	for _, ch := range ref {
-		if !((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
+		isAlpha := ch >= 'A' && ch <= 'Z'
+		isDigit := ch >= '0' && ch <= '9'
+		if !isAlpha && !isDigit {
 			return
 		}
 	}
