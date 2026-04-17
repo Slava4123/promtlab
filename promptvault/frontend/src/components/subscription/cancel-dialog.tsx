@@ -88,10 +88,8 @@ export function CancelDialog({ open, onOpenChange, onConfirm, isPending = false 
         </fieldset>
 
         <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" disabled={isPending}>
-              Не отменять
-            </Button>
+          <DialogClose render={<Button variant="outline" disabled={isPending} />}>
+            Не отменять
           </DialogClose>
           <Button variant="destructive" onClick={handleConfirm} disabled={isPending}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}

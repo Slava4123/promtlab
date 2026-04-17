@@ -100,10 +100,8 @@ export function DowngradePreviewDialog({
         ) : null}
 
         <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" disabled={isPending}>
-              Остаться на {preview?.current_plan_id === "free" ? "Free" : "текущем тарифе"}
-            </Button>
+          <DialogClose render={<Button variant="outline" disabled={isPending} />}>
+            Остаться на {preview?.current_plan_id === "free" ? "Free" : "текущем тарифе"}
           </DialogClose>
           <Button variant="destructive" onClick={onConfirm} disabled={isPending || isLoading}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}

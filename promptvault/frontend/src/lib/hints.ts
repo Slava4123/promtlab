@@ -28,7 +28,7 @@ function readDismissed(): Set<HintId> {
   }
 }
 
-function writeDismissed(set: Set<HintId>) {
+function writeDismissed(set: ReadonlySet<HintId>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)))
   } catch {

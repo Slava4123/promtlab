@@ -75,10 +75,8 @@ export function PauseDialog({ open, onOpenChange, onConfirm, isPending = false }
         </fieldset>
 
         <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" disabled={isPending}>
-              Отмена
-            </Button>
+          <DialogClose render={<Button variant="outline" disabled={isPending} />}>
+            Отмена
           </DialogClose>
           <Button onClick={() => onConfirm(months)} disabled={isPending}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}

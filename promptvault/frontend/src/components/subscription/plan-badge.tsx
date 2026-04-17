@@ -7,7 +7,9 @@ const planConfig: Record<
 > = {
   free: { label: "Free", bg: "bg-muted", text: "text-muted-foreground", Icon: Zap },
   pro: { label: "Pro", bg: "bg-violet-500/15", text: "text-violet-600 dark:text-violet-400", Icon: Sparkles },
+  pro_yearly: { label: "Pro · год", bg: "bg-violet-500/15", text: "text-violet-600 dark:text-violet-400", Icon: Sparkles },
   max: { label: "Max", bg: "bg-amber-500/15", text: "text-amber-600 dark:text-amber-400", Icon: Crown },
+  max_yearly: { label: "Max · год", bg: "bg-amber-500/15", text: "text-amber-600 dark:text-amber-400", Icon: Crown },
 }
 
 interface PlanBadgeProps {
