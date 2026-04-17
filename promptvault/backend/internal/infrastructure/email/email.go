@@ -113,7 +113,7 @@ func (s *Service) SendRenewalFailed(to, planName string, attempt, maxAttempts in
 		body = fmt.Sprintf(
 			"Мы сделали %d попытки списания за подписку ПромтЛаб %s — все неуспешные.\r\n\r\n"+
 				"Ваш доступ сохраняется до %s. После этой даты аккаунт перейдёт на Free план, если карта не будет обновлена.\r\n\r\n"+
-				"Обновить способ оплаты: %s/settings\r\n\r\n"+
+				"Обновить способ оплаты: %s/settings/subscription\r\n\r\n"+
 				"Созданные промпты и коллекции при переходе на Free сохранятся — но часть возможностей ограничится.",
 			maxAttempts, planName, graceUntil.Format("02.01.2006"), frontendURL,
 		)
@@ -121,7 +121,7 @@ func (s *Service) SendRenewalFailed(to, planName string, attempt, maxAttempts in
 		body = fmt.Sprintf(
 			"Последняя попытка списания за подписку ПромтЛаб %s не удалась (%d из %d).\r\n\r\n"+
 				"Возможные причины: недостаточно средств, карта истекла или банк отклонил списание.\r\n\r\n"+
-				"Подписка действует до %s. Обновите способ оплаты, чтобы не потерять доступ: %s/settings",
+				"Подписка действует до %s. Обновите способ оплаты, чтобы не потерять доступ: %s/settings/subscription",
 			planName, attempt, maxAttempts, endsAt.Format("02.01.2006"), frontendURL,
 		)
 	default:
@@ -129,7 +129,7 @@ func (s *Service) SendRenewalFailed(to, planName string, attempt, maxAttempts in
 			"Не удалось продлить подписку ПромтЛаб %s (попытка %d из %d).\r\n\r\n"+
 				"Возможные причины: недостаточно средств, карта истекла или банк отклонил списание.\r\n\r\n"+
 				"Подписка остаётся активной до %s. Мы автоматически попробуем списать ещё раз через 24 часа.\r\n\r\n"+
-				"Обновить способ оплаты можно в настройках: %s/settings",
+				"Обновить способ оплаты можно в настройках: %s/settings/subscription",
 			planName, attempt, maxAttempts, endsAt.Format("02.01.2006"), frontendURL,
 		)
 	}

@@ -6,7 +6,7 @@ export default function ExtensionPrivacyPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-3xl px-6 py-10">
         <Link
-          to="/settings"
+          to="/settings/integrations"
           className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />

@@ -170,7 +170,7 @@ export function CommandPalette() {
               <FolderOpen />
               <span>Коллекции</span>
             </CommandItem>
-            <CommandItem onSelect={() => runAction(() => navigate("/settings"))}>
+            <CommandItem onSelect={() => runAction(() => navigate("/settings/profile"))}>
               <Settings />
               <span>Настройки</span>
             </CommandItem>

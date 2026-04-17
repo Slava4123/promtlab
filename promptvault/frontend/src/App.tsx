@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react"
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { QueryClient, QueryCache, QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { Loader2 } from "lucide-react"
@@ -31,7 +31,17 @@ const PromptEditor = lazy(() => import("@/pages/prompt-editor"))
 const Collections = lazy(() => import("@/pages/collections"))
 const CollectionView = lazy(() => import("@/pages/collection-view"))
 const Versions = lazy(() => import("@/pages/versions"))
-const SettingsPage = lazy(() => import("@/pages/settings"))
+// /settings/* — nested routes. Layout — lazy (грузится один раз при заходе),
+// sub-страницы — eager: формы лёгкие, per-section split дал бы 8 микро-чанков
+// и мерцание Suspense fallback при каждом переключении nav.
+const SettingsLayout = lazy(() => import("@/pages/settings/layout"))
+import SettingsProfile from "@/pages/settings/profile"
+import SettingsSecurity from "@/pages/settings/security"
+import SettingsAccounts from "@/pages/settings/accounts"
+import SettingsSubscription from "@/pages/settings/subscription"
+import SettingsReferral from "@/pages/settings/referral"
+import SettingsIntegrations from "@/pages/settings/integrations"
+import SettingsAppearance from "@/pages/settings/appearance"
 const Teams = lazy(() => import("@/pages/teams"))
 const TeamView = lazy(() => import("@/pages/team-view"))
 const Pricing = lazy(() => import("@/pages/pricing"))
@@ -41,6 +51,7 @@ const Welcome = lazy(() => import("@/pages/welcome"))
 const Changelog = lazy(() => import("@/pages/changelog"))
 const Badges = lazy(() => import("@/pages/badges"))
 const Help = lazy(() => import("@/pages/help"))
+const HelpMCP = lazy(() => import("@/pages/help/mcp"))
 
 // Admin pages
 const AdminLayout = lazy(() => import("@/pages/admin/layout"))
@@ -109,6 +120,7 @@ function AppRoutes() {
       <Route path="/s/:token" element={<SharedPrompt />} />
       <Route path="/p/:slug" element={<PublicPrompt />} />
       <Route path="/help" element={<Suspense fallback={<PageFallback />}><Help /></Suspense>} />
+      <Route path="/help/mcp" element={<Suspense fallback={<PageFallback />}><HelpMCP /></Suspense>} />
       <Route path="/legal/extension-privacy" element={<Suspense fallback={<PageFallback />}><ExtensionPrivacy /></Suspense>} />
       <Route path="/legal/terms" element={<Suspense fallback={<PageFallback />}><Terms /></Suspense>} />
       <Route path="/legal/privacy" element={<Suspense fallback={<PageFallback />}><Privacy /></Suspense>} />
@@ -128,7 +140,19 @@ function AppRoutes() {
           <Route path="/collections/:id" element={<Suspense fallback={<PageFallback />}><CollectionView /></Suspense>} />
           <Route path="/teams" element={<Suspense fallback={<PageFallback />}><Teams /></Suspense>} />
           <Route path="/teams/:slug" element={<Suspense fallback={<PageFallback />}><TeamView /></Suspense>} />
-          <Route path="/settings" element={<Suspense fallback={<PageFallback />}><SettingsPage /></Suspense>} />
+          <Route path="/settings" element={<Suspense fallback={<PageFallback />}><SettingsLayout /></Suspense>}>
+            <Route index element={<Navigate to="profile" replace />} />
+            <Route path="profile" element={<SettingsProfile />} />
+            <Route path="security" element={<SettingsSecurity />} />
+            <Route path="accounts" element={<SettingsAccounts />} />
+            <Route path="subscription" element={<SettingsSubscription />} />
+            <Route path="referral" element={<SettingsReferral />} />
+            <Route path="integrations" element={<SettingsIntegrations />} />
+            {/* Backward-compat: старые URL после реорганизации */}
+            <Route path="extension" element={<Navigate to="/settings/integrations" replace />} />
+            <Route path="api-keys" element={<Navigate to="/settings/integrations" replace />} />
+            <Route path="appearance" element={<SettingsAppearance />} />
+          </Route>
           <Route path="/history" element={<Suspense fallback={<PageFallback />}><History /></Suspense>} />
           <Route path="/trash" element={<Suspense fallback={<PageFallback />}><Trash /></Suspense>} />
           <Route path="/pricing" element={<Suspense fallback={<PageFallback />}><Pricing /></Suspense>} />

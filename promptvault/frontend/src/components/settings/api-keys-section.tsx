@@ -65,10 +65,8 @@ export function APIKeysSection() {
       </div>
 
       <p className="text-xs text-muted-foreground mb-4">
-        API-ключи используются для подключения ПромтЛаб как MCP-сервера в ИИ-клиенты (Claude Code, Cursor и др.),
-        а также для{" "}
-        <span className="font-medium text-foreground">Chrome-расширения</span>, которое вставляет ваши промпты прямо в ChatGPT,
-        Claude, Gemini и Perplexity.
+        Один ключ работает и для MCP-сервера (Claude Code, Cursor), и для Chrome-расширения.
+        Ключ показывается один раз — скопируйте сразу.
       </p>
 
       {/* Create form */}

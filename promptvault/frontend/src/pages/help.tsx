@@ -56,7 +56,7 @@ const FAQ: FaqItem[] = [
   {
     question: "Как подключить MCP-сервер для Claude Desktop/Code?",
     answer:
-      "В Настройках → API keys создайте ключ, затем в Claude Desktop/Code пропишите MCP-сервер с HTTP-транспортом и этим ключом. Подробная инструкция с примером конфига — в FAQ статье «MCP integration».",
+      "В Настройках → API-ключи создайте ключ, затем подключите MCP-сервер в клиенте. Полная инструкция с командами для Claude Code, Claude Desktop, Cursor и Windsurf, список из 24 tools, примеры запросов и troubleshooting — на отдельной странице /help/mcp.",
     tags: ["mcp", "claude"],
   },
   {

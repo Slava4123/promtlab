@@ -219,14 +219,14 @@ export default function Dashboard() {
         id="dashboard_extension"
         title="Расширение для Chrome и Firefox"
         description="Вставляйте любимые промпты прямо в ChatGPT/Claude/любой веб-чат одной клавишей."
-        cta={{ label: "Открыть в настройках", onClick: () => navigate("/settings") }}
+        cta={{ label: "Открыть в настройках", onClick: () => navigate("/settings/integrations") }}
         tone="violet"
       />
       <DismissibleBanner
         id="dashboard_mcp"
         title="MCP-сервер для Claude Code и Claude Desktop"
         description="Сохраняйте промпты из переписки с Claude одной командой и вытягивайте их обратно в любой чат."
-        cta={{ label: "Как подключить", onClick: () => navigate("/settings") }}
+        cta={{ label: "Как подключить", onClick: () => navigate("/settings/integrations") }}
         tone="emerald"
       />
 

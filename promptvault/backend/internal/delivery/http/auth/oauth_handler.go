@@ -204,7 +204,7 @@ func (h *OAuthHandler) redirectLinkError(w http.ResponseWriter, r *http.Request,
 		code = "not_configured"
 	}
 	slog.Error("oauth link failed", "error", err, "code", code)
-	http.Redirect(w, r, h.frontendURL+"/settings?link_error="+code, http.StatusTemporaryRedirect)
+	http.Redirect(w, r, h.frontendURL+"/settings/accounts?link_error="+code, http.StatusTemporaryRedirect)
 }
 
 // --- OAuth Redirects ---
@@ -245,7 +245,7 @@ func (h *OAuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 				h.redirectLinkError(w, r, err)
 				return
 			}
-			http.Redirect(w, r, h.frontendURL+"/settings?linked=github", http.StatusTemporaryRedirect)
+			http.Redirect(w, r, h.frontendURL+"/settings/accounts?linked=github", http.StatusTemporaryRedirect)
 			return
 		}
 		h.clearLinkCookie(w)
@@ -297,7 +297,7 @@ func (h *OAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 				h.redirectLinkError(w, r, err)
 				return
 			}
-			http.Redirect(w, r, h.frontendURL+"/settings?linked=google", http.StatusTemporaryRedirect)
+			http.Redirect(w, r, h.frontendURL+"/settings/accounts?linked=google", http.StatusTemporaryRedirect)
 			return
 		}
 		h.clearLinkCookie(w)
@@ -349,7 +349,7 @@ func (h *OAuthHandler) YandexCallback(w http.ResponseWriter, r *http.Request) {
 				h.redirectLinkError(w, r, err)
 				return
 			}
-			http.Redirect(w, r, h.frontendURL+"/settings?linked=yandex", http.StatusTemporaryRedirect)
+			http.Redirect(w, r, h.frontendURL+"/settings/accounts?linked=yandex", http.StatusTemporaryRedirect)
 			return
 		}
 		h.clearLinkCookie(w)

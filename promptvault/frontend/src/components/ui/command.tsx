@@ -55,7 +55,10 @@ function CommandDialog({
       </DialogHeader>
       <DialogContent
         className={cn(
-          "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
+          // Command palette best practice (Linear/Vercel/Notion): верхняя четверть экрана,
+          // не center. Принудительно отключаем bottom (от родительского inset-0 m-auto)
+          // и расширяем до xl (~576px) — для палитры с навигацией и поиском sm тесно.
+          "top-[15vh] bottom-auto m-0 mx-auto max-w-xl overflow-hidden rounded-xl! p-0",
           className
         )}
         showCloseButton={showCloseButton}

@@ -57,7 +57,7 @@ const secondaryNav: NavItem[] = [
 const bottomNav: NavItem[] = [
   { title: "Тарифы", icon: CreditCard, path: "/pricing" },
   { title: "Что нового", icon: Sparkles, path: "/changelog" },
-  { title: "Настройки", icon: Settings, path: "/settings" },
+  { title: "Настройки", icon: Settings, path: "/settings/profile" },
 ]
 
 const adminNavItem: NavItem = { title: "Админ", icon: Shield, path: "/admin/users" }
