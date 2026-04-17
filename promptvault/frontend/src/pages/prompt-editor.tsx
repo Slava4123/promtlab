@@ -13,6 +13,8 @@ import { useWorkspaceStore } from "@/stores/workspace-store"
 import { TagInput } from "@/components/tags/tag-input"
 import { CollectionsCombobox } from "@/components/prompts/collections-combobox"
 import { AIPanel } from "@/components/ai/ai-panel"
+import { HelpPopover } from "@/components/help/help-popover"
+import { InfoTooltip } from "@/components/help/info-tooltip"
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
 import { ShareDialog } from "@/components/prompts/share-dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -133,7 +135,7 @@ export default function PromptEditor() {
         setChangeNote("")
         toast.success("Промпт обновлён")
       } else {
-        const created = await createPrompt.mutateAsync({ ...data, team_id: teamId, collection_ids: collectionIds, tag_ids: tagIds })
+        const created = await createPrompt.mutateAsync({ ...data, team_id: teamId, collection_ids: collectionIds, tag_ids: tagIds, is_public: isPublic })
         toast.success("Промпт создан")
         navigate(`/prompts/${created.id}`, { replace: true })
         return
@@ -185,7 +187,7 @@ export default function PromptEditor() {
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/[0.08] ring-1 ring-violet-500/10">
           <FileText className="h-4 w-4 text-violet-400" />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-lg font-bold tracking-tight text-foreground">
             {isEdit ? "Редактировать промпт" : "Новый промпт"}
           </h1>
@@ -193,6 +195,26 @@ export default function PromptEditor() {
             {isEdit ? "Измените и сохраните" : "Заполните поля и создайте промпт"}
           </p>
         </div>
+        {!isEdit && (
+          <HelpPopover
+            title="Что такое промпт?"
+            learnMoreHref="/help"
+            learnMoreLabel="Все вопросы — в Помощи"
+            ariaLabel="Подсказка по созданию промпта"
+          >
+            <p>
+              Промпт — это шаблон сообщения для AI-моделей. Хранится в вашей библиотеке,
+              версионируется при каждом сохранении.
+            </p>
+            <p>
+              В тексте можно использовать <code className="rounded bg-muted px-1 text-[0.78em]">{"{{переменные}}"}</code> —
+              они подставятся при использовании.
+            </p>
+            <p>
+              AI-ассистент ниже умеет улучшать, переписывать и анализировать ваш промпт.
+            </p>
+          </HelpPopover>
+        )}
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -256,6 +278,9 @@ export default function PromptEditor() {
                 <Sparkles className="h-3 w-3 text-violet-400/60" />
                 Модель
                 <span className="text-muted-foreground">(необяз.)</span>
+                <InfoTooltip ariaLabel="Что значит поле «Модель»?">
+                  Под какую AI-модель оптимизирован промпт. Например: <code className="rounded bg-muted px-1">gpt-4o</code>, <code className="rounded bg-muted px-1">claude-sonnet-4</code>. Поле справочное — оно не выбирает модель для AI-ассистента.
+                </InfoTooltip>
               </label>
               <input
                 id="model"
@@ -270,6 +295,9 @@ export default function PromptEditor() {
                 <FolderOpen className="h-3 w-3 text-violet-400/60" />
                 Коллекции
                 <span className="text-muted-foreground">(необяз.)</span>
+                <InfoTooltip ariaLabel="Что такое коллекции?">
+                  Группировка промптов по темам — например «Код-ревью», «Маркетинг». Один промпт может быть в нескольких коллекциях одновременно.
+                </InfoTooltip>
                 {collectionIds.length > 0 && (
                   <span className="ml-auto text-[0.7rem] text-violet-400">{collectionIds.length} выбрано</span>
                 )}
@@ -288,31 +316,33 @@ export default function PromptEditor() {
               <Tag className="h-3 w-3 text-violet-400/60" />
               Теги
               <span className="text-muted-foreground">(необяз.)</span>
+              <InfoTooltip ariaLabel="Что такое теги?">
+                Метки для фильтрации и поиска по библиотеке. В отличие от коллекций — плоские, без иерархии. Удобно для кросс-категорий: «срочно», «черновик», «en».
+              </InfoTooltip>
             </label>
             <TagInput selectedTagIds={tagIds} onChange={setTagIds} />
           </div>
 
-          {/* Публичный доступ (только в режиме редактирования — slug генерится по id) */}
-          {isEdit && (
-            <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 text-sm">
-              <input
-                type="checkbox"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
-                className="mt-0.5 h-4 w-4 cursor-pointer accent-brand"
-              />
-              <span className="flex-1">
-                <span className="font-medium text-foreground">Публичный промпт</span>
-                <span className="ml-2 text-muted-foreground">
-                  {isPublic
-                    ? existing?.slug
-                      ? `Доступен по ссылке /p/${existing.slug}`
-                      : "Будет доступен по публичной ссылке после сохранения"
-                    : "Только вы видите этот промпт"}
-                </span>
+          {/* Публичный доступ — slug генерится backend'ом по id после INSERT,
+              на create-форме URL ещё неизвестен → показываем общий placeholder. */}
+          <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 text-sm">
+            <input
+              type="checkbox"
+              checked={isPublic}
+              onChange={(e) => setIsPublic(e.target.checked)}
+              className="mt-0.5 h-4 w-4 cursor-pointer accent-brand"
+            />
+            <span className="flex-1">
+              <span className="font-medium text-foreground">Публичный промпт</span>
+              <span className="ml-2 text-muted-foreground">
+                {isPublic
+                  ? existing?.slug
+                    ? `Доступен по ссылке /p/${existing.slug}`
+                    : "Будет доступен по публичной ссылке после сохранения"
+                  : "Только вы видите этот промпт"}
               </span>
-            </label>
-          )}
+            </span>
+          </label>
 
           {/* Заметка к изменению (collapsible, X-4) — скрываем по умолчанию, большинство
               юзеров не описывают каждое изменение, и поле занимает визуальный вес зря. */}

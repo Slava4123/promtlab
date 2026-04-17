@@ -7,6 +7,7 @@ type CreatePromptRequest struct {
 	TeamID        *uint  `json:"team_id"`
 	CollectionIDs []uint `json:"collection_ids"`
 	TagIDs        []uint `json:"tag_ids"`
+	IsPublic      bool   `json:"is_public"`
 }
 
 type PinRequest struct {

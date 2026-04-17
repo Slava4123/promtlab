@@ -45,11 +45,12 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Prompt, [
 	}
 
 	p := &models.Prompt{
-		UserID:  in.UserID,
-		TeamID:  in.TeamID,
-		Title:   in.Title,
-		Content: in.Content,
-		Model:   in.Model,
+		UserID:   in.UserID,
+		TeamID:   in.TeamID,
+		Title:    in.Title,
+		Content:  in.Content,
+		Model:    in.Model,
+		IsPublic: in.IsPublic,
 	}
 
 	if len(in.TagIDs) > 0 {
@@ -82,6 +83,16 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Prompt, [
 
 	if err := s.prompts.Create(ctx, p); err != nil {
 		return nil, nil, err
+	}
+
+	// Public-промпт: slug нужно генерить после INSERT, т.к. зависит от ID.
+	// Второй UPDATE — приемлемая цена за UX (юзер сразу ставит галочку при создании,
+	// не вынужден сохранять → переоткрывать → публиковать).
+	if in.IsPublic {
+		p.Slug = makeSlug(p.ID, p.Title)
+		if err := s.prompts.Update(ctx, p); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	if s.streaks != nil {

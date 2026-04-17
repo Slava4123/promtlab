@@ -57,7 +57,7 @@ export function useCreatePrompt() {
   const qc = useQueryClient()
   const handleBadges = useBadgeUnlocks()
   return useMutation({
-    mutationFn: (data: { title: string; content: string; model?: string; team_id?: number | null; collection_ids?: number[]; tag_ids?: number[] }) =>
+    mutationFn: (data: { title: string; content: string; model?: string; team_id?: number | null; collection_ids?: number[]; tag_ids?: number[]; is_public?: boolean }) =>
       api<Prompt>("/prompts", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: (data) => {
       // Узкая инвалидация: только активные списки. Коллекции/теги

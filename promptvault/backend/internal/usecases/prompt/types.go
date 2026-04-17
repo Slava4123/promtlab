@@ -8,6 +8,9 @@ type CreateInput struct {
 	Model         string
 	CollectionIDs []uint
 	TagIDs        []uint
+	// IsPublic — пометить промпт публичным сразу при создании. Slug генерируется
+	// после INSERT (нужен ID), потом второй UPDATE проставляет slug.
+	IsPublic bool
 }
 
 type UpdateInput struct {

@@ -28,3 +28,17 @@ type Prompt struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+// BeforeSave — для пустого Slug омитим колонку из INSERT/UPDATE.
+//
+// Партиальный unique-index `idx_prompts_slug ON prompts (slug) WHERE slug IS NOT NULL`
+// (миграция 000034) предполагает NULL для непубличных промптов. Но Go-string
+// шлёт `''` вместо NULL, и индекс считает пустую строку валидным значением —
+// при втором непубличном промпте получаем 23505 duplicate key.
+// Omit убирает колонку из statement — БД использует дефолт (NULL).
+func (p *Prompt) BeforeSave(tx *gorm.DB) error {
+	if p.Slug == "" {
+		tx.Statement.Omit("Slug")
+	}
+	return nil
+}

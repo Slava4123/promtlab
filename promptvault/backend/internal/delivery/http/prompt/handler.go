@@ -122,6 +122,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Model:         req.Model,
 		CollectionIDs: req.CollectionIDs,
 		TagIDs:        req.TagIDs,
+		IsPublic:      req.IsPublic,
 	})
 	if err != nil {
 		respondError(w, err)
