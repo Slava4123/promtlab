@@ -33,6 +33,7 @@ import (
 	feedbackhttp "promptvault/internal/delivery/http/feedback"
 	prompthttp "promptvault/internal/delivery/http/prompt"
 	searchhttp "promptvault/internal/delivery/http/search"
+	seohttp "promptvault/internal/delivery/http/seo"
 	streakhttp "promptvault/internal/delivery/http/streak"
 	sharehttp "promptvault/internal/delivery/http/share"
 	starterhttp "promptvault/internal/delivery/http/starter"
@@ -160,6 +161,7 @@ type App struct {
 	changelogHandler      *changeloghttp.Handler
 	subscriptionHandler   *subscriptionhttp.Handler
 	webhookHandler        *webhookhttp.Handler
+	seoHandler            *seohttp.Handler
 	// Следующие поля используются в MountRoutes для admin-middleware chain:
 	userLookup adminmw.UserLookup
 	auditSvc   *auditsvc.Service
@@ -362,6 +364,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		changelogHandler:      changeloghttp.NewHandler(changelogSvc),
 		subscriptionHandler:  subscriptionhttp.NewHandler(subscriptionSvc, quotaSvc),
 		webhookHandler:       webhookhttp.NewHandler(subscriptionSvc),
+		seoHandler:           seohttp.NewHandler(promptSvc, cfg.Server.FrontendURL),
 		mcpServer:            mcpSrv,
 		expirationLoop:       expirationLoop,
 		renewalLoop:          renewalLoop,
@@ -406,6 +409,16 @@ func (a *App) MountRoutes(r chi.Router) {
 		return ratelimit.ByIP(rpm, trustProxy)
 	}
 
+	// SEO endpoints (outside /api): /sitemap.xml для поисковиков. Rate-limit 60/IP —
+	// типичный crawl-rate для bot-ов, защита от DoS на статичный список.
+	r.With(byIP(60)).Get("/sitemap.xml", a.seoHandler.Sitemap)
+
+	// /p/{slug} — server-rendered HTML. nginx роутит сюда ТОЛЬКО bot-UA
+	// (Yandexbot/Googlebot/Telegram/VK/...). Обычные юзеры получают SPA.
+	// Без bot-routing этот endpoint всё равно будет отдаваться по прямому
+	// curl/wget запросу — это OK (валидный HTML, индексируется).
+	r.With(byIP(60)).Get("/p/{slug}", a.seoHandler.PromptHTML)
+
 	// MCP endpoint (outside /api, with pre-auth IP rate limit)
 	if a.mcpServer != nil {
 		mcpHandler := byIP(120)(a.mcpServer.Handler())
@@ -432,6 +445,13 @@ func (a *App) MountRoutes(r chi.Router) {
 		r.Route("/public/prompts", func(r chi.Router) {
 			r.Use(byIP(60))
 			r.Get("/{slug}", a.promptHandler.GetPublic)
+		})
+
+		// OG-image generation для социальных превью (Telegram/VK/Twitter Cards).
+		// ETag-cache 24h: 99% запросов после прогрева — 304 Not Modified без рендера.
+		r.Route("/og/prompts", func(r chi.Router) {
+			r.Use(byIP(60))
+			r.Get("/{slug}", a.seoHandler.OGImage)
 		})
 
 		// public — webhooks. T-Bank шлёт 1-5 уведомлений за цикл платежа;

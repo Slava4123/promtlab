@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Copy, Check, Loader2, Sparkles } from "lucide-react"
 import { useState } from "react"
 import { publicApi } from "@/api/client"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import type { Prompt } from "@/api/types"
 
 /**
@@ -36,16 +36,31 @@ export default function PublicPrompt() {
     document.title = `${data.title} — ПромтЛаб`
 
     const description = data.content.length > 160 ? data.content.slice(0, 157) + "..." : data.content
+    const canonicalURL = `${window.location.origin}/p/${slug}`
+    // OG-image endpoint — тот же домен, backend сам генерит PNG с кэшем 24h.
+    const ogImageURL = `${window.location.origin}/api/og/prompts/${slug}.png`
+
     setMeta("description", description)
+    setMeta("robots", "index,follow,max-image-preview:large")
     setOG("og:title", data.title)
     setOG("og:description", description)
     setOG("og:type", "article")
-    setOG("og:url", window.location.href)
+    setOG("og:url", canonicalURL)
+    setOG("og:image", ogImageURL)
+    setOG("og:image:width", "1200")
+    setOG("og:image:height", "630")
+    setOG("og:site_name", "ПромтЛаб")
+    setOG("og:locale", "ru_RU")
+    setMeta("twitter:card", "summary_large_image")
+    setMeta("twitter:title", data.title)
+    setMeta("twitter:description", description)
+    setMeta("twitter:image", ogImageURL)
+    setLink("canonical", canonicalURL)
 
     return () => {
       document.title = prevTitle
     }
-  }, [data])
+  }, [data, slug])
 
   const handleCopy = async () => {
     if (!data) return
@@ -99,12 +114,13 @@ export default function PublicPrompt() {
           {copied ? <Check className="mr-2 h-3.5 w-3.5" /> : <Copy className="mr-2 h-3.5 w-3.5" />}
           Скопировать промпт
         </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link to="/sign-up">
-            <Sparkles className="mr-2 h-3.5 w-3.5" />
-            Сохранить в ПромтЛаб
-          </Link>
-        </Button>
+        <Link
+          to="/sign-up"
+          className={buttonVariants({ size: "sm", variant: "outline" })}
+        >
+          <Sparkles className="mr-2 h-3.5 w-3.5" />
+          Сохранить в ПромтЛаб
+        </Link>
       </div>
 
       <footer className="mt-12 border-t border-border pt-6 text-[0.75rem] text-muted-foreground">
@@ -136,4 +152,16 @@ function setOG(property: string, content: string) {
     document.head.appendChild(el)
   }
   el.content = content
+}
+
+// setLink — вставляет/обновляет <link rel=X href=Y> в head. Для canonical
+// и alternate. Вызывается из useEffect при смене slug.
+function setLink(rel: string, href: string) {
+  let el = document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`)
+  if (!el) {
+    el = document.createElement("link")
+    el.rel = rel
+    document.head.appendChild(el)
+  }
+  el.href = href
 }
