@@ -203,13 +203,18 @@ smithery mcp publish "https://ваш-домен/mcp" -n yourorg/promptvault
 ### Готовые артефакты (в репо)
 
 - **Логотип:** `promptvault/frontend/public/logo-mcp-400.png` (400×400 PNG, ~16 KB), публично доступен как `https://promtlabs.ru/logo-mcp-400.png`.
-- **Draft текста issue:** `.github/ISSUE_TEMPLATE/cline-submission.md` — готовая шпаргалка, которую нужно скопировать в новую issue в `cline/mcp-marketplace`.
+- **Install guide для Cline agent'а:** `promptvault/llms-install.md` — объясняет LLM'у, что сервер remote и клонировать не нужно, как только прописать URL + Bearer token.
+- **Draft формы подачи:** `promptvault/docs/cline-submission-draft.md` — готовые значения полей под YAML-форму Cline.
 
 ### Процедура подачи (ручная)
 
-1. Открыть https://github.com/cline/mcp-marketplace/issues/new
-2. Скопировать тело из `.github/ISSUE_TEMPLATE/cline-submission.md` (section после `<!--`).
-3. Отправить issue. Дождаться ревью мейнтейнеров.
+1. Открыть https://github.com/cline/mcp-marketplace/issues/new?template=mcp-server-submission.yml
+2. Заполнить поля значениями из `promptvault/docs/cline-submission-draft.md`:
+   - GitHub Repository URL
+   - Logo Image (URL или drag-and-drop `logo-mcp-400.png`)
+   - Installation Testing (оба чекбокса)
+   - Additional Information (длинный текст с описанием возможностей)
+3. Отправить issue. Ревью мейнтейнеров обычно идёт несколько дней.
 
 ---
 
