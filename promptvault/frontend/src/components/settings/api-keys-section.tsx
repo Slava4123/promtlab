@@ -168,7 +168,7 @@ export function APIKeysSection() {
                   <Users className="h-3 w-3" />
                   Команда
                 </label>
-                <Select value={teamId} onValueChange={setTeamId}>
+                <Select value={teamId} onValueChange={(v) => setTeamId(v ?? NO_TEAM_VALUE)}>
                   <SelectTrigger className="h-9 w-full">
                     <SelectValue>
                       {teamId === NO_TEAM_VALUE
