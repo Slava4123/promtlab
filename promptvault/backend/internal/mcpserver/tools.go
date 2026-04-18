@@ -1019,6 +1019,7 @@ func (t *toolHandlers) deletePrompt(ctx context.Context, _ *sdkmcp.CallToolReque
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	t.notifier.NotifyPrompt(ctx, input.ID)
 	res, err := jsonResult(map[string]string{
 		"status":  "deleted",
@@ -1045,6 +1046,7 @@ func (t *toolHandlers) createTag(ctx context.Context, _ *sdkmcp.CallToolRequest,
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	t.invalidateTagsCache(ctx)
 	t.notifier.NotifyTags(ctx)
 	res, err := jsonResult(TagResponse{ID: tag.ID, Name: tag.Name, Color: tag.Color})
@@ -1069,6 +1071,7 @@ func (t *toolHandlers) createCollection(ctx context.Context, _ *sdkmcp.CallToolR
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	t.invalidateCollectionsCache(ctx)
 	t.notifier.NotifyCollections(ctx)
 	res, err := jsonResult(CollectionResponse{
@@ -1092,6 +1095,7 @@ func (t *toolHandlers) deleteCollection(ctx context.Context, _ *sdkmcp.CallToolR
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	t.invalidateCollectionsCache(ctx)
 	t.notifier.NotifyCollections(ctx)
 	res, err := jsonResult(map[string]string{
@@ -1274,6 +1278,9 @@ func (t *toolHandlers) shareCreate(ctx context.Context, _ *sdkmcp.CallToolReques
 	if err := enforceScope(ctx, "share_create", true); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -1282,6 +1289,7 @@ func (t *toolHandlers) shareCreate(ctx context.Context, _ *sdkmcp.CallToolReques
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	t.notifier.NotifyPrompt(ctx, input.PromptID)
 	res, err := jsonResult(ShareLinkResponse{
 		ID: link.ID, Token: link.Token, URL: link.URL,
@@ -1293,6 +1301,9 @@ func (t *toolHandlers) shareCreate(ctx context.Context, _ *sdkmcp.CallToolReques
 
 func (t *toolHandlers) collectionUpdate(ctx context.Context, _ *sdkmcp.CallToolRequest, input CollectionUpdateInput) (*sdkmcp.CallToolResult, any, error) {
 	if err := enforceScope(ctx, "collection_update", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := t.checkMCPQuota(ctx); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
 	start := time.Now()
@@ -1327,6 +1338,7 @@ func (t *toolHandlers) collectionUpdate(ctx context.Context, _ *sdkmcp.CallToolR
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	t.invalidateCollectionsCache(ctx)
 	t.notifier.NotifyCollections(ctx)
 	res, err := jsonResult(CollectionResponse{
@@ -1341,6 +1353,9 @@ func (t *toolHandlers) promptRevert(ctx context.Context, _ *sdkmcp.CallToolReque
 	if err := enforceScope(ctx, "prompt_revert", true); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -1349,6 +1364,7 @@ func (t *toolHandlers) promptRevert(ctx context.Context, _ *sdkmcp.CallToolReque
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	t.notifier.NotifyPrompt(ctx, input.PromptID)
 	res, err := jsonResult(toPromptResponse(prompt))
 	return res, nil, err
@@ -1356,6 +1372,9 @@ func (t *toolHandlers) promptRevert(ctx context.Context, _ *sdkmcp.CallToolReque
 
 func (t *toolHandlers) shareDeactivate(ctx context.Context, _ *sdkmcp.CallToolRequest, input ShareDeactivateInput) (*sdkmcp.CallToolResult, any, error) {
 	if err := enforceScope(ctx, "share_deactivate", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := t.checkMCPQuota(ctx); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
 	start := time.Now()
@@ -1366,6 +1385,7 @@ func (t *toolHandlers) shareDeactivate(ctx context.Context, _ *sdkmcp.CallToolRe
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	t.notifier.NotifyPrompt(ctx, input.PromptID)
 	res, err := jsonResult(map[string]string{"status": "deactivated"})
 	return res, nil, err
@@ -1373,6 +1393,9 @@ func (t *toolHandlers) shareDeactivate(ctx context.Context, _ *sdkmcp.CallToolRe
 
 func (t *toolHandlers) tagDelete(ctx context.Context, _ *sdkmcp.CallToolRequest, input TagDeleteInput) (*sdkmcp.CallToolResult, any, error) {
 	if err := enforceScope(ctx, "tag_delete", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := t.checkMCPQuota(ctx); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
 	start := time.Now()
@@ -1383,6 +1406,7 @@ func (t *toolHandlers) tagDelete(ctx context.Context, _ *sdkmcp.CallToolRequest,
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.incrementMCPUsage(ctx)
 	t.invalidateTagsCache(ctx)
 	t.notifier.NotifyTags(ctx)
 	res, err := jsonResult(map[string]string{
