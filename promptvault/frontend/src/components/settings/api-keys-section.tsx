@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Key, Plus, Trash2, Copy, Loader2, AlertTriangle, Lock, Users, Wrench, Clock, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 
@@ -39,6 +39,20 @@ export function APIKeysSection() {
   const [selectedTools, setSelectedTools] = useState<string[]>([])
   const [expiresAt, setExpiresAt] = useState<string>("")
   const [toolsOpen, setToolsOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Фокусируем input поиска при открытии dropdown без прокрутки страницы.
+  // Base UI Popup с initialFocus={false} отключает авто-фокус; мы делаем
+  // focus вручную с { preventScroll: true } — иначе браузер скроллит страницу
+  // к верху (triggered cmdk + overflow-hidden на карточке-обёртке).
+  useEffect(() => {
+    if (!toolsOpen) return
+    // requestAnimationFrame — дождаться, когда Popup смонтируется в portal.
+    const raf = requestAnimationFrame(() => {
+      searchInputRef.current?.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [toolsOpen])
 
   const resetForm = () => {
     setName("")
@@ -97,7 +111,11 @@ export function APIKeysSection() {
 
   const keys = data?.keys ?? []
   const maxKeys = data?.max_keys ?? 5
-  const minExpiresDate = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
+  // useState lazy initializer: вычисляется один раз при монтировании компонента.
+  // Избегаем прямого Date.now() в теле — react-hooks/purity запрещает impure calls.
+  const [minExpiresDate] = useState(() =>
+    new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+  )
 
   return (
     <div className="rounded-xl border border-border bg-card p-5 overflow-hidden">
@@ -209,9 +227,9 @@ export function APIKeysSection() {
                     </span>
                     <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0 ml-2" />
                   </PopoverTrigger>
-                  <PopoverContent className="w-[320px] p-0" align="start">
+                  <PopoverContent className="w-[320px] p-0" align="start" initialFocus={false}>
                     <Command>
-                      <CommandInput placeholder="Поиск инструмента..." />
+                      <CommandInput ref={searchInputRef} placeholder="Поиск инструмента..." />
                       <CommandList>
                         <CommandEmpty>Ничего не найдено.</CommandEmpty>
                         {(["read", "write", "destructive"] as const).map((group) => (

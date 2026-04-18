@@ -280,6 +280,16 @@ func TestCreate_UnknownTool(t *testing.T) {
 	keys.AssertNotCalled(t, "Create")
 }
 
+// TestIsKnownTool_V12Tools защищает от регрессии, когда в mcpserver/tools.go
+// регистрируется новый tool, но его забывают добавить в KnownTools. Без этого
+// создание scoped API-key с новым tool'ом падает с ErrInvalidToolName.
+func TestIsKnownTool_V12Tools(t *testing.T) {
+	v12Tools := []string{"list_teams", "whoami", "list_trash", "restore_prompt", "purge_prompt"}
+	for _, name := range v12Tools {
+		assert.Truef(t, IsKnownTool(name), "tool %q must be in KnownTools whitelist", name)
+	}
+}
+
 func TestCreate_ValidScope(t *testing.T) {
 	keys := new(mockAPIKeyRepo)
 	svc := newTestService(keys)
