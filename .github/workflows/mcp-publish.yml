@@ -67,14 +67,22 @@ jobs:
 
       - name: Verify new version in registry
         run: |
-          sleep 10
-          CURRENT=$(curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=promtlab" | jq -r '.servers[0].server.version')
+          # Индекс search реестра обновляется с задержкой ~30–120 сек. Ретраим
+          # с увеличивающимися паузами — сумма до ~90 сек (6 × 15 сек).
+          # Также смотрим запись isLatest=true, а не просто servers[0].
           EXPECTED=$(jq -r .version promptvault/server.json)
-          echo "registry=$CURRENT expected=$EXPECTED"
-          if [ "$CURRENT" != "$EXPECTED" ]; then
-            echo "::error::registry still shows $CURRENT, expected $EXPECTED"
-            exit 1
-          fi
+          for i in 1 2 3 4 5 6; do
+            sleep 15
+            CURRENT=$(curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=promtlab" \
+              | jq -r '[.servers[] | select(._meta."io.modelcontextprotocol.registry/official".isLatest == true)][0].server.version // "none"')
+            echo "attempt $i: registry=$CURRENT expected=$EXPECTED"
+            if [ "$CURRENT" = "$EXPECTED" ]; then
+              echo "::notice::registry updated to $CURRENT"
+              exit 0
+            fi
+          done
+          echo "::error::registry still shows $CURRENT after 90s, expected $EXPECTED"
+          exit 1
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
