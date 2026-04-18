@@ -182,14 +182,26 @@ const CATALOGS: Catalog[] = [
     status: "ready",
   },
   {
+    name: "Anthropic Connectors",
+    description: "Официальный каталог коннекторов в Claude.ai — самый широкий охват (миллионы пользователей)",
+    url: null,
+    status: "soon",
+  },
+  {
     name: "Awesome MCP Servers",
-    description: "GitHub-список курируемых MCP-серверов комьюнити",
+    description: "GitHub-список курируемых MCP-серверов комьюнити (40k+ звёзд)",
+    url: null,
+    status: "soon",
+  },
+  {
+    name: "Glama.ai",
+    description: "Discovery-платформа с security-грейдингом (20k+ серверов, автосинк из Registry)",
     url: null,
     status: "soon",
   },
   {
     name: "PulseMCP",
-    description: "Discovery-платформа MCP-серверов с рейтингами и обзорами",
+    description: "Discovery-платформа с рейтингами и обзорами (автосинк из Registry)",
     url: null,
     status: "soon",
   },

@@ -2,9 +2,13 @@
 
 ## Статус
 
-- ✅ Official MCP Registry — v1.2.0 опубликована 2026-04-18, автопубликация новых версий по git-тегу настроена (см. §8).
-- 🔒 Cline Marketplace — **отложено до перевода репо в public**. Cline требует открытый GitHub-репозиторий для ревью кода; пока `Slava4123/promtlab` приватный, подача не имеет смысла. Артефакты (логотип, `llms-install.md`, draft текста) оставлены в репо — если репо будет сделан публичным, подача делается одним шагом.
-- ⏳ Остальные (Smithery, Anthropic Connectors, PulseMCP, Glama) — не подано.
+- ✅ **Official MCP Registry** — v1.2.0 опубликована 2026-04-18, автопубликация новых версий по git-тегу настроена (§8).
+- ⏳ **Anthropic Connectors Directory** — **приоритет #1**. Аудитория десятки миллионов пользователей Claude.ai, remote-серверы поддерживаются. Подача: Google-форма https://forms.gle/tyiAZvch1kDADKoP9, ~15 мин. Кураторский отбор.
+- ⏳ **Smithery** — **приоритет #2**. Коммьюнити-хаб с one-click install. Подача одной командой: `smithery mcp publish https://promtlabs.ru/mcp -n Slava4123/promptvault`. ~5 мин.
+- ⏳ **Awesome MCP Servers** — **приоритет #3**. GitHub-список https://github.com/punkpeye/awesome-mcp-servers, 40k+ ★. Подача: PR с одной строкой в README, ~5 мин.
+- ⏳ **Glama.ai** — автосинк из Official Registry, должны появиться в течение ~недели без действий. После появления можно claim listing и добавить доп. метаданные.
+- ⏳ **PulseMCP** — автосинк, аналогично Glama.
+- 🔒 **Cline Marketplace** — **отложено до перевода репо в public**. Cline требует открытый GitHub-репозиторий для ревью кода; пока `Slava4123/promtlab` приватный, подача не имеет смысла. Артефакты (логотип, `llms-install.md`, `docs/cline-submission-draft.md`) оставлены в репо — если репо будет сделан публичным, подача делается одним шагом.
 
 ---
 
