@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Link } from "react-router-dom"
 import {
   ArrowLeft,
@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
+import { AIShareBlock } from "@/components/help/ai-share-block"
 
 // --- Конфиги клиентов ---
 
@@ -200,19 +201,6 @@ export default function HelpMCPPage() {
   const [activeClient, setActiveClient] = useState<ClientId>("claude-code")
   const current = CLIENTS.find((c) => c.id === activeClient)!
 
-  // llms.txt-стандарт: подсказываем AI-агентам, что есть чистая markdown-версия страницы.
-  // SPA-рендеринг не выдаёт контент при простом fetch, поэтому даём явную ссылку.
-  useEffect(() => {
-    const link = document.createElement("link")
-    link.rel = "alternate"
-    link.type = "text/markdown"
-    link.href = "/help/mcp.md"
-    document.head.appendChild(link)
-    return () => {
-      document.head.removeChild(link)
-    }
-  }, [])
-
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
@@ -236,6 +224,12 @@ export default function HelpMCPPage() {
             ПромтЛаб реализует <a href="https://modelcontextprotocol.io/" target="_blank" rel="noreferrer" className="underline decoration-dotted hover:text-foreground">Model Context Protocol</a> — открытый стандарт для подключения данных к AI-клиентам. Через MCP ваши промпты, коллекции и теги становятся доступны прямо из Claude Code, Claude Desktop, Cursor, Windsurf и других совместимых клиентов.
           </p>
         </header>
+
+        <AIShareBlock
+          mdUrl="/help/mcp.md"
+          topic="настроить MCP-сервер ПромтЛаб для Claude Code, Claude Desktop, Cursor или Windsurf"
+          className="mb-8"
+        />
 
         {/* --- Быстрый старт --- */}
         <Section icon={Sparkles} title="Быстрый старт">

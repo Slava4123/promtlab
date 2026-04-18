@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 
+import { AIShareBlock } from "@/components/help/ai-share-block"
+
 export default function TermsPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -26,6 +28,12 @@ export default function TermsPage() {
               Последнее обновление: 12 апреля 2026 г.
             </p>
           </header>
+
+          <AIShareBlock
+            mdUrl="/legal/terms.md"
+            topic="разобраться в Пользовательском соглашении ПромтЛаб (объясни простыми словами)"
+            compact
+          />
 
           <Section title="1. Общие положения">
             <p>

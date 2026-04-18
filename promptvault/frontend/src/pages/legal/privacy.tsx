@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 
+import { AIShareBlock } from "@/components/help/ai-share-block"
+
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -26,6 +28,12 @@ export default function PrivacyPage() {
               Последнее обновление: 12 апреля 2026 г.
             </p>
           </header>
+
+          <AIShareBlock
+            mdUrl="/legal/privacy.md"
+            topic="разобраться в Политике конфиденциальности ПромтЛаб (что собираем, кому передаём, какие у меня права)"
+            compact
+          />
 
           <Section title="1. Какие данные мы собираем">
             <p>При использовании Сервиса мы собираем:</p>

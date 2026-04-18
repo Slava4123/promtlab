@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 
+import { AIShareBlock } from "@/components/help/ai-share-block"
+
 /**
  * Публичная оферта (договор-оферта) на оказание услуг по предоставлению
  * доступа к сервису ПромтЛаб. ИП на УСН (без НДС).
@@ -33,6 +35,12 @@ export default function OfferPage() {
               Редакция от: 14 апреля 2026 г.
             </p>
           </header>
+
+          <AIShareBlock
+            mdUrl="/legal/offer.md"
+            topic="разобраться в Публичной оферте ПромтЛаб (условия возврата, обязательства сторон, реквизиты)"
+            compact
+          />
 
           <Section title="Преамбула">
             <p>
