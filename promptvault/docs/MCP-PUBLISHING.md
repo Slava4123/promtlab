@@ -1,8 +1,108 @@
 # Публикация MCP-сервера PromptLab в реестрах
 
-## Статус: запланировано
+## Статус
+
+- ✅ Official MCP Registry — v1.0.0 опубликована 2026-04-13, автопубликация новых версий настроена (см. ниже).
+- ⏳ Cline Marketplace — артефакты готовы (логотип + draft issue), не подано.
+- ⏳ Остальные (Smithery, Anthropic Connectors, PulseMCP, Glama) — не подано.
 
 ---
+
+## 0. DNS setup для автопубликации (one-time)
+
+Чтобы GitHub Actions мог публиковать в namespace `ru.promtlabs/*`, нужна DNS-верификация домена:
+
+```bash
+# 1. Сгенерировать Ed25519 keypair (локально)
+openssl genpkey -algorithm Ed25519 -out mcp-dns-key.pem
+
+# 2. Public key → base64 для DNS TXT
+openssl pkey -in mcp-dns-key.pem -pubout -outform DER | tail -c 32 | base64
+
+# 3. Private key → 64-символьная hex-строка для GitHub Secret
+openssl pkey -in mcp-dns-key.pem -noout -text | grep -A3 "priv:" | tail -n +2 | tr -d ' :\n'
+```
+
+Дальше:
+- Добавить в DNS зону `promtlabs.ru` TXT-запись:
+  ```
+  promtlabs.ru. IN TXT "v=MCPv1; k=ed25519; p=<BASE64_PUBLIC_KEY>"
+  ```
+  Проверка: `dig TXT promtlabs.ru +short` должен содержать строку с `v=MCPv1`.
+- В GitHub → Settings → Secrets → Actions создать secret `MCP_DNS_PRIVATE_KEY` с 64-hex private key.
+- Удалить локальный `mcp-dns-key.pem` — private key хранится только в GitHub Secret.
+
+---
+
+## 8. Автопубликация через GitHub Actions
+
+Workflow: `.github/workflows/mcp-publish.yml`.
+
+### Триггеры
+- `push` тега `vX.Y.Z` — публикация + создание GitHub Release.
+- `workflow_dispatch` — ручной запуск из Actions UI (на случай failed run'а).
+
+### Procedure релиза
+
+```bash
+# 1. Bump версии в server.json
+cd promptvault
+jq '.version = "1.3.0"' server.json > server.json.tmp && mv server.json.tmp server.json
+
+# 2. Commit + push в main
+cd ..
+git add promptvault/server.json
+git commit -m "chore(mcp): bump v1.2.0 → v1.3.0"
+git push
+
+# 3. Тег + push тега
+git tag v1.3.0
+git push --tags
+```
+
+Дальше всё делает workflow:
+- Проверяет что tag_version == server.json.version.
+- Устанавливает `mcp-publisher`.
+- Логинится через DNS (secret `MCP_DNS_PRIVATE_KEY`).
+- `mcp-publisher publish`.
+- Проверяет что новая версия реально появилась в реестре.
+- Создаёт GitHub Release с автогенерируемыми release notes.
+
+### PR-guard `mcp-validate.yml`
+
+Отдельный workflow `.github/workflows/mcp-validate.yml` запускается на PR, если `promptvault/server.json` изменён:
+- `mcp-publisher validate` — schema-check.
+- Сравнение `server.json.version` с текущей версией в реестре — не разрешает merge, если версия не bump'нута.
+
+---
+
+## 1. Official MCP Registry (главный приоритет)
+
+**URL:** https://registry.modelcontextprotocol.io/
+**Охват:** Все MCP-клиенты (Claude, Cursor, Windsurf, Cline и др.)
+
+Старый репозиторий `modelcontextprotocol/servers` больше НЕ принимает PR. Всё через CLI `mcp-publisher`.
+
+### Процесс (ручной, для первой публикации)
+
+```bash
+# 1. Установить CLI
+curl -fsSL https://registry.modelcontextprotocol.io/install | sh
+
+# 2. Сгенерировать server.json
+mcp-publisher init
+
+# 3. Авторизоваться (GitHub OAuth → namespace io.github.username/*)
+mcp-publisher login github
+
+# 4. Или DNS/HTTP-верификация домена → namespace ru.promptvault/*
+# mcp-publisher login domain
+
+# 5. Опубликовать
+mcp-publisher publish
+```
+
+Для нас используется DNS-верификация (см. §0), namespace `ru.promtlabs/*`. Первичная публикация v1.0.0 была сделана вручную; обновления идут через workflow (см. §8).
 
 ## 1. Official MCP Registry (главный приоритет)
 
@@ -98,7 +198,18 @@ smithery mcp publish "https://ваш-домен/mcp" -n yourorg/promptvault
 **URL:** https://github.com/cline/mcp-marketplace
 **Охват:** Миллионы пользователей VS Code / Cline
 
-Подача: GitHub Issue с URL репозитория + логотип 400x400 PNG.
+Подача: GitHub Issue с URL репозитория + логотип 400×400 PNG.
+
+### Готовые артефакты (в репо)
+
+- **Логотип:** `promptvault/frontend/public/logo-mcp-400.png` (400×400 PNG, ~16 KB), публично доступен как `https://promtlabs.ru/logo-mcp-400.png`.
+- **Draft текста issue:** `.github/ISSUE_TEMPLATE/cline-submission.md` — готовая шпаргалка, которую нужно скопировать в новую issue в `cline/mcp-marketplace`.
+
+### Процедура подачи (ручная)
+
+1. Открыть https://github.com/cline/mcp-marketplace/issues/new
+2. Скопировать тело из `.github/ISSUE_TEMPLATE/cline-submission.md` (section после `<!--`).
+3. Отправить issue. Дождаться ревью мейнтейнеров.
 
 ---
 

@@ -13,6 +13,8 @@
 
 # Screenshots (QA artifacts)
 *.png
+# но не публичные ассеты frontend (логотипы, иконки для каталогов)
+!promptvault/frontend/public/**/*.png
 
 # SSL certificates
 ca.crt

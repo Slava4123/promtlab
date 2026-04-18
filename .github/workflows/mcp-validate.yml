@@ -1,0 +1,39 @@
+name: Validate MCP server.json
+
+# PR-guard: если меняется promptvault/server.json, проверяем что:
+#   1. Схема валидна (mcp-publisher validate).
+#   2. Новая version не совпадает с уже опубликованной в реестре
+#      (иначе publish упадёт из-за "version already exists").
+#
+# Это предохранитель перед merge в main: когда кто-то bump'ит server.json
+# и готовится к релизу, PR не зелёный, пока новая версия реально новая.
+
+on:
+  pull_request:
+    paths:
+      - 'promptvault/server.json'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL https://registry.modelcontextprotocol.io/install | sh
+          mcp-publisher --version
+
+      - name: Schema validate server.json
+        working-directory: promptvault
+        run: mcp-publisher validate
+
+      - name: Version must differ from current registry version
+        run: |
+          NEW=$(jq -r .version promptvault/server.json)
+          CURRENT=$(curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=promtlab" | jq -r '.servers[0].server.version // "none"')
+          echo "server.json=$NEW registry=$CURRENT"
+          if [ "$NEW" = "$CURRENT" ]; then
+            echo "::error::version $NEW уже опубликована в registry — bump версию перед merge"
+            exit 1
+          fi
