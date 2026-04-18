@@ -367,6 +367,10 @@ export interface APIKey {
   key_prefix: string
   last_used_at?: string | null
   created_at: string
+  read_only: boolean
+  team_id?: number | null
+  allowed_tools?: string[] | null
+  expires_at?: string | null
 }
 
 export interface APIKeyListResponse {
@@ -376,6 +380,10 @@ export interface APIKeyListResponse {
 
 export interface CreateAPIKeyRequest {
   name: string
+  read_only?: boolean
+  team_id?: number | null
+  allowed_tools?: string[]
+  expires_at?: string | null
 }
 
 // Share Links
@@ -406,6 +414,10 @@ export interface CreatedAPIKey {
   key: string
   key_prefix: string
   created_at: string
+  read_only: boolean
+  team_id?: number | null
+  allowed_tools?: string[] | null
+  expires_at?: string | null
 }
 
 // Badges

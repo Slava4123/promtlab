@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -35,9 +36,19 @@ func APIKeyAuth(svc *apikeyuc.Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			slog.Info("mcp.auth.success", "user_id", result.UserID, "key_id", result.KeyID)
+			policy := result.Policy
+			// Debug: каждый MCP-запрос — на проде это до 60 rpm/user. В INFO не хотим.
+			slog.Debug("mcp.auth.success",
+				"user_id", result.UserID,
+				"key_id", result.KeyID,
+				"read_only", policy.ReadOnly,
+				"team_id", policy.TeamID,
+				"tools_count", len(policy.AllowedTools),
+				"has_expiry", policy.ExpiresAt != nil,
+			)
 
 			ctx := context.WithValue(r.Context(), authmw.UserIDKey, result.UserID)
+			ctx = withKeyPolicy(ctx, &policy)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -46,7 +57,8 @@ func APIKeyAuth(svc *apikeyuc.Service) func(http.Handler) http.Handler {
 func writeAuthError(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
-	if _, err := w.Write([]byte(`{"error":"` + msg + `"}`)); err != nil {
-		slog.Error("mcp.auth.write_error", "error", err)
+	// Кодируем через encoder — защита от поломки JSON при появлении кавычек в msg.
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
+		slog.Debug("mcp.auth.write_error", "error", err)
 	}
 }

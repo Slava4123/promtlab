@@ -356,7 +356,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		userHandler:       userhttp.NewHandler(useruc.NewService(userRepo)),
 		starterHandler:    starterhttp.NewHandler(starterSvc),
 		trashHandler:      trashhttp.NewHandler(trashSvc),
-		apiKeyHandler:     apikeyhttp.NewHandler(apiKeySvc, cfg.MCP.MaxKeysPerUser),
+		apiKeyHandler:     apikeyhttp.NewHandler(apiKeySvc, teamSvc, cfg.MCP.MaxKeysPerUser),
 		shareHandler:      sharehttp.NewHandler(shareSvc),
 		streakHandler:     streakhttp.NewHandler(streakSvc),
 		badgeHandler:      badgehttp.NewHandler(badgeSvc),

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	apikeyuc "promptvault/internal/usecases/apikey"
 	colluc "promptvault/internal/usecases/collection"
 	promptuc "promptvault/internal/usecases/prompt"
 	shareuc "promptvault/internal/usecases/share"
@@ -57,6 +58,12 @@ func mapDomainError(err error) error {
 		return fmt.Errorf("access denied")
 	case errors.Is(err, shareuc.ErrViewerReadOnly):
 		return fmt.Errorf("read-only access")
+
+	// api-key scope — константные сообщения, без утечки имени tool / team_id.
+	case errors.Is(err, apikeyuc.ErrScopeDenied):
+		return fmt.Errorf("scope denied: operation not permitted by key policy")
+	case errors.Is(err, apikeyuc.ErrTeamMismatch):
+		return fmt.Errorf("team mismatch: key is bound to a different workspace")
 	}
 	return fmt.Errorf("internal server error")
 }

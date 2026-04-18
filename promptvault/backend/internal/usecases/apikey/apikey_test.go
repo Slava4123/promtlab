@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -58,7 +59,7 @@ func TestCreate_Success(t *testing.T) {
 	keys.On("CountByUserID", ctx, uint(1)).Return(int64(0), nil)
 	keys.On("Create", ctx, mock.AnythingOfType("*models.APIKey")).Return(nil)
 
-	plaintext, info, err := svc.Create(ctx, 1, "Test Key")
+	plaintext, info, err := svc.Create(ctx, CreateInput{UserID: 1, Name: "Test Key"})
 
 	assert.NoError(t, err)
 	assert.True(t, strings.HasPrefix(plaintext, "pvlt_"))
@@ -72,10 +73,10 @@ func TestCreate_EmptyName(t *testing.T) {
 	keys := new(mockAPIKeyRepo)
 	svc := newTestService(keys)
 
-	_, _, err := svc.Create(context.Background(), 1, "")
+	_, _, err := svc.Create(context.Background(), CreateInput{UserID: 1, Name: ""})
 	assert.ErrorIs(t, err, ErrNameEmpty)
 
-	_, _, err = svc.Create(context.Background(), 1, "   ")
+	_, _, err = svc.Create(context.Background(), CreateInput{UserID: 1, Name: "   "})
 	assert.ErrorIs(t, err, ErrNameEmpty)
 }
 
@@ -84,7 +85,7 @@ func TestCreate_NameTooLong(t *testing.T) {
 	svc := newTestService(keys)
 
 	longName := strings.Repeat("a", 101)
-	_, _, err := svc.Create(context.Background(), 1, longName)
+	_, _, err := svc.Create(context.Background(), CreateInput{UserID: 1, Name: longName})
 	assert.ErrorIs(t, err, ErrNameTooLong)
 }
 
@@ -95,7 +96,7 @@ func TestCreate_MaxKeysReached(t *testing.T) {
 
 	keys.On("CountByUserID", ctx, uint(1)).Return(int64(5), nil)
 
-	_, _, err := svc.Create(ctx, 1, "Another Key")
+	_, _, err := svc.Create(ctx, CreateInput{UserID: 1, Name: "Another Key"})
 	assert.ErrorIs(t, err, ErrMaxKeysReached)
 	keys.AssertNotCalled(t, "Create")
 }
@@ -108,8 +109,8 @@ func TestCreate_TwoCallsProduceDifferentKeys(t *testing.T) {
 	keys.On("CountByUserID", ctx, uint(1)).Return(int64(0), nil)
 	keys.On("Create", ctx, mock.AnythingOfType("*models.APIKey")).Return(nil)
 
-	key1, _, err1 := svc.Create(ctx, 1, "Key 1")
-	key2, _, err2 := svc.Create(ctx, 1, "Key 2")
+	key1, _, err1 := svc.Create(ctx, CreateInput{UserID: 1, Name: "Key 1"})
+	key2, _, err2 := svc.Create(ctx, CreateInput{UserID: 1, Name: "Key 2"})
 
 	assert.NoError(t, err1)
 	assert.NoError(t, err2)
@@ -190,6 +191,118 @@ func TestValidateKey_UpdateLastUsedError_Ignored(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, uint(42), result.UserID)
+}
+
+// --- ValidateKey expiry (HIGH-5) ---
+
+func TestValidateKey_ExpiredKey(t *testing.T) {
+	keys := new(mockAPIKeyRepo)
+	svc := newTestService(keys)
+	ctx := context.Background()
+
+	plaintext, _ := generateKey()
+	hash := hashKey(plaintext)
+	expired := time.Now().Add(-time.Hour)
+
+	keys.On("GetByHash", ctx, hash).Return(&models.APIKey{
+		ID: 1, UserID: 42, ExpiresAt: &expired,
+	}, nil)
+
+	_, err := svc.ValidateKey(ctx, plaintext)
+	assert.ErrorIs(t, err, ErrExpired)
+	// UpdateLastUsed не должен вызываться при истёкшем ключе
+	keys.AssertNotCalled(t, "UpdateLastUsed")
+}
+
+func TestValidateKey_FutureExpiry(t *testing.T) {
+	keys := new(mockAPIKeyRepo)
+	svc := newTestService(keys)
+	ctx := context.Background()
+
+	plaintext, _ := generateKey()
+	hash := hashKey(plaintext)
+	future := time.Now().Add(time.Hour)
+
+	keys.On("GetByHash", ctx, hash).Return(&models.APIKey{
+		ID: 1, UserID: 42, ExpiresAt: &future,
+	}, nil)
+	keys.On("UpdateLastUsed", mock.Anything, uint(1)).Return(nil)
+
+	result, err := svc.ValidateKey(ctx, plaintext)
+	assert.NoError(t, err)
+	assert.Equal(t, uint(42), result.UserID)
+	assert.NotNil(t, result.Policy.ExpiresAt)
+}
+
+func TestValidateKey_NilExpiryWorks(t *testing.T) {
+	keys := new(mockAPIKeyRepo)
+	svc := newTestService(keys)
+	ctx := context.Background()
+
+	plaintext, _ := generateKey()
+	hash := hashKey(plaintext)
+
+	keys.On("GetByHash", ctx, hash).Return(&models.APIKey{
+		ID: 1, UserID: 42, ExpiresAt: nil,
+	}, nil)
+	keys.On("UpdateLastUsed", mock.Anything, uint(1)).Return(nil)
+
+	_, err := svc.ValidateKey(ctx, plaintext)
+	assert.NoError(t, err)
+}
+
+// --- Create validations (HIGH-5) ---
+
+func TestCreate_ExpiresInPast(t *testing.T) {
+	keys := new(mockAPIKeyRepo)
+	svc := newTestService(keys)
+	past := time.Now().Add(-time.Hour)
+
+	_, _, err := svc.Create(context.Background(), CreateInput{
+		UserID:    1,
+		Name:      "Test",
+		ExpiresAt: &past,
+	})
+	assert.ErrorIs(t, err, ErrInvalidExpires)
+	keys.AssertNotCalled(t, "Create")
+}
+
+func TestCreate_UnknownTool(t *testing.T) {
+	keys := new(mockAPIKeyRepo)
+	svc := newTestService(keys)
+
+	_, _, err := svc.Create(context.Background(), CreateInput{
+		UserID:       1,
+		Name:         "Test",
+		AllowedTools: []string{"unknown_tool"},
+	})
+	assert.ErrorIs(t, err, ErrInvalidToolName)
+	keys.AssertNotCalled(t, "Create")
+}
+
+func TestCreate_ValidScope(t *testing.T) {
+	keys := new(mockAPIKeyRepo)
+	svc := newTestService(keys)
+	ctx := context.Background()
+
+	keys.On("CountByUserID", ctx, uint(1)).Return(int64(0), nil)
+	keys.On("Create", ctx, mock.AnythingOfType("*models.APIKey")).Return(nil)
+
+	teamID := uint(42)
+	future := time.Now().Add(24 * time.Hour)
+	_, info, err := svc.Create(ctx, CreateInput{
+		UserID:       1,
+		Name:         "Scoped",
+		ReadOnly:     true,
+		TeamID:       &teamID,
+		AllowedTools: []string{"list_prompts", "get_prompt"},
+		ExpiresAt:    &future,
+	})
+	assert.NoError(t, err)
+	assert.True(t, info.ReadOnly)
+	assert.Equal(t, &teamID, info.TeamID)
+	assert.Len(t, info.AllowedTools, 2)
+	assert.NotNil(t, info.ExpiresAt)
 }
 
 // --- Revoke ---

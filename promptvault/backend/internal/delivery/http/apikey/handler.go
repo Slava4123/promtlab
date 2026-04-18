@@ -1,6 +1,7 @@
 package apikey
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -13,14 +14,21 @@ import (
 	apikeyuc "promptvault/internal/usecases/apikey"
 )
 
+// TeamChecker — узкий интерфейс для проверки членства в команде при создании scoped-key.
+// Реализуется *teamuc.Service.
+type TeamChecker interface {
+	IsMember(ctx context.Context, teamID, userID uint) (bool, error)
+}
+
 type Handler struct {
 	svc      *apikeyuc.Service
+	teams    TeamChecker
 	maxKeys  int
 	validate *validator.Validate
 }
 
-func NewHandler(svc *apikeyuc.Service, maxKeys int) *Handler {
-	return &Handler{svc: svc, maxKeys: maxKeys, validate: validator.New()}
+func NewHandler(svc *apikeyuc.Service, teams TeamChecker, maxKeys int) *Handler {
+	return &Handler{svc: svc, teams: teams, maxKeys: maxKeys, validate: validator.New()}
 }
 
 // GET /api/api-keys
@@ -51,18 +59,42 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plaintext, info, err := h.svc.Create(r.Context(), userID, req.Name)
+	// Проверка членства в команде, если указан team_id.
+	if req.TeamID != nil {
+		ok, err := h.teams.IsMember(r.Context(), *req.TeamID, userID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		if !ok {
+			respondError(w, errTeamAccessDenied)
+			return
+		}
+	}
+
+	plaintext, info, err := h.svc.Create(r.Context(), apikeyuc.CreateInput{
+		UserID:       userID,
+		Name:         req.Name,
+		ReadOnly:     req.ReadOnly,
+		TeamID:       req.TeamID,
+		AllowedTools: req.AllowedTools,
+		ExpiresAt:    req.ExpiresAt,
+	})
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
 	utils.WriteCreated(w, CreatedAPIKeyResponse{
-		ID:        info.ID,
-		Name:      info.Name,
-		Key:       plaintext,
-		KeyPrefix: info.KeyPrefix,
-		CreatedAt: info.CreatedAt,
+		ID:           info.ID,
+		Name:         info.Name,
+		Key:          plaintext,
+		KeyPrefix:    info.KeyPrefix,
+		CreatedAt:    info.CreatedAt,
+		ReadOnly:     info.ReadOnly,
+		TeamID:       info.TeamID,
+		AllowedTools: info.AllowedTools,
+		ExpiresAt:    info.ExpiresAt,
 	})
 }
 

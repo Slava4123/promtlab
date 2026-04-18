@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -143,4 +144,109 @@ func TestUsePrompt_InvalidID(t *testing.T) {
 	_, err := h.usePrompt(ctx, req)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid prompt id")
+}
+
+// --- usePrompt: vars, role, size, missing (HIGH-5) ---
+
+func promptWithVars(content string) *models.Prompt {
+	p := samplePrompt()
+	p.Content = content
+	return p
+}
+
+func TestUsePrompt_ZeroIDRejected(t *testing.T) {
+	h, _, _, _ := newResourceHandlers()
+	ctx := ctxWithUser(42)
+
+	req := &sdkmcp.GetPromptRequest{Params: &sdkmcp.GetPromptParams{Arguments: map[string]string{"id": "0"}}}
+	_, err := h.usePrompt(ctx, req)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid prompt id")
+}
+
+func TestUsePrompt_InvalidRole(t *testing.T) {
+	h, p, _, _ := newResourceHandlers()
+	ctx := ctxWithUser(42)
+	p.On("GetByID", ctx, uint(1), uint(42)).Return(samplePrompt(), nil).Maybe()
+
+	req := &sdkmcp.GetPromptRequest{Params: &sdkmcp.GetPromptParams{Arguments: map[string]string{
+		"id": "1", "role": "system",
+	}}}
+	_, err := h.usePrompt(ctx, req)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid role")
+}
+
+func TestUsePrompt_RoleCaseInsensitive(t *testing.T) {
+	h, p, _, _ := newResourceHandlers()
+	ctx := ctxWithUser(42)
+	p.On("GetByID", ctx, uint(1), uint(42)).Return(samplePrompt(), nil)
+
+	req := &sdkmcp.GetPromptRequest{Params: &sdkmcp.GetPromptParams{Arguments: map[string]string{
+		"id": "1", "role": "ASSISTANT",
+	}}}
+	res, err := h.usePrompt(ctx, req)
+	require.NoError(t, err)
+	require.Len(t, res.Messages, 1)
+	assert.Equal(t, sdkmcp.Role("assistant"), res.Messages[0].Role)
+}
+
+func TestUsePrompt_VarsNotJSON(t *testing.T) {
+	h, p, _, _ := newResourceHandlers()
+	ctx := ctxWithUser(42)
+	p.On("GetByID", ctx, uint(1), uint(42)).Return(samplePrompt(), nil).Maybe()
+
+	req := &sdkmcp.GetPromptRequest{Params: &sdkmcp.GetPromptParams{Arguments: map[string]string{
+		"id": "1", "vars": "[1,2,3]",
+	}}}
+	_, err := h.usePrompt(ctx, req)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "JSON object")
+}
+
+func TestUsePrompt_VarsTooLarge(t *testing.T) {
+	h, p, _, _ := newResourceHandlers()
+	ctx := ctxWithUser(42)
+	p.On("GetByID", ctx, uint(1), uint(42)).Return(samplePrompt(), nil).Maybe()
+
+	big := strings.Repeat("x", maxVarsJSONSize+10)
+	req := &sdkmcp.GetPromptRequest{Params: &sdkmcp.GetPromptParams{Arguments: map[string]string{
+		"id": "1", "vars": big,
+	}}}
+	_, err := h.usePrompt(ctx, req)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "exceed")
+}
+
+func TestUsePrompt_MissingVarsReturnsHint(t *testing.T) {
+	h, p, _, _ := newResourceHandlers()
+	ctx := ctxWithUser(42)
+	p.On("GetByID", ctx, uint(1), uint(42)).Return(
+		promptWithVars("Hello {{name}} and {{lang}}"), nil,
+	)
+
+	req := &sdkmcp.GetPromptRequest{Params: &sdkmcp.GetPromptParams{Arguments: map[string]string{"id": "1"}}}
+	_, err := h.usePrompt(ctx, req)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "requires variables")
+	assert.Contains(t, err.Error(), "name")
+	assert.Contains(t, err.Error(), "lang")
+}
+
+func TestUsePrompt_VarsRendered(t *testing.T) {
+	h, p, _, _ := newResourceHandlers()
+	ctx := ctxWithUser(42)
+	p.On("GetByID", ctx, uint(1), uint(42)).Return(
+		promptWithVars("Write {{lang}} code"), nil,
+	)
+
+	req := &sdkmcp.GetPromptRequest{Params: &sdkmcp.GetPromptParams{Arguments: map[string]string{
+		"id": "1", "vars": `{"lang":"Go"}`,
+	}}}
+	res, err := h.usePrompt(ctx, req)
+	require.NoError(t, err)
+	require.Len(t, res.Messages, 1)
+	text := res.Messages[0].Content.(*sdkmcp.TextContent).Text
+	assert.Contains(t, text, "Write Go code")
+	assert.NotContains(t, text, "{{")
 }

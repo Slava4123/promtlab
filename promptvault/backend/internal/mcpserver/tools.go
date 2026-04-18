@@ -14,6 +14,8 @@ import (
 	repo "promptvault/internal/interface/repository"
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/models"
+	"promptvault/internal/template"
+	apikeyuc "promptvault/internal/usecases/apikey"
 	colluc "promptvault/internal/usecases/collection"
 	promptuc "promptvault/internal/usecases/prompt"
 	quotauc "promptvault/internal/usecases/quota"
@@ -29,6 +31,7 @@ type toolHandlers struct {
 	shares      ShareService
 	quotas      *quotauc.Service
 	cache       *listCache // P-11: TTL cache для list_collections/list_tags
+	notifier    *notifier  // C-1: рассылка resources/updated подписчикам
 }
 
 // checkAndIncrementMCP проверяет MCP-квоту перед write-операцией и инкрементит после.
@@ -43,8 +46,14 @@ func (h *toolHandlers) incrementMCPUsage(ctx context.Context) {
 	if h.quotas == nil {
 		return
 	}
-	if err := h.quotas.IncrementMCPUsage(ctx, authmw.GetUserID(ctx)); err != nil {
-		slog.Error("mcp.quota.increment_failed", "error", err)
+	userID := authmw.GetUserID(ctx)
+	if err := h.quotas.IncrementMCPUsage(ctx, userID); err != nil {
+		// Quota drift = revenue leak (write прошёл, счётчик не увеличился).
+		// Sentry ловит — ops должен реагировать.
+		slog.Error("mcp.quota.increment_failed", "user_id", userID, "error", err)
+		if hub := sentry.GetHubFromContext(ctx); hub != nil {
+			hub.CaptureException(err)
+		}
 	}
 }
 
@@ -79,8 +88,10 @@ type ListPromptsInput struct {
 	TagIDs       []uint `json:"tag_ids,omitempty" jsonschema:"Filter by tag IDs"`
 	FavoriteOnly bool   `json:"favorite_only,omitempty" jsonschema:"Show only favorites"`
 	Query        string `json:"query,omitempty" jsonschema:"Search within prompts"`
-	Page         int    `json:"page,omitempty" jsonschema:"Page number (0-based)"`
-	PageSize     int    `json:"page_size,omitempty" jsonschema:"Items per page (default 20)"`
+	Page         int    `json:"page,omitempty" jsonschema:"Page number (0-based). Ignored if cursor is provided."`
+	PageSize     int    `json:"page_size,omitempty" jsonschema:"Items per page (default 20). Legacy; use 'limit' instead."`
+	Cursor       string `json:"cursor,omitempty" jsonschema:"Opaque pagination cursor from previous response's next_cursor. Omit for first page."`
+	Limit        int    `json:"limit,omitempty" jsonschema:"Max items per page when using cursor (default 50, max 200)."`
 }
 
 type GetPromptInput struct {
@@ -336,6 +347,13 @@ func (t *toolHandlers) register(server *sdkmcp.Server) {
 		Annotations: readOnlyAnnotations,
 	}, t.searchSuggest)
 
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "list_prompt_vars",
+		Title:       "List prompt variables",
+		Description: "Extract {{variables}} from a prompt's content. Use before use_prompt to know what values to pass in the vars argument.",
+		Annotations: readOnlyAnnotations,
+	}, t.listPromptVars)
+
 	// --- new write tools ---
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
 		Name:        "prompt_favorite",
@@ -422,6 +440,7 @@ func isDomainError(err error) bool {
 		colluc.ErrNotFound, colluc.ErrForbidden, colluc.ErrViewerReadOnly,
 		taguc.ErrNotFound, taguc.ErrForbidden, taguc.ErrViewerReadOnly, taguc.ErrNameEmpty,
 		shareuc.ErrNotFound, shareuc.ErrPromptNotFound, shareuc.ErrForbidden, shareuc.ErrViewerReadOnly,
+		apikeyuc.ErrScopeDenied, apikeyuc.ErrTeamMismatch,
 	}
 	for _, de := range domainErrors {
 		if errors.Is(err, de) {
@@ -472,6 +491,12 @@ func jsonResult(data any) (*sdkmcp.CallToolResult, error) {
 // --- read tool handlers ---
 
 func (t *toolHandlers) searchPrompts(ctx context.Context, _ *sdkmcp.CallToolRequest, input SearchInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "search_prompts", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -485,15 +510,31 @@ func (t *toolHandlers) searchPrompts(ctx context.Context, _ *sdkmcp.CallToolRequ
 }
 
 func (t *toolHandlers) listPrompts(ctx context.Context, _ *sdkmcp.CallToolRequest, input ListPromptsInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "list_prompts", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
-	pageSize := input.PageSize
-	if pageSize <= 0 {
+	// pageSize: новый "limit" (cursor mode) имеет приоритет — до 200,
+	// иначе legacy page_size — до 100. Default 20 (исторический).
+	var pageSize int
+	switch {
+	case input.Limit > 0:
+		pageSize = input.Limit
+		if pageSize > 200 {
+			pageSize = 200
+		}
+	case input.PageSize > 0:
+		pageSize = input.PageSize
+		if pageSize > 100 {
+			pageSize = 100
+		}
+	default:
 		pageSize = 20
-	}
-	if pageSize > 100 {
-		pageSize = 100
 	}
 
 	filter := repo.PromptListFilter{
@@ -509,16 +550,61 @@ func (t *toolHandlers) listPrompts(ctx context.Context, _ *sdkmcp.CallToolReques
 		filter.TeamIDs = []uint{*input.TeamID}
 	}
 
+	// Keyset cursor (C-3): декодируем, сверяем filter_hash.
+	usingCursor := input.Cursor != ""
+	if usingCursor {
+		c, err := decodeCursor(input.Cursor)
+		if err != nil {
+			logTool(ctx, "list_prompts", start, err)
+			return nil, nil, fmt.Errorf("invalid cursor: %w", err)
+		}
+		if c.Fh != filterHash(filter) {
+			logTool(ctx, "list_prompts", start, ErrCursorFilterMismatch)
+			return nil, nil, ErrCursorFilterMismatch
+		}
+		lid := c.Lid
+		lts := c.Lts
+		filter.AfterID = &lid
+		filter.AfterUpdatedAt = &lts
+	}
+
 	prompts, total, err := t.prompts.List(ctx, filter)
 	logTool(ctx, "list_prompts", start, err)
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
-	res, err := jsonResult(map[string]any{"prompts": toPromptList(prompts), "total": total})
+
+	slog.Info("mcp.pagination.cursor",
+		"tool", "list_prompts",
+		"user_id", userID,
+		"limit", pageSize,
+		"page_size_returned", len(prompts),
+		"used_cursor", usingCursor,
+	)
+
+	payload := map[string]any{
+		"prompts": toPromptList(prompts),
+		"total":   total,
+	}
+	if len(prompts) == pageSize {
+		last := prompts[len(prompts)-1]
+		next, err := encodeCursor(cursorData{
+			Lid: last.ID,
+			Lts: last.UpdatedAt,
+			Fh:  filterHash(filter),
+		})
+		if err == nil {
+			payload["next_cursor"] = next
+		}
+	}
+	res, err := jsonResult(payload)
 	return res, nil, err
 }
 
 func (t *toolHandlers) getPrompt(ctx context.Context, _ *sdkmcp.CallToolRequest, input GetPromptInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "get_prompt", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -532,6 +618,12 @@ func (t *toolHandlers) getPrompt(ctx context.Context, _ *sdkmcp.CallToolRequest,
 }
 
 func (t *toolHandlers) listCollections(ctx context.Context, _ *sdkmcp.CallToolRequest, input ListCollectionsInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "list_collections", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -578,6 +670,12 @@ func (t *toolHandlers) listCollections(ctx context.Context, _ *sdkmcp.CallToolRe
 }
 
 func (t *toolHandlers) listTags(ctx context.Context, _ *sdkmcp.CallToolRequest, input ListTagsInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "list_tags", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -614,6 +712,9 @@ func (t *toolHandlers) listTags(ctx context.Context, _ *sdkmcp.CallToolRequest, 
 }
 
 func (t *toolHandlers) getPromptVersions(ctx context.Context, _ *sdkmcp.CallToolRequest, input GetVersionsInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "get_prompt_versions", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -645,6 +746,12 @@ func (t *toolHandlers) getPromptVersions(ctx context.Context, _ *sdkmcp.CallTool
 // --- write tool handlers ---
 
 func (t *toolHandlers) createPrompt(ctx context.Context, _ *sdkmcp.CallToolRequest, input CreatePromptInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "create_prompt", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	if err := t.checkMCPQuota(ctx); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
@@ -670,6 +777,9 @@ func (t *toolHandlers) createPrompt(ctx context.Context, _ *sdkmcp.CallToolReque
 }
 
 func (t *toolHandlers) updatePrompt(ctx context.Context, _ *sdkmcp.CallToolRequest, input UpdatePromptInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "update_prompt", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	if err := t.checkMCPQuota(ctx); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
@@ -689,11 +799,15 @@ func (t *toolHandlers) updatePrompt(ctx context.Context, _ *sdkmcp.CallToolReque
 		return nil, nil, mapDomainError(err)
 	}
 	t.incrementMCPUsage(ctx)
+	t.notifier.NotifyPrompt(ctx, input.ID)
 	res, err := jsonResult(toPromptResponse(prompt))
 	return res, nil, err
 }
 
 func (t *toolHandlers) deletePrompt(ctx context.Context, _ *sdkmcp.CallToolRequest, input DeletePromptInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "delete_prompt", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	if err := t.checkMCPQuota(ctx); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
@@ -705,6 +819,7 @@ func (t *toolHandlers) deletePrompt(ctx context.Context, _ *sdkmcp.CallToolReque
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.notifier.NotifyPrompt(ctx, input.ID)
 	res, err := jsonResult(map[string]string{
 		"status":  "deleted",
 		"message": "Prompt moved to trash. Recoverable for 30 days.",
@@ -713,6 +828,12 @@ func (t *toolHandlers) deletePrompt(ctx context.Context, _ *sdkmcp.CallToolReque
 }
 
 func (t *toolHandlers) createTag(ctx context.Context, _ *sdkmcp.CallToolRequest, input CreateTagInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "create_tag", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	if err := t.checkMCPQuota(ctx); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
@@ -725,11 +846,18 @@ func (t *toolHandlers) createTag(ctx context.Context, _ *sdkmcp.CallToolRequest,
 		return nil, nil, mapDomainError(err)
 	}
 	t.invalidateTagsCache(ctx)
+	t.notifier.NotifyTags(ctx)
 	res, err := jsonResult(TagResponse{ID: tag.ID, Name: tag.Name, Color: tag.Color})
 	return res, nil, err
 }
 
 func (t *toolHandlers) createCollection(ctx context.Context, _ *sdkmcp.CallToolRequest, input CreateCollectionInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "create_collection", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	if err := t.checkMCPQuota(ctx); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
@@ -742,6 +870,7 @@ func (t *toolHandlers) createCollection(ctx context.Context, _ *sdkmcp.CallToolR
 		return nil, nil, mapDomainError(err)
 	}
 	t.invalidateCollectionsCache(ctx)
+	t.notifier.NotifyCollections(ctx)
 	res, err := jsonResult(CollectionResponse{
 		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: coll.Color, Icon: coll.Icon,
 	})
@@ -749,6 +878,9 @@ func (t *toolHandlers) createCollection(ctx context.Context, _ *sdkmcp.CallToolR
 }
 
 func (t *toolHandlers) deleteCollection(ctx context.Context, _ *sdkmcp.CallToolRequest, input DeleteCollectionInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "delete_collection", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	if err := t.checkMCPQuota(ctx); err != nil {
 		return nil, nil, mapDomainError(err)
 	}
@@ -761,6 +893,7 @@ func (t *toolHandlers) deleteCollection(ctx context.Context, _ *sdkmcp.CallToolR
 		return nil, nil, mapDomainError(err)
 	}
 	t.invalidateCollectionsCache(ctx)
+	t.notifier.NotifyCollections(ctx)
 	res, err := jsonResult(map[string]string{
 		"status":  "deleted",
 		"message": "Collection deleted. Prompts inside are not affected.",
@@ -771,6 +904,12 @@ func (t *toolHandlers) deleteCollection(ctx context.Context, _ *sdkmcp.CallToolR
 // --- new read tool handlers ---
 
 func (t *toolHandlers) promptListPinned(ctx context.Context, _ *sdkmcp.CallToolRequest, input ListLimitedInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "prompt_list_pinned", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -792,6 +931,12 @@ func (t *toolHandlers) promptListPinned(ctx context.Context, _ *sdkmcp.CallToolR
 }
 
 func (t *toolHandlers) promptListRecent(ctx context.Context, _ *sdkmcp.CallToolRequest, input ListLimitedInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "prompt_list_recent", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -813,6 +958,9 @@ func (t *toolHandlers) promptListRecent(ctx context.Context, _ *sdkmcp.CallToolR
 }
 
 func (t *toolHandlers) collectionGet(ctx context.Context, _ *sdkmcp.CallToolRequest, input CollectionGetInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "collection_get", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -827,7 +975,33 @@ func (t *toolHandlers) collectionGet(ctx context.Context, _ *sdkmcp.CallToolRequ
 	return res, nil, err
 }
 
+func (t *toolHandlers) listPromptVars(ctx context.Context, _ *sdkmcp.CallToolRequest, input PromptIDInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "list_prompt_vars", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	prompt, err := t.prompts.GetByID(ctx, input.ID, userID)
+	logTool(ctx, "list_prompt_vars", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	vars := template.Extract(prompt.Content)
+	if vars == nil {
+		vars = []string{}
+	}
+	res, err := jsonResult(map[string]any{"variables": vars})
+	return res, nil, err
+}
+
 func (t *toolHandlers) searchSuggest(ctx context.Context, _ *sdkmcp.CallToolRequest, input SuggestInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "search_suggest", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -843,6 +1017,9 @@ func (t *toolHandlers) searchSuggest(ctx context.Context, _ *sdkmcp.CallToolRequ
 // --- new write tool handlers ---
 
 func (t *toolHandlers) promptFavorite(ctx context.Context, _ *sdkmcp.CallToolRequest, input PromptIDInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "prompt_favorite", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -851,11 +1028,15 @@ func (t *toolHandlers) promptFavorite(ctx context.Context, _ *sdkmcp.CallToolReq
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.notifier.NotifyPrompt(ctx, input.ID)
 	res, err := jsonResult(toPromptResponse(prompt))
 	return res, nil, err
 }
 
 func (t *toolHandlers) promptPin(ctx context.Context, _ *sdkmcp.CallToolRequest, input PromptPinInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "prompt_pin", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -868,11 +1049,15 @@ func (t *toolHandlers) promptPin(ctx context.Context, _ *sdkmcp.CallToolRequest,
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.notifier.NotifyPrompt(ctx, input.ID)
 	res, err := jsonResult(PinResultResponse{Pinned: result.Pinned, TeamWide: result.TeamWide})
 	return res, nil, err
 }
 
 func (t *toolHandlers) promptIncrementUsage(ctx context.Context, _ *sdkmcp.CallToolRequest, input PromptIDInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "prompt_increment_usage", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -886,6 +1071,9 @@ func (t *toolHandlers) promptIncrementUsage(ctx context.Context, _ *sdkmcp.CallT
 }
 
 func (t *toolHandlers) shareCreate(ctx context.Context, _ *sdkmcp.CallToolRequest, input ShareCreateInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "share_create", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -894,6 +1082,7 @@ func (t *toolHandlers) shareCreate(ctx context.Context, _ *sdkmcp.CallToolReques
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.notifier.NotifyPrompt(ctx, input.PromptID)
 	res, err := jsonResult(ShareLinkResponse{
 		ID: link.ID, Token: link.Token, URL: link.URL,
 		IsActive: link.IsActive, ViewCount: link.ViewCount,
@@ -903,6 +1092,9 @@ func (t *toolHandlers) shareCreate(ctx context.Context, _ *sdkmcp.CallToolReques
 }
 
 func (t *toolHandlers) collectionUpdate(ctx context.Context, _ *sdkmcp.CallToolRequest, input CollectionUpdateInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "collection_update", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -936,6 +1128,7 @@ func (t *toolHandlers) collectionUpdate(ctx context.Context, _ *sdkmcp.CallToolR
 		return nil, nil, mapDomainError(err)
 	}
 	t.invalidateCollectionsCache(ctx)
+	t.notifier.NotifyCollections(ctx)
 	res, err := jsonResult(CollectionResponse{
 		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: coll.Color, Icon: coll.Icon,
 	})
@@ -945,6 +1138,9 @@ func (t *toolHandlers) collectionUpdate(ctx context.Context, _ *sdkmcp.CallToolR
 // --- new destructive/revert tool handlers ---
 
 func (t *toolHandlers) promptRevert(ctx context.Context, _ *sdkmcp.CallToolRequest, input RevertInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "prompt_revert", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -953,11 +1149,15 @@ func (t *toolHandlers) promptRevert(ctx context.Context, _ *sdkmcp.CallToolReque
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.notifier.NotifyPrompt(ctx, input.PromptID)
 	res, err := jsonResult(toPromptResponse(prompt))
 	return res, nil, err
 }
 
 func (t *toolHandlers) shareDeactivate(ctx context.Context, _ *sdkmcp.CallToolRequest, input ShareDeactivateInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "share_deactivate", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -966,11 +1166,15 @@ func (t *toolHandlers) shareDeactivate(ctx context.Context, _ *sdkmcp.CallToolRe
 	if err != nil {
 		return nil, nil, mapDomainError(err)
 	}
+	t.notifier.NotifyPrompt(ctx, input.PromptID)
 	res, err := jsonResult(map[string]string{"status": "deactivated"})
 	return res, nil, err
 }
 
 func (t *toolHandlers) tagDelete(ctx context.Context, _ *sdkmcp.CallToolRequest, input TagDeleteInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "tag_delete", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
 	start := time.Now()
 	userID := authmw.GetUserID(ctx)
 
@@ -980,6 +1184,7 @@ func (t *toolHandlers) tagDelete(ctx context.Context, _ *sdkmcp.CallToolRequest,
 		return nil, nil, mapDomainError(err)
 	}
 	t.invalidateTagsCache(ctx)
+	t.notifier.NotifyTags(ctx)
 	res, err := jsonResult(map[string]string{
 		"status":  "deleted",
 		"message": "Tag deleted. Prompts are not affected.",

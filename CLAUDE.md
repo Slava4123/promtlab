@@ -28,6 +28,6 @@ docker compose -f docker-compose.dev.yml up                # full dev stack
 promptvault/
 ├── backend/       # Go API (Chi + GORM + PostgreSQL), Clean Architecture
 ├── frontend/      # React 19 SPA (Vite + shadcn/ui + TanStack Query + Zustand)
-├── docs/          # PLAN.md, TODO.md, FEATURES.md, DEPLOY.md
+├── docs/          # PLAN.md, FEATURES.md, DEPLOY.md (+ archive/)
 └── CLAUDE.md      # ← полная документация проекта
 ```

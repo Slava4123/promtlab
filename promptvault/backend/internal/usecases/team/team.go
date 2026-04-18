@@ -347,6 +347,19 @@ func (s *Service) RemoveMember(ctx context.Context, slug string, userID, targetU
 	return s.teams.RemoveMember(ctx, team.ID, targetUserID)
 }
 
+// IsMember проверяет, что userID является участником команды teamID (в любой роли).
+// Используется при валидации scoped API-keys с team_id.
+func (s *Service) IsMember(ctx context.Context, teamID, userID uint) (bool, error) {
+	_, err := s.teams.GetMember(ctx, teamID, userID)
+	if err != nil {
+		if errors.Is(err, repo.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // checkAccess проверяет, что пользователь является участником команды с минимальной ролью
 func (s *Service) checkAccess(ctx context.Context, slug string, userID uint, minRole models.TeamRole) (*models.Team, *models.TeamMember, error) {
 	team, err := s.teams.GetBySlug(ctx, slug)

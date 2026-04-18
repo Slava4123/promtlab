@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -57,12 +58,32 @@ func NewMCPServer(
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "promptvault",
-		Version: "v1.0.0",
+		Version: "v1.1.0",
 	}, &mcp.ServerOptions{
-		Instructions: serverInstructions,
-		Logger:       logger,
-		KeepAlive:    5 * time.Minute,
+		Instructions:      serverInstructions,
+		Logger:            logger,
+		KeepAlive:         5 * time.Minute,
+		CompletionHandler: makeCompletionHandler(promptSvc),
+		// SubscribeHandler / UnsubscribeHandler: no-op acceptors.
+		// SDK внутри трекует подписки; серверу остаётся только вызывать
+		// server.ResourceUpdated после CUD — это делает notifier.
+		SubscribeHandler: func(ctx context.Context, req *mcp.SubscribeRequest) error {
+			slog.Debug("mcp.subscription.added",
+				"user_id", authmw.GetUserID(ctx),
+				"uri", req.Params.URI,
+			)
+			return nil
+		},
+		UnsubscribeHandler: func(ctx context.Context, req *mcp.UnsubscribeRequest) error {
+			slog.Debug("mcp.subscription.removed",
+				"user_id", authmw.GetUserID(ctx),
+				"uri", req.Params.URI,
+			)
+			return nil
+		},
 	})
+
+	notif := newNotifier(server)
 
 	tools := &toolHandlers{
 		prompts:     promptSvc,
@@ -72,6 +93,7 @@ func NewMCPServer(
 		shares:      shareSvc,
 		quotas:      quotas,
 		cache:       newListCache(30 * time.Second),
+		notifier:    notif,
 	}
 	tools.register(server)
 

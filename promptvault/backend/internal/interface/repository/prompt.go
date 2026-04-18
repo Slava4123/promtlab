@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"promptvault/internal/models"
 )
@@ -15,6 +16,13 @@ type PromptListFilter struct {
 	Query        string
 	Page         int
 	PageSize     int
+
+	// Keyset cursor pagination для MCP list_prompts (C-3).
+	// Если AfterID != nil и AfterUpdatedAt != nil — используется keyset-ветка
+	// `WHERE (updated_at, id) < ($ts, $id)` вместо OFFSET.
+	// Когда заданы, Page игнорируется.
+	AfterID        *uint
+	AfterUpdatedAt *time.Time
 }
 
 type PromptRepository interface {

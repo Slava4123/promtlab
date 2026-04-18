@@ -5,13 +5,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
+	"strings"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	authmw "promptvault/internal/middleware/auth"
+	"promptvault/internal/template"
 	promptuc "promptvault/internal/usecases/prompt"
 )
+
+// maxVarsJSONSize — лимит размера JSON-строки vars в use_prompt (10 KB).
+// Защита от аномальных payload'ов. На всех практических промптах хватает с запасом.
+const maxVarsJSONSize = 10 * 1024
+
+// validRoles — допустимые значения аргумента role в use_prompt.
+// Соответствуют MCP spec PromptMessage.Role.
+var validRoles = map[string]sdkmcp.Role{
+	"user":      "user",
+	"assistant": "assistant",
+}
 
 type resourceHandlers struct {
 	prompts     PromptService
@@ -43,12 +57,14 @@ func (r *resourceHandlers) register(server *sdkmcp.Server) {
 		MIMEType:    "application/json",
 	}, r.readPrompt)
 
-	// MCP Prompt — use_prompt: fetch a prompt and format it for LLM use
+	// MCP Prompt — use_prompt: fetch a prompt, substitute {{vars}}, return as a message
 	server.AddPrompt(&sdkmcp.Prompt{
 		Name:        "use_prompt",
-		Description: "Fetch a prompt from your library and format it for use",
+		Description: "Fetch a prompt from your library, substitute {{variables}}, and return as a message. Use list_prompt_vars to discover which variables a prompt needs.",
 		Arguments: []*sdkmcp.PromptArgument{
 			{Name: "id", Description: "Prompt ID", Required: true},
+			{Name: "vars", Description: "JSON object with values for {{variables}}: {\"name\":\"Alice\",\"lang\":\"Go\"}. Required if the prompt contains variables."},
+			{Name: "role", Description: "Message role: user (default) or assistant"},
 		},
 	}, r.usePrompt)
 }
@@ -111,34 +127,25 @@ func (r *resourceHandlers) readTags(ctx context.Context, req *sdkmcp.ReadResourc
 func (r *resourceHandlers) readPrompt(ctx context.Context, req *sdkmcp.ReadResourceRequest) (*sdkmcp.ReadResourceResult, error) {
 	userID := authmw.GetUserID(ctx)
 
-	// parse ID from URI: promptvault://prompts/{id}
 	uri := req.Params.URI
-	// extract last path segment
-	id := uint(0)
-	for i := len(uri) - 1; i >= 0; i-- {
-		if uri[i] == '/' {
-			parsed, err := strconv.ParseUint(uri[i+1:], 10, 32)
-			if err != nil {
-				return nil, sdkmcp.ResourceNotFoundError(uri)
-			}
-			id = uint(parsed)
-			break
-		}
+	idx := strings.LastIndex(uri, "/")
+	if idx < 0 || idx == len(uri)-1 {
+		return nil, sdkmcp.ResourceNotFoundError(uri)
 	}
-	if id == 0 {
+	parsed, err := strconv.ParseUint(uri[idx+1:], 10, 32)
+	if err != nil || parsed == 0 {
 		return nil, sdkmcp.ResourceNotFoundError(uri)
 	}
 
-	prompt, err := r.prompts.GetByID(ctx, id, userID)
+	prompt, err := r.prompts.GetByID(ctx, uint(parsed), userID)
 	if err != nil {
 		if errors.Is(err, promptuc.ErrNotFound) {
 			return nil, sdkmcp.ResourceNotFoundError(uri)
 		}
-		return nil, fmt.Errorf("read prompt %d: %w", id, err)
+		return nil, fmt.Errorf("read prompt %d: %w", parsed, err)
 	}
 
-	resp := toPromptResponse(prompt)
-	data, err := json.Marshal(resp)
+	data, err := json.Marshal(toPromptResponse(prompt))
 	if err != nil {
 		return nil, fmt.Errorf("marshal prompt: %w", err)
 	}
@@ -155,27 +162,82 @@ func (r *resourceHandlers) readPrompt(ctx context.Context, req *sdkmcp.ReadResou
 func (r *resourceHandlers) usePrompt(ctx context.Context, req *sdkmcp.GetPromptRequest) (*sdkmcp.GetPromptResult, error) {
 	userID := authmw.GetUserID(ctx)
 
+	// 1. Parse id (required)
 	idStr := req.Params.Arguments["id"]
 	parsed, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil || parsed == 0 {
-		return nil, fmt.Errorf("invalid prompt id: %s", idStr)
+		return nil, fmt.Errorf("use_prompt: invalid prompt id %q", idStr)
 	}
 
+	// 2. Parse role (optional, default "user")
+	role := sdkmcp.Role("user")
+	if raw := strings.TrimSpace(req.Params.Arguments["role"]); raw != "" {
+		resolved, ok := validRoles[strings.ToLower(raw)]
+		if !ok {
+			return nil, fmt.Errorf("use_prompt: invalid role %q: must be user or assistant", raw)
+		}
+		role = resolved
+	}
+
+	// 3. Parse vars (optional, JSON object)
+	var vars map[string]string
+	if raw := strings.TrimSpace(req.Params.Arguments["vars"]); raw != "" {
+		if len(raw) > maxVarsJSONSize {
+			return nil, fmt.Errorf("use_prompt: vars exceed %d bytes limit", maxVarsJSONSize)
+		}
+		if err := json.Unmarshal([]byte(raw), &vars); err != nil {
+			return nil, fmt.Errorf("use_prompt: vars must be a JSON object of string→string: %w", err)
+		}
+	}
+
+	// 4. Load the prompt
 	prompt, err := r.prompts.GetByID(ctx, uint(parsed), userID)
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
 
-	// Format the prompt content for LLM use
-	content := fmt.Sprintf("# %s\n\n%s", prompt.Title, prompt.Content)
+	// 5. Render template
+	rendered, missing := template.Render(prompt.Content, vars)
+	if len(missing) > 0 {
+		slog.Warn("mcp.use_prompt.missing_vars",
+			"user_id", userID,
+			"prompt_id", prompt.ID,
+			"missing", missing,
+		)
+		return nil, fmt.Errorf(
+			"use_prompt: prompt requires variables: %s. Pass them as vars=%s",
+			strings.Join(missing, ", "),
+			jsonSkeletonForVars(missing),
+		)
+	}
 
+	slog.Debug("mcp.use_prompt.rendered",
+		"user_id", userID,
+		"prompt_id", prompt.ID,
+		"role", string(role),
+		"vars_count", len(vars),
+	)
+
+	body := fmt.Sprintf("# %s\n\n%s", prompt.Title, rendered)
 	return &sdkmcp.GetPromptResult{
 		Description: fmt.Sprintf("Prompt: %s", prompt.Title),
-		Messages: []*sdkmcp.PromptMessage{
-			{
-				Role:    "user",
-				Content: &sdkmcp.TextContent{Text: content},
-			},
-		},
+		Messages: []*sdkmcp.PromptMessage{{
+			Role:    role,
+			Content: &sdkmcp.TextContent{Text: body},
+		}},
 	}, nil
+}
+
+// jsonSkeletonForVars строит подсказку-скелет JSON для ошибки missing vars.
+// Результат: `{"name":"","lang":""}` для [name, lang].
+func jsonSkeletonForVars(names []string) string {
+	skeleton := make(map[string]string, len(names))
+	for _, n := range names {
+		skeleton[n] = ""
+	}
+	data, err := json.Marshal(skeleton)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }

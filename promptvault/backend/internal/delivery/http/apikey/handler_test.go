@@ -49,10 +49,19 @@ func (m *mRepo) CountByUserID(ctx context.Context, userID uint) (int64, error) {
 
 // --- helpers ---
 
+type stubTeamChecker struct {
+	member bool
+	err    error
+}
+
+func (s stubTeamChecker) IsMember(_ context.Context, _ uint, _ uint) (bool, error) {
+	return s.member, s.err
+}
+
 func setupHandler() (*Handler, *mRepo) {
 	r := new(mRepo)
 	svc := apikeyuc.NewService(r, 5)
-	return NewHandler(svc, 5), r
+	return NewHandler(svc, stubTeamChecker{member: true}, 5), r
 }
 
 func makeReq(method, url string, userID uint, params map[string]string, body []byte) (*http.Request, *httptest.ResponseRecorder) {

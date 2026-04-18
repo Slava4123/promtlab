@@ -2,6 +2,8 @@
 
 ПромтЛаб работает как [MCP-сервер](https://modelcontextprotocol.io/) — ваши промпты доступны прямо из ИИ-клиентов (Claude Code, Cursor, Windsurf и др.).
 
+**Версия сервера:** `v1.1.0` (см. `server.json`).
+
 ## Быстрый старт
 
 ### 1. Создайте API-ключ
@@ -52,13 +54,13 @@ claude mcp add promptvault --transport http https://ваш-домен/mcp --head
 
 ### Tools (24 шт.)
 
-#### Чтение (10)
+#### Чтение (11)
 
 | Tool | Описание | Viewer |
 |------|----------|--------|
-| `search_prompts` | Поиск по промптам, коллекциям, тегам | ✅ |
+| `search_prompts` | Поиск по промптам, коллекциям, тегам (топ-K, без курсора) | ✅ |
 | `search_suggest` | Автодополнение по префиксу | ✅ |
-| `list_prompts` | Список промптов с фильтрами (коллекция, теги, избранное) | ✅ |
+| `list_prompts` | Список промптов с фильтрами и **cursor pagination** (см. ниже) | ✅ |
 | `get_prompt` | Получить промпт по ID с полным содержимым | ✅ |
 | `prompt_list_pinned` | Список закреплённых промптов | ✅ |
 | `prompt_list_recent` | Список недавно использованных промптов | ✅ |
@@ -66,6 +68,7 @@ claude mcp add promptvault --transport http https://ваш-домен/mcp --head
 | `collection_get` | Получить коллекцию по ID | ✅ |
 | `list_tags` | Список тегов | ✅ |
 | `get_prompt_versions` | История версий промпта | ✅ |
+| `list_prompt_vars` | Извлечь `{{переменные}}` из промпта (для `use_prompt`) | ✅ |
 
 #### Запись (11)
 
@@ -101,9 +104,29 @@ claude mcp add promptvault --transport http https://ваш-домен/mcp --head
 
 ### Prompts
 
-| Имя | Описание |
-|-----|----------|
-| `use_prompt` | Загрузить промпт из библиотеки и отформатировать для использования LLM |
+| Имя | Аргументы | Описание |
+|-----|-----------|----------|
+| `use_prompt` | `id` (required), `vars` (JSON object, optional), `role` (user/assistant, optional) | Загрузить промпт, подставить `{{переменные}}` и вернуть как сообщение |
+
+**Синтаксис переменных** — `{{имя}}`. Если промпт содержит переменные, но `vars` не передан, сервер вернёт ошибку со списком недостающих и JSON-скелетом.
+
+Пример:
+
+```json
+{
+  "id": "42",
+  "vars": "{\"язык\":\"Go\",\"задача\":\"рефакторинг\"}",
+  "role": "user"
+}
+```
+
+### Autocomplete (completions/complete)
+
+MCP-клиенты с поддержкой `completion/complete` (Claude Code, Cursor) получают подсказки для `use_prompt`:
+
+- `id` — список ID ваших промптов с префиксным поиском (до 20).
+- `role` — `user` / `assistant`.
+- `vars` — JSON-скелет с нужными переменными (требует `id` в context).
 
 ## Работа с командами
 
@@ -193,12 +216,56 @@ Viewer имеет доступ только к read-tools: `search_prompts`, `se
 → share_deactivate(prompt_id=5)
 ```
 
-## API-ключи
+## API-ключи (v1.1+)
 
 - Максимум **5 ключей** на пользователя
 - Ключ показывается **один раз** при создании
 - Управление: **Настройки → API-ключи**
 - Формат: `pvlt_` + 43 символа
+
+### Scope-ограничения
+
+При создании ключа можно задать ограничения:
+
+| Ограничение | Эффект |
+|---|---|
+| **Read-only** | Ключ может только читать (10 read-tools), write/delete — `"scope denied"`. |
+| **Команда (team_id)** | Ключ работает только с ресурсами выбранной команды. Запросы к другой команде/личному пространству — `"team mismatch"`. |
+| **Разрешённые tools** | Белый список имён tool'ов. Вызовы вне списка — `"scope denied"`. |
+| **Срок действия (expires_at)** | После даты сервер возвращает `"unauthorized"` на любом запросе. |
+
+Backward-compat: ключи, созданные до v1.1, получают полный доступ (как раньше).
+
+## Cursor pagination (list_prompts)
+
+`list_prompts` поддерживает keyset-курсор для выкачивания большой библиотеки.
+
+**Input:**
+- `limit` *(int, default 50, max 200)* — размер страницы.
+- `cursor` *(string, optional)* — opaque метка из `next_cursor` предыдущего ответа.
+
+**Output:**
+- `prompts` — массив промптов.
+- `total` — общее количество (считается на каждом запросе).
+- `next_cursor` — метка для следующей страницы. Пусто/отсутствует = последняя страница.
+
+**Семантика смены фильтра:** cursor содержит хеш фильтра. Если клиент меняет фильтр между страницами — сервер возвращает `cursor_filter_mismatch`, клиент должен перезапустить пагинацию без cursor.
+
+Legacy `page`/`page_size` остаются для обратной совместимости (используются, если `cursor` не передан).
+
+Для постраничного поиска промптов — `list_prompts(query=..., cursor=...)`. `search_prompts` возвращает топ-K агрегированных результатов (prompts+collections+tags) без курсора.
+
+## Resource subscriptions (v1.1+)
+
+MCP-клиенты могут подписаться на изменения ресурсов через стандартный `resources/subscribe`:
+
+| URI | Событие `resources/updated` |
+|---|---|
+| `promptvault://collections` | create/update/delete коллекции **через MCP** |
+| `promptvault://tags` | create/delete тега **через MCP** |
+| `promptvault://prompts/{id}` | update/delete/favorite/pin/revert/share этого промпта **через MCP** |
+
+**Known Gap:** при изменениях **через веб-интерфейс или HTTP API** MCP-уведомления пока не отправляются (cross-channel broadcast отложен). Клиент увидит свежие данные при следующем `resources/read` или своей CUD-операции.
 
 ## Лимиты
 

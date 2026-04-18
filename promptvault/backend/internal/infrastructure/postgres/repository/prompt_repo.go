@@ -99,20 +99,35 @@ func (r *promptRepo) List(ctx context.Context, filter repo.PromptListFilter) ([]
 		return nil, 0, err
 	}
 
-	// Пагинация
+	pageSize := filter.PageSize
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 20
+	}
+
+	// Keyset pagination (C-3): если задан курсор — используем
+	// `WHERE (updated_at, id) < ($ts, $id)` вместо OFFSET.
+	// Кортежное сравнение в PostgreSQL корректно для двух колонок, использует
+	// составной индекс (user_id, updated_at DESC, id DESC) если он есть.
+	if filter.AfterID != nil && filter.AfterUpdatedAt != nil {
+		q = q.Where("(prompts.updated_at, prompts.id) < (?, ?)", *filter.AfterUpdatedAt, *filter.AfterID)
+		var prompts []models.Prompt
+		err := q.Preload("Tags").Preload("Collections").
+			Order("prompts.updated_at DESC, prompts.id DESC").
+			Limit(pageSize).
+			Find(&prompts).Error
+		return prompts, total, err
+	}
+
+	// Offset pagination (HTTP API и старые MCP-клиенты).
 	page := filter.Page
 	if page < 1 {
 		page = 1
-	}
-	pageSize := filter.PageSize
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
 	}
 	offset := (page - 1) * pageSize
 
 	var prompts []models.Prompt
 	err := q.Preload("Tags").Preload("Collections").
-		Order("updated_at DESC").
+		Order("prompts.updated_at DESC, prompts.id DESC").
 		Limit(pageSize).
 		Offset(offset).
 		Find(&prompts).Error

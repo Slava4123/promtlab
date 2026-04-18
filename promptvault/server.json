@@ -3,7 +3,7 @@
   "name": "ru.promtlabs/promptvault",
   "title": "ПромтЛаб — библиотека AI-промптов",
   "description": "AI prompt library with collections, tags, version history and team collaboration.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "remotes": [
     {
       "type": "streamable-http",

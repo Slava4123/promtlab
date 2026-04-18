@@ -219,16 +219,14 @@ backend/internal/
 
 ## Документация (`docs/`)
 - `PLAN.md` — 12-фазный план разработки
-- `TODO.md` — чеклист с отметками выполнения
 - `FEATURES.md` — детализация фич по фазам
 - `DEPLOY.md` — Docker Compose + GitHub Actions + VPS
 - `MONETIZATION.md` — тарифы Free/Pro/Max, маржа, квоты
 - `ADMIN.md` — bootstrap админа, TOTP 2FA, audit log, admin actions
 - `SENTRY_NEXT_STEPS.md` — GlitchTip self-hosted setup, source maps
 - `MCP.md`, `MCP-PUBLISHING.md` — MCP-интеграция и публикация
-- `LAUNCH_PLAN.md`, `RELEASE_READINESS.md` — план запуска и готовность
 - `SUBSCRIPTION_PLAN.md` — модель подписок и quota enforcement
-- `ANTHROPIC_CONNECTORS_TODO.md` — интеграция Anthropic connectors
+- `archive/` — выполненные/исторические документы: `TODO.md`, `LAUNCH_PLAN.md`, `RELEASE_READINESS.md`, `ANTHROPIC_CONNECTORS_TODO.md`
 
 ## Admin Panel (кратко)
 

@@ -3,10 +3,10 @@ package apikey
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -32,8 +32,11 @@ func NewService(keys repo.APIKeyRepository, maxKeysPerUser int) *Service {
 	return &Service{keys: keys, maxKeysPerUser: maxKeysPerUser}
 }
 
-func (s *Service) Create(ctx context.Context, userID uint, name string) (string, *APIKeyInfo, error) {
-	name = strings.TrimSpace(name)
+// Create создаёт новый API-ключ. CreateInput.AllowedTools и TeamID уже должны быть
+// валидированы на уровне HTTP-хэндлера (team membership, known tool names).
+// Service проверяет только имя, лимит ключей и будущую дату expires_at.
+func (s *Service) Create(ctx context.Context, in CreateInput) (string, *APIKeyInfo, error) {
+	name := strings.TrimSpace(in.Name)
 	if name == "" {
 		return "", nil, ErrNameEmpty
 	}
@@ -41,7 +44,17 @@ func (s *Service) Create(ctx context.Context, userID uint, name string) (string,
 		return "", nil, ErrNameTooLong
 	}
 
-	count, err := s.keys.CountByUserID(ctx, userID)
+	if in.ExpiresAt != nil && !in.ExpiresAt.After(time.Now()) {
+		return "", nil, ErrInvalidExpires
+	}
+
+	for _, tool := range in.AllowedTools {
+		if !IsKnownTool(tool) {
+			return "", nil, fmt.Errorf("%w: %q", ErrInvalidToolName, tool)
+		}
+	}
+
+	count, err := s.keys.CountByUserID(ctx, in.UserID)
 	if err != nil {
 		return "", nil, fmt.Errorf("count api keys: %w", err)
 	}
@@ -58,20 +71,28 @@ func (s *Service) Create(ctx context.Context, userID uint, name string) (string,
 	prefix := safePrefix(plaintext)
 
 	key := &models.APIKey{
-		UserID:    userID,
-		Name:      name,
-		KeyPrefix: prefix,
-		KeyHash:   hash,
+		UserID:       in.UserID,
+		Name:         name,
+		KeyPrefix:    prefix,
+		KeyHash:      hash,
+		ReadOnly:     in.ReadOnly,
+		TeamID:       in.TeamID,
+		AllowedTools: in.AllowedTools,
+		ExpiresAt:    in.ExpiresAt,
 	}
 	if err := s.keys.Create(ctx, key); err != nil {
 		return "", nil, fmt.Errorf("create api key: %w", err)
 	}
 
 	info := &APIKeyInfo{
-		ID:        key.ID,
-		Name:      key.Name,
-		KeyPrefix: key.KeyPrefix,
-		CreatedAt: key.CreatedAt,
+		ID:           key.ID,
+		Name:         key.Name,
+		KeyPrefix:    key.KeyPrefix,
+		CreatedAt:    key.CreatedAt,
+		ReadOnly:     key.ReadOnly,
+		TeamID:       key.TeamID,
+		AllowedTools: key.AllowedTools,
+		ExpiresAt:    key.ExpiresAt,
 	}
 	return plaintext, info, nil
 }
@@ -85,11 +106,15 @@ func (s *Service) List(ctx context.Context, userID uint) ([]APIKeyInfo, error) {
 	result := make([]APIKeyInfo, len(keys))
 	for i, k := range keys {
 		result[i] = APIKeyInfo{
-			ID:         k.ID,
-			Name:       k.Name,
-			KeyPrefix:  k.KeyPrefix,
-			LastUsedAt: k.LastUsedAt,
-			CreatedAt:  k.CreatedAt,
+			ID:           k.ID,
+			Name:         k.Name,
+			KeyPrefix:    k.KeyPrefix,
+			LastUsedAt:   k.LastUsedAt,
+			CreatedAt:    k.CreatedAt,
+			ReadOnly:     k.ReadOnly,
+			TeamID:       k.TeamID,
+			AllowedTools: k.AllowedTools,
+			ExpiresAt:    k.ExpiresAt,
 		}
 	}
 	return result, nil
@@ -120,6 +145,11 @@ func (s *Service) ValidateKey(ctx context.Context, rawKey string) (*ValidateResu
 		return nil, fmt.Errorf("validate api key: %w", err)
 	}
 
+	if key.ExpiresAt != nil && !time.Now().Before(*key.ExpiresAt) {
+		slog.Warn("apikey.expired", "key_id", key.ID, "user_id", key.UserID, "expired_at", key.ExpiresAt)
+		return nil, ErrExpired
+	}
+
 	// async best-effort update last_used_at
 	go func() {
 		defer func() {
@@ -134,7 +164,16 @@ func (s *Service) ValidateKey(ctx context.Context, rawKey string) (*ValidateResu
 		}
 	}()
 
-	return &ValidateResult{UserID: key.UserID, KeyID: key.ID}, nil
+	return &ValidateResult{
+		UserID: key.UserID,
+		KeyID:  key.ID,
+		Policy: KeyPolicy{
+			ReadOnly:     key.ReadOnly,
+			TeamID:       key.TeamID,
+			AllowedTools: []string(key.AllowedTools),
+			ExpiresAt:    key.ExpiresAt,
+		},
+	}, nil
 }
 
 func generateKey() (string, error) {
