@@ -60,7 +60,7 @@ PromtLabs — self-hosted SaaS для управления AI-промптами
 | Участники/команда | 3 | 10 | Безлимит |
 | Шаринг (активные ссылки) | 2 | 10 | Безлимит |
 | Вставки через расширение | 5/день | 30/день | Безлимит |
-| Вставки через MCP | 5/день | 30/день | Безлимит |
+| Платные MCP-вызовы (13 из 30 tools: write/destructive) | 5/день | 30/день | Безлимит |
 | Приоритетная поддержка | Нет | Да | Да |
 
 ### 2.2 Функции доступные на всех тарифах
@@ -78,7 +78,7 @@ PromtLabs — self-hosted SaaS для управления AI-промптами
 | Онбординг (34 стартовых шаблона) | + | + | + |
 | OAuth (GitHub, Google, Яндекс) | + | + | + |
 | API-ключи | + | + | + |
-| MCP-сервер (24 инструмента) | + | + | + |
+| MCP-сервер (30 инструментов, 13 из них едят дневную квоту) | + | + | + |
 | Chrome-расширение | + | + | + |
 | AI-ассистент (Enhance, Rewrite, Analyze, Variations) | + | + | + |
 | SSE-стриминг ответов | + | + | + |
@@ -262,7 +262,7 @@ CREATE TABLE IF NOT EXISTS daily_feature_usage (
 **Идентификация источника:**
 - AI: запросы к `/api/ai/*` endpoints
 - Extension: заголовок `X-Client-Source: extension` (добавить в extension при отправке запросов)
-- MCP: запросы через `/mcp` endpoint — трекинг внутри `mcpserver/` при каждом tool call
+- MCP: запросы через `/mcp` endpoint — трекинг внутри `mcpserver/` только для 13 платных tools (write/destructive); read-only и UX-toggle (favorite/pin/increment_usage) не инкрементят счётчик
 
 ### 4.5 Миграция 000023: users.plan_id
 
@@ -468,7 +468,7 @@ T-Bank формирует `Token` = SHA-256 от конкатенации все
 ### Шаг 3: Интеграция квот в существующие usecases (~150 LOC Go)
 - Добавить `quotaSvc` в prompt, ai, team, share usecases
 - Добавить трекинг extension usage в prompt handler (по заголовку `X-Client-Source: extension`)
-- Добавить трекинг MCP usage в `mcpserver/` (при каждом tool call)
+- Добавить трекинг MCP usage в `mcpserver/` (при каждом платном tool call — 13 типов write/destructive; read-only tools и UX-toggle не тарифицируются)
 - Добавить quota error mapping в delivery/http errors
 - **Критерий:** Free-юзер не может создать 51-й промпт (402), AI-квота, share, ext/MCP лимиты работают
 

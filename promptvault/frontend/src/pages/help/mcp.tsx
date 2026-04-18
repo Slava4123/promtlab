@@ -109,15 +109,19 @@ const CLIENTS: ClientConfig[] = [
 // --- Tools ---
 
 const TOOLS_READ = [
+  ["whoami", "Текущий пользователь (id, email, plan, default_model)"],
   ["search_prompts", "Поиск по промптам, коллекциям, тегам"],
   ["search_suggest", "Автодополнение по префиксу"],
   ["list_prompts", "Список промптов с фильтрами (коллекция, теги, избранное)"],
   ["get_prompt", "Получить промпт по ID с полным содержимым"],
+  ["list_prompt_vars", "Извлечь {{переменные}} из промпта"],
   ["prompt_list_pinned", "Список закреплённых промптов"],
   ["prompt_list_recent", "Список недавно использованных промптов"],
   ["list_collections", "Список коллекций с количеством промптов"],
   ["collection_get", "Получить коллекцию по ID"],
   ["list_tags", "Список тегов"],
+  ["list_teams", "Список команд пользователя (id, role, member_count)"],
+  ["list_trash", "Содержимое корзины (soft-deleted промпты)"],
   ["get_prompt_versions", "История версий промпта"],
 ] as const
 
@@ -129,6 +133,7 @@ const TOOLS_WRITE = [
   ["prompt_revert", "Откатить промпт к предыдущей версии"],
   ["prompt_increment_usage", "Отметить использование промпта (для аналитики)"],
   ["share_create", "Создать публичную ссылку на промпт"],
+  ["restore_prompt", "Восстановить промпт из корзины"],
   ["collection_update", "Обновить название/описание/цвет/иконку коллекции"],
   ["create_tag", "Создать тег"],
   ["create_collection", "Создать коллекцию для организации промптов"],
@@ -139,6 +144,7 @@ const TOOLS_DELETE = [
   ["delete_collection", "Удалить коллекцию (промпты внутри не затрагиваются)"],
   ["tag_delete", "Удалить тег (промпты не затрагиваются)"],
   ["share_deactivate", "Деактивировать публичную ссылку"],
+  ["purge_prompt", "Удалить промпт навсегда (из корзины, необратимо)"],
 ] as const
 
 const RESOURCES = [
@@ -301,7 +307,7 @@ export default function HelpMCPPage() {
         </Section>
 
         {/* --- Что доступно: Tools --- */}
-        <Section icon={Terminal} title="Что MCP умеет (24 tool)">
+        <Section icon={Terminal} title="Что MCP умеет (30 tool)">
           <p className="mb-4 text-sm text-muted-foreground">
             Все операции работают и в личном пространстве, и в команде (через параметр <code className="rounded bg-muted px-1 text-[0.78em]">team_id</code>). Запись недоступна для роли <strong>viewer</strong>.
           </p>
@@ -407,8 +413,24 @@ export default function HelpMCPPage() {
           />
         </Section>
 
+        {/* --- Квотирование --- */}
+        <Section icon={Zap} title="Квотирование MCP">
+          <p className="mb-3 text-sm text-muted-foreground">
+            ПромтЛаб тарифицирует только реальные изменения в БД: 13 write/destructive
+            операций из 30. Чтение и UX-toggle (favorite/pin) — бесплатны.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <LimitCard label="Free: платных вызовов/день" value="5" />
+            <LimitCard label="Pro: платных вызовов/день" value="30" />
+            <LimitCard label="Max: платных вызовов/день" value="∞" />
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Едят квоту: <code className="rounded bg-muted px-1 text-[0.78em]">create_prompt</code>, <code className="rounded bg-muted px-1 text-[0.78em]">update_prompt</code>, <code className="rounded bg-muted px-1 text-[0.78em]">delete_prompt</code>, <code className="rounded bg-muted px-1 text-[0.78em]">restore_prompt</code>, <code className="rounded bg-muted px-1 text-[0.78em]">purge_prompt</code>, <code className="rounded bg-muted px-1 text-[0.78em]">prompt_revert</code>, <code className="rounded bg-muted px-1 text-[0.78em]">create_collection</code>, <code className="rounded bg-muted px-1 text-[0.78em]">collection_update</code>, <code className="rounded bg-muted px-1 text-[0.78em]">delete_collection</code>, <code className="rounded bg-muted px-1 text-[0.78em]">create_tag</code>, <code className="rounded bg-muted px-1 text-[0.78em]">tag_delete</code>, <code className="rounded bg-muted px-1 text-[0.78em]">share_create</code>, <code className="rounded bg-muted px-1 text-[0.78em]">share_deactivate</code>. При превышении — <code className="rounded bg-muted px-1 text-[0.78em]">402 Payment Required</code>.
+          </p>
+        </Section>
+
         {/* --- Лимиты --- */}
-        <Section icon={Zap} title="Лимиты">
+        <Section icon={Zap} title="Rate limits">
           <div className="grid gap-3 sm:grid-cols-3">
             <LimitCard label="API-ключей на пользователя" value="до 5" />
             <LimitCard label="Запросов в минуту с IP" value="120" />

@@ -50,46 +50,52 @@ claude mcp add promptvault --transport http https://promtlabs.ru/mcp --header "A
 
 ## Возможности
 
-### Tools (24 шт.)
+### Tools (30 шт.)
 
-#### Чтение (10)
+#### Чтение (14)
 
 | Tool | Описание | Viewer |
 |------|----------|--------|
+| `whoami` | Текущий пользователь (id, email, plan, default_model) | ✅ |
 | `search_prompts` | Поиск по промптам, коллекциям, тегам | ✅ |
 | `search_suggest` | Автодополнение по префиксу | ✅ |
 | `list_prompts` | Список промптов с фильтрами (коллекция, теги, избранное) | ✅ |
 | `get_prompt` | Получить промпт по ID с полным содержимым | ✅ |
+| `list_prompt_vars` | Извлечь `{{переменные}}` из промпта | ✅ |
 | `prompt_list_pinned` | Список закреплённых промптов | ✅ |
 | `prompt_list_recent` | Список недавно использованных промптов | ✅ |
 | `list_collections` | Список коллекций с количеством промптов | ✅ |
 | `collection_get` | Получить коллекцию по ID | ✅ |
 | `list_tags` | Список тегов | ✅ |
+| `list_teams` | Список команд пользователя (id, role, member_count) | ✅ |
+| `list_trash` | Содержимое корзины (soft-deleted промпты) | ✅ |
 | `get_prompt_versions` | История версий промпта | ✅ |
 
 #### Запись (11)
 
-| Tool | Описание | Viewer |
-|------|----------|--------|
-| `create_prompt` | Создать промпт | ❌ |
-| `update_prompt` | Обновить промпт (создаёт новую версию) | ❌ |
-| `prompt_favorite` | Переключить статус избранного | ❌ |
-| `prompt_pin` | Закрепить/открепить промпт (team_wide для команды) | ❌ |
-| `prompt_revert` | Откатить промпт к предыдущей версии | ❌ |
-| `prompt_increment_usage` | Отметить использование промпта (для аналитики) | ❌ |
-| `share_create` | Создать публичную ссылку на промпт | ❌ |
-| `collection_update` | Обновить название/описание/цвет/иконку коллекции | ❌ |
-| `create_tag` | Создать тег | ❌ |
-| `create_collection` | Создать коллекцию для организации промптов | ❌ |
+| Tool | Описание | Viewer | Ест квоту |
+|------|----------|--------|-----------|
+| `create_prompt` | Создать промпт | ❌ | ✅ |
+| `update_prompt` | Обновить промпт (создаёт новую версию) | ❌ | ✅ |
+| `prompt_favorite` | Переключить статус избранного | ❌ | — |
+| `prompt_pin` | Закрепить/открепить промпт (team_wide для команды) | ❌ | — |
+| `prompt_revert` | Откатить промпт к предыдущей версии | ❌ | ✅ |
+| `prompt_increment_usage` | Отметить использование промпта (для аналитики) | ❌ | — |
+| `share_create` | Создать публичную ссылку на промпт | ❌ | ✅ |
+| `restore_prompt` | Восстановить промпт из корзины | ❌ | ✅ |
+| `collection_update` | Обновить название/описание/цвет/иконку коллекции | ❌ | ✅ |
+| `create_tag` | Создать тег | ❌ | ✅ |
+| `create_collection` | Создать коллекцию для организации промптов | ❌ | ✅ |
 
-#### Удаление (3)
+#### Удаление (5)
 
-| Tool | Описание | Viewer |
-|------|----------|--------|
-| `delete_prompt` | Удалить промпт (в корзину на 30 дней) | ❌ |
-| `delete_collection` | Удалить коллекцию (промпты внутри не затрагиваются) | ❌ |
-| `tag_delete` | Удалить тег (промпты не затрагиваются) | ❌ |
-| `share_deactivate` | Деактивировать публичную ссылку | ❌ |
+| Tool | Описание | Viewer | Ест квоту |
+|------|----------|--------|-----------|
+| `delete_prompt` | Удалить промпт (в корзину на 30 дней) | ❌ | ✅ |
+| `delete_collection` | Удалить коллекцию (промпты внутри не затрагиваются) | ❌ | ✅ |
+| `tag_delete` | Удалить тег (промпты не затрагиваются) | ❌ | ✅ |
+| `share_deactivate` | Деактивировать публичную ссылку | ❌ | ✅ |
+| `purge_prompt` | Удалить промпт навсегда (из корзины, необратимо) | ❌ | ✅ |
 
 ### Resources
 
@@ -125,7 +131,7 @@ claude mcp add promptvault --transport http https://promtlabs.ru/mcp --header "A
 | **editor** | ✅ | ✅ |
 | **viewer** | ✅ | ❌ |
 
-Viewer имеет доступ только к read-tools: `search_prompts`, `search_suggest`, `list_prompts`, `get_prompt`, `prompt_list_pinned`, `prompt_list_recent`, `list_collections`, `collection_get`, `list_tags`, `get_prompt_versions`.
+Viewer имеет доступ ко всем 14 read-tools (включая `whoami`, `list_teams`, `list_trash`, `list_prompt_vars`). Любые write/destructive операции для viewer запрещены.
 
 ## Примеры использования
 
@@ -199,6 +205,23 @@ Viewer имеет доступ только к read-tools: `search_prompts`, `se
 - Ключ показывается **один раз** при создании
 - Управление: **Настройки → API-ключи**
 - Формат: `pvlt_` + 43 символа
+
+## Квотирование MCP
+
+ПромтЛаб тарифицирует только реальные изменения в БД. Из 30 инструментов:
+
+- **Бесплатны** (14 read + 3 UX-toggle + `use_prompt`): `whoami`, `search_prompts`, `search_suggest`, `list_prompts`, `list_collections`, `list_tags`, `list_teams`, `list_trash`, `list_prompt_vars`, `get_prompt`, `get_prompt_versions`, `prompt_list_pinned`, `prompt_list_recent`, `collection_get`, `prompt_favorite`, `prompt_pin`, `prompt_increment_usage`.
+- **Едят дневную MCP-квоту** (13 write/destructive): `create_prompt`, `update_prompt`, `delete_prompt`, `restore_prompt`, `purge_prompt`, `prompt_revert`, `create_collection`, `collection_update`, `delete_collection`, `create_tag`, `tag_delete`, `share_create`, `share_deactivate`.
+
+Лимиты по тарифам:
+
+| Тариф | Платных вызовов в день |
+|-------|-----------------------|
+| Free | 5 |
+| Pro | 30 |
+| Max | Безлимит |
+
+При превышении backend возвращает `402 Payment Required` c сообщением «MCP quota exceeded».
 
 ## Лимиты
 
