@@ -21,6 +21,7 @@ import (
 	quotauc "promptvault/internal/usecases/quota"
 	shareuc "promptvault/internal/usecases/share"
 	taguc "promptvault/internal/usecases/tag"
+	trashuc "promptvault/internal/usecases/trash"
 )
 
 type toolHandlers struct {
@@ -29,6 +30,9 @@ type toolHandlers struct {
 	tags        TagService
 	search      SearchService
 	shares      ShareService
+	teams       TeamService
+	trash       TrashService
+	users       UserService
 	quotas      *quotauc.Service
 	cache       *listCache // P-11: TTL cache для list_collections/list_tags
 	notifier    *notifier  // C-1: рассылка resources/updated подписчикам
@@ -203,6 +207,27 @@ type SuggestInput struct {
 	TeamID *uint  `json:"team_id,omitempty" jsonschema:"Team ID (omit for personal workspace)"`
 }
 
+// ListTeamsInput — пустой вход: возвращаем все команды текущего пользователя.
+// Если API-key привязан к конкретной команде (policy.TeamID), результат
+// фильтруется до одной этой команды.
+type ListTeamsInput struct{}
+
+type WhoamiInput struct{}
+
+type ListTrashInput struct {
+	TeamID   *uint `json:"team_id,omitempty" jsonschema:"Team ID (omit for personal workspace)"`
+	Page     int   `json:"page,omitempty" jsonschema:"Page number (0-based)"`
+	PageSize int   `json:"page_size,omitempty" jsonschema:"Items per page (default 20, max 100)"`
+}
+
+type RestorePromptInput struct {
+	ID uint `json:"id" jsonschema:"required,Prompt ID in trash"`
+}
+
+type PurgePromptInput struct {
+	ID uint `json:"id" jsonschema:"required,Prompt ID in trash"`
+}
+
 var (
 	readOnlyAnnotations = &sdkmcp.ToolAnnotations{
 		ReadOnlyHint:  true,
@@ -267,6 +292,41 @@ func (t *toolHandlers) register(server *sdkmcp.Server) {
 		Description: "List all tags",
 		Annotations: readOnlyAnnotations,
 	}, t.listTags)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "list_teams",
+		Title:       "List teams",
+		Description: "List all teams the current user is a member of. Use returned team.id as team_id for other tools (list_prompts, list_collections, etc.) to work in a team workspace.",
+		Annotations: readOnlyAnnotations,
+	}, t.listTeams)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "whoami",
+		Title:       "Current user info",
+		Description: "Get info about the authenticated user: id, email, name, plan, default AI model. Use to identify which PromptLab account is connected.",
+		Annotations: readOnlyAnnotations,
+	}, t.whoami)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "list_trash",
+		Title:       "List deleted prompts",
+		Description: "List prompts in trash (soft-deleted, recoverable within 30 days). Use restore_prompt to bring back or purge_prompt to delete permanently.",
+		Annotations: readOnlyAnnotations,
+	}, t.listTrash)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "restore_prompt",
+		Title:       "Restore prompt from trash",
+		Description: "Restore a soft-deleted prompt from trash. Use list_trash first to find the prompt ID.",
+		Annotations: writeIdempotentAnnotations,
+	}, t.restorePrompt)
+
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "purge_prompt",
+		Title:       "Permanently delete prompt",
+		Description: "Permanently delete a prompt from trash. This cannot be undone. Use list_trash first to find the prompt ID.",
+		Annotations: deleteAnnotations,
+	}, t.purgePrompt)
 
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
 		Name:        "get_prompt_versions",
@@ -441,6 +501,7 @@ func isDomainError(err error) bool {
 		taguc.ErrNotFound, taguc.ErrForbidden, taguc.ErrViewerReadOnly, taguc.ErrNameEmpty,
 		shareuc.ErrNotFound, shareuc.ErrPromptNotFound, shareuc.ErrForbidden, shareuc.ErrViewerReadOnly,
 		apikeyuc.ErrScopeDenied, apikeyuc.ErrTeamMismatch,
+		trashuc.ErrNotFound, trashuc.ErrForbidden, trashuc.ErrViewerReadOnly, trashuc.ErrInvalidType,
 	}
 	for _, de := range domainErrors {
 		if errors.Is(err, de) {
@@ -708,6 +769,145 @@ func (t *toolHandlers) listTags(ctx context.Context, _ *sdkmcp.CallToolRequest, 
 		t.cache.Set(cacheKey, payload)
 	}
 	res, err := jsonResult(payload)
+	return res, nil, err
+}
+
+func (t *toolHandlers) listTeams(ctx context.Context, _ *sdkmcp.CallToolRequest, _ ListTeamsInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "list_teams", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	items, err := t.teams.List(ctx, userID)
+	logTool(ctx, "list_teams", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+
+	// Если ключ привязан к конкретной команде — отдаём только её.
+	policy := GetKeyPolicy(ctx)
+	result := make([]TeamResponse, 0, len(items))
+	for _, it := range items {
+		if policy != nil && policy.TeamID != nil && *policy.TeamID != it.Team.ID {
+			continue
+		}
+		result = append(result, TeamResponse{
+			ID:          it.Team.ID,
+			Slug:        it.Team.Slug,
+			Name:        it.Team.Name,
+			Description: it.Team.Description,
+			Role:        string(it.Role),
+			MemberCount: it.MemberCount,
+			CreatedAt:   it.Team.CreatedAt,
+		})
+	}
+	res, err := jsonResult(map[string]any{"teams": result})
+	return res, nil, err
+}
+
+func (t *toolHandlers) whoami(ctx context.Context, _ *sdkmcp.CallToolRequest, _ WhoamiInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "whoami", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	u, err := t.users.GetByID(ctx, userID)
+	logTool(ctx, "whoami", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+
+	resp := UserResponse{
+		ID:            u.ID,
+		Email:         u.Email,
+		Name:          u.Name,
+		Username:      u.Username,
+		AvatarURL:     u.AvatarURL,
+		PlanID:        u.PlanID,
+		DefaultModel:  u.DefaultModel,
+		EmailVerified: u.EmailVerified,
+	}
+	res, err := jsonResult(resp)
+	return res, nil, err
+}
+
+func (t *toolHandlers) listTrash(ctx context.Context, _ *sdkmcp.CallToolRequest, input ListTrashInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "list_trash", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	pageSize := input.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	var teamIDs []uint
+	if input.TeamID != nil {
+		teamIDs = []uint{*input.TeamID}
+	}
+
+	prompts, total, err := t.trash.ListDeletedPrompts(ctx, userID, teamIDs, input.Page, pageSize)
+	logTool(ctx, "list_trash", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+
+	res, err := jsonResult(map[string]any{
+		"prompts": toPromptList(prompts),
+		"total":   total,
+	})
+	return res, nil, err
+}
+
+func (t *toolHandlers) restorePrompt(ctx context.Context, _ *sdkmcp.CallToolRequest, input RestorePromptInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "restore_prompt", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	err := t.trash.Restore(ctx, trashuc.TypePrompt, input.ID, userID)
+	logTool(ctx, "restore_prompt", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	t.incrementMCPUsage(ctx)
+
+	res, err := jsonResult(map[string]any{"restored": true, "id": input.ID})
+	return res, nil, err
+}
+
+func (t *toolHandlers) purgePrompt(ctx context.Context, _ *sdkmcp.CallToolRequest, input PurgePromptInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "purge_prompt", true); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := t.checkMCPQuota(ctx); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	err := t.trash.PermanentDelete(ctx, trashuc.TypePrompt, input.ID, userID)
+	logTool(ctx, "purge_prompt", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	t.incrementMCPUsage(ctx)
+
+	res, err := jsonResult(map[string]any{"purged": true, "id": input.ID})
 	return res, nil, err
 }
 

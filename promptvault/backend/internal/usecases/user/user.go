@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	repo "promptvault/internal/interface/repository"
+	"promptvault/internal/models"
 )
 
 type Service struct {
@@ -42,6 +43,11 @@ func (s *Service) Search(ctx context.Context, query string, limit int) ([]Search
 		})
 	}
 	return results, nil
+}
+
+// GetByID возвращает пользователя по ID. Используется, например, MCP whoami.
+func (s *Service) GetByID(ctx context.Context, id uint) (*models.User, error) {
+	return s.users.GetByID(ctx, id)
 }
 
 func maskEmail(email string) string {

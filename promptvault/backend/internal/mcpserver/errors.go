@@ -9,6 +9,7 @@ import (
 	promptuc "promptvault/internal/usecases/prompt"
 	shareuc "promptvault/internal/usecases/share"
 	taguc "promptvault/internal/usecases/tag"
+	trashuc "promptvault/internal/usecases/trash"
 )
 
 func mapDomainError(err error) error {
@@ -64,6 +65,16 @@ func mapDomainError(err error) error {
 		return fmt.Errorf("scope denied: operation not permitted by key policy")
 	case errors.Is(err, apikeyuc.ErrTeamMismatch):
 		return fmt.Errorf("team mismatch: key is bound to a different workspace")
+
+	// trash
+	case errors.Is(err, trashuc.ErrNotFound):
+		return fmt.Errorf("item not found in trash")
+	case errors.Is(err, trashuc.ErrForbidden):
+		return fmt.Errorf("access denied")
+	case errors.Is(err, trashuc.ErrViewerReadOnly):
+		return fmt.Errorf("read-only access")
+	case errors.Is(err, trashuc.ErrInvalidType):
+		return fmt.Errorf("invalid item type")
 	}
 	return fmt.Errorf("internal server error")
 }

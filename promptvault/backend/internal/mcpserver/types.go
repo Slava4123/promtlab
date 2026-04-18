@@ -60,3 +60,24 @@ type ShareLinkResponse struct {
 	LastViewedAt *time.Time `json:"last_viewed_at,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 }
+
+type TeamResponse struct {
+	ID          uint      `json:"id"`
+	Slug        string    `json:"slug"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Role        string    `json:"role"`
+	MemberCount int       `json:"member_count"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type UserResponse struct {
+	ID            uint   `json:"id"`
+	Email         string `json:"email"`
+	Name          string `json:"name"`
+	Username      string `json:"username,omitempty"`
+	AvatarURL     string `json:"avatar_url,omitempty"`
+	PlanID        string `json:"plan_id"`
+	DefaultModel  string `json:"default_model,omitempty"`
+	EmailVerified bool   `json:"email_verified"`
+}

@@ -13,11 +13,14 @@ import (
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	apikeyuc "promptvault/internal/usecases/apikey"
 	colluc "promptvault/internal/usecases/collection"
 	promptuc "promptvault/internal/usecases/prompt"
 	searchuc "promptvault/internal/usecases/search"
 	shareuc "promptvault/internal/usecases/share"
 	taguc "promptvault/internal/usecases/tag"
+	teamuc "promptvault/internal/usecases/team"
+	trashuc "promptvault/internal/usecases/trash"
 )
 
 // --- helpers ---
@@ -28,7 +31,24 @@ func newToolHandlers() (*toolHandlers, *mockPromptSvc, *mockCollectionSvc, *mock
 	tg := new(mockTagSvc)
 	s := new(mockSearchSvc)
 	sh := new(mockShareSvc)
-	return &toolHandlers{prompts: p, collections: c, tags: tg, search: s, shares: sh}, p, c, tg, s, sh
+	tm := new(mockTeamSvc)
+	return &toolHandlers{prompts: p, collections: c, tags: tg, search: s, shares: sh, teams: tm}, p, c, tg, s, sh
+}
+
+// newToolHandlersWithTeam — helper для тестов, которым нужен прямой доступ к mockTeamSvc.
+func newToolHandlersWithTeam() (*toolHandlers, *mockTeamSvc) {
+	tm := new(mockTeamSvc)
+	return &toolHandlers{teams: tm}, tm
+}
+
+func newToolHandlersWithTrash() (*toolHandlers, *mockTrashSvc) {
+	tr := new(mockTrashSvc)
+	return &toolHandlers{trash: tr}, tr
+}
+
+func newToolHandlersWithUser() (*toolHandlers, *mockUserSvc) {
+	us := new(mockUserSvc)
+	return &toolHandlers{users: us}, us
 }
 
 func samplePrompt() *models.Prompt {
@@ -183,6 +203,135 @@ func TestListTags(t *testing.T) {
 	data := parseJSON(t, text)
 	tagList := data["tags"].([]any)
 	assert.Len(t, tagList, 1)
+}
+
+// --- list teams ---
+
+func TestListTeams(t *testing.T) {
+	h, tm := newToolHandlersWithTeam()
+	ctx := ctxWithUser(42)
+
+	items := []teamuc.TeamListItem{
+		{
+			Team:        models.Team{ID: 4, Slug: "mts-3911", Name: "МТС", CreatedAt: time.Date(2026, 4, 7, 0, 0, 0, 0, time.UTC)},
+			Role:        models.RoleOwner,
+			MemberCount: 1,
+		},
+		{
+			Team:        models.Team{ID: 1, Slug: "family-1", Name: "Семейная команда", Description: "", CreatedAt: time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC)},
+			Role:        models.RoleOwner,
+			MemberCount: 3,
+		},
+	}
+	tm.On("List", ctx, uint(42)).Return(items, nil)
+
+	res, _, err := h.listTeams(ctx, nil, ListTeamsInput{})
+	require.NoError(t, err)
+
+	data := parseJSON(t, res.Content[0].(*sdkmcp.TextContent).Text)
+	teams := data["teams"].([]any)
+	require.Len(t, teams, 2)
+
+	first := teams[0].(map[string]any)
+	assert.Equal(t, float64(4), first["id"])
+	assert.Equal(t, "МТС", first["name"])
+	assert.Equal(t, "owner", first["role"])
+	assert.Equal(t, float64(1), first["member_count"])
+}
+
+// --- whoami ---
+
+func TestWhoami(t *testing.T) {
+	h, us := newToolHandlersWithUser()
+	ctx := ctxWithUser(42)
+
+	us.On("GetByID", ctx, uint(42)).Return(&models.User{
+		ID:            42,
+		Email:         "slava@example.com",
+		Name:          "Slava",
+		Username:      "slava",
+		PlanID:        "pro",
+		DefaultModel:  "anthropic/claude-sonnet-4",
+		EmailVerified: true,
+	}, nil)
+
+	res, _, err := h.whoami(ctx, nil, WhoamiInput{})
+	require.NoError(t, err)
+
+	data := parseJSON(t, res.Content[0].(*sdkmcp.TextContent).Text)
+	assert.Equal(t, float64(42), data["id"])
+	assert.Equal(t, "slava@example.com", data["email"])
+	assert.Equal(t, "pro", data["plan_id"])
+	assert.Equal(t, true, data["email_verified"])
+}
+
+// --- trash ---
+
+func TestListTrash(t *testing.T) {
+	h, tr := newToolHandlersWithTrash()
+	ctx := ctxWithUser(42)
+
+	prompts := []models.Prompt{{
+		ID: 7, Title: "Deleted", Content: "bye",
+		CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+	}}
+	tr.On("ListDeletedPrompts", ctx, uint(42), []uint(nil), 0, 20).Return(prompts, int64(1), nil)
+
+	res, _, err := h.listTrash(ctx, nil, ListTrashInput{})
+	require.NoError(t, err)
+
+	data := parseJSON(t, res.Content[0].(*sdkmcp.TextContent).Text)
+	assert.Equal(t, float64(1), data["total"])
+	assert.Len(t, data["prompts"].([]any), 1)
+}
+
+func TestRestorePrompt(t *testing.T) {
+	h, tr := newToolHandlersWithTrash()
+	ctx := ctxWithUser(42)
+
+	tr.On("Restore", ctx, trashuc.TypePrompt, uint(7), uint(42)).Return(nil)
+
+	res, _, err := h.restorePrompt(ctx, nil, RestorePromptInput{ID: 7})
+	require.NoError(t, err)
+
+	data := parseJSON(t, res.Content[0].(*sdkmcp.TextContent).Text)
+	assert.Equal(t, true, data["restored"])
+	assert.Equal(t, float64(7), data["id"])
+}
+
+func TestPurgePrompt(t *testing.T) {
+	h, tr := newToolHandlersWithTrash()
+	ctx := ctxWithUser(42)
+
+	tr.On("PermanentDelete", ctx, trashuc.TypePrompt, uint(7), uint(42)).Return(nil)
+
+	res, _, err := h.purgePrompt(ctx, nil, PurgePromptInput{ID: 7})
+	require.NoError(t, err)
+
+	data := parseJSON(t, res.Content[0].(*sdkmcp.TextContent).Text)
+	assert.Equal(t, true, data["purged"])
+}
+
+// TestListTeamsScopedToTeamKey — ключ, привязанный к team_id, видит только одну команду.
+func TestListTeamsScopedToTeamKey(t *testing.T) {
+	h, tm := newToolHandlersWithTeam()
+	scopedTeamID := uint(1)
+	ctx := withKeyPolicy(ctxWithUser(42), &apikeyuc.KeyPolicy{TeamID: &scopedTeamID})
+
+	items := []teamuc.TeamListItem{
+		{Team: models.Team{ID: 4, Name: "МТС"}, Role: models.RoleOwner, MemberCount: 1},
+		{Team: models.Team{ID: 1, Name: "Семейная команда"}, Role: models.RoleOwner, MemberCount: 3},
+	}
+	tm.On("List", ctx, uint(42)).Return(items, nil)
+
+	res, _, err := h.listTeams(ctx, nil, ListTeamsInput{})
+	require.NoError(t, err)
+
+	data := parseJSON(t, res.Content[0].(*sdkmcp.TextContent).Text)
+	teams := data["teams"].([]any)
+	require.Len(t, teams, 1)
+	assert.Equal(t, "Семейная команда", teams[0].(map[string]any)["name"])
 }
 
 // --- get prompt versions ---

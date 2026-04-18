@@ -11,6 +11,8 @@ import (
 	promptuc "promptvault/internal/usecases/prompt"
 	searchuc "promptvault/internal/usecases/search"
 	shareuc "promptvault/internal/usecases/share"
+	teamuc "promptvault/internal/usecases/team"
+	trashuc "promptvault/internal/usecases/trash"
 )
 
 // --- context helper ---
@@ -185,4 +187,45 @@ func (m *mockShareSvc) CreateOrGet(ctx context.Context, promptID, userID uint) (
 
 func (m *mockShareSvc) Deactivate(ctx context.Context, promptID, userID uint) error {
 	return m.Called(ctx, promptID, userID).Error(0)
+}
+
+// --- team mock ---
+
+type mockTeamSvc struct{ mock.Mock }
+
+func (m *mockTeamSvc) List(ctx context.Context, userID uint) ([]teamuc.TeamListItem, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]teamuc.TeamListItem), args.Error(1)
+}
+
+// --- trash mock ---
+
+type mockTrashSvc struct{ mock.Mock }
+
+func (m *mockTrashSvc) ListDeletedPrompts(ctx context.Context, userID uint, teamIDs []uint, page, pageSize int) ([]models.Prompt, int64, error) {
+	args := m.Called(ctx, userID, teamIDs, page, pageSize)
+	return args.Get(0).([]models.Prompt), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *mockTrashSvc) Restore(ctx context.Context, itemType trashuc.ItemType, id, userID uint) error {
+	return m.Called(ctx, itemType, id, userID).Error(0)
+}
+
+func (m *mockTrashSvc) PermanentDelete(ctx context.Context, itemType trashuc.ItemType, id, userID uint) error {
+	return m.Called(ctx, itemType, id, userID).Error(0)
+}
+
+// --- user mock ---
+
+type mockUserSvc struct{ mock.Mock }
+
+func (m *mockUserSvc) GetByID(ctx context.Context, id uint) (*models.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
 }

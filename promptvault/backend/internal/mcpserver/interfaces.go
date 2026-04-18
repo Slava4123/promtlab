@@ -8,6 +8,8 @@ import (
 	promptuc "promptvault/internal/usecases/prompt"
 	searchuc "promptvault/internal/usecases/search"
 	shareuc "promptvault/internal/usecases/share"
+	teamuc "promptvault/internal/usecases/team"
+	trashuc "promptvault/internal/usecases/trash"
 )
 
 type PromptService interface {
@@ -47,4 +49,18 @@ type SearchService interface {
 type ShareService interface {
 	CreateOrGet(ctx context.Context, promptID, userID uint) (*shareuc.ShareLinkInfo, bool, error)
 	Deactivate(ctx context.Context, promptID, userID uint) error
+}
+
+type TeamService interface {
+	List(ctx context.Context, userID uint) ([]teamuc.TeamListItem, error)
+}
+
+type TrashService interface {
+	ListDeletedPrompts(ctx context.Context, userID uint, teamIDs []uint, page, pageSize int) ([]models.Prompt, int64, error)
+	Restore(ctx context.Context, itemType trashuc.ItemType, id, userID uint) error
+	PermanentDelete(ctx context.Context, itemType trashuc.ItemType, id, userID uint) error
+}
+
+type UserService interface {
+	GetByID(ctx context.Context, id uint) (*models.User, error)
 }

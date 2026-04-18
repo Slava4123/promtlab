@@ -247,6 +247,9 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	trashRepo := pgrepo.NewTrashRepository(db)
 	trashSvc := trashuc.NewService(trashRepo, teamRepo)
 
+	// User service — общий для HTTP-хендлера и MCP (whoami).
+	userSvc := useruc.NewService(userRepo)
+
 	// API Keys
 	apiKeyRepo := pgrepo.NewAPIKeyRepository(db)
 	apiKeySvc := apikeyuc.NewService(apiKeyRepo, cfg.MCP.MaxKeysPerUser)
@@ -266,6 +269,9 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			tagSvc,
 			searchSvc,
 			shareSvc,
+			teamSvc,
+			trashSvc,
+			userSvc,
 			60,
 			quotaSvc,
 		)
@@ -353,7 +359,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		aiHandler:         aihttp.NewHandler(aiSvc, quotaSvc),
 		searchHandler:     searchhttp.NewHandler(searchSvc),
 		teamHandler:       teamhttp.NewHandler(teamSvc),
-		userHandler:       userhttp.NewHandler(useruc.NewService(userRepo)),
+		userHandler:       userhttp.NewHandler(userSvc),
 		starterHandler:    starterhttp.NewHandler(starterSvc),
 		trashHandler:      trashhttp.NewHandler(trashSvc),
 		apiKeyHandler:     apikeyhttp.NewHandler(apiKeySvc, teamSvc, cfg.MCP.MaxKeysPerUser),
