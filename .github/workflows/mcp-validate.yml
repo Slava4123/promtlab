@@ -21,7 +21,12 @@ jobs:
 
       - name: Install mcp-publisher
         run: |
-          curl -fsSL https://registry.modelcontextprotocol.io/install | sh
+          LATEST=$(curl -fsSL https://api.github.com/repos/modelcontextprotocol/registry/releases/latest | jq -r .tag_name)
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${LATEST}/mcp-publisher_linux_amd64.tar.gz"
+          tar -xzf mcp-publisher.tar.gz
+          sudo mv mcp-publisher /usr/local/bin/mcp-publisher
+          chmod +x /usr/local/bin/mcp-publisher
           mcp-publisher --version
 
       - name: Schema validate server.json
