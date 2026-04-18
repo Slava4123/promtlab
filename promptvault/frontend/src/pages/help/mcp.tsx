@@ -177,19 +177,13 @@ const CATALOGS: Catalog[] = [
   },
   {
     name: "MCP Registry",
-    description: "Централизованный реестр публичных MCP-серверов",
-    url: null,
-    status: "soon",
+    description: "Официальный реестр публичных MCP-серверов — ПромтЛаб уже опубликован",
+    url: "https://registry.modelcontextprotocol.io/v0/servers?search=promtlab",
+    status: "ready",
   },
   {
     name: "Awesome MCP Servers",
     description: "GitHub-список курируемых MCP-серверов комьюнити",
-    url: null,
-    status: "soon",
-  },
-  {
-    name: "Cline Marketplace",
-    description: "Каталог расширений и MCP-серверов для VS Code Cline",
     url: null,
     status: "soon",
   },
