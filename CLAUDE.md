@@ -26,8 +26,26 @@ docker compose -f docker-compose.dev.yml up                # full dev stack
 
 ```
 promptvault/
-├── backend/       # Go API (Chi + GORM + PostgreSQL), Clean Architecture
-├── frontend/      # React 19 SPA (Vite + shadcn/ui + TanStack Query + Zustand)
-├── docs/          # PLAN.md, FEATURES.md, DEPLOY.md (+ archive/)
-└── CLAUDE.md      # ← полная документация проекта
+├── backend/              # Go API (Chi + GORM + PostgreSQL), Clean Architecture
+├── frontend/             # React 19 SPA (Vite + shadcn/ui + TanStack Query + Zustand)
+├── docs/                 # PLAN.md, FEATURES.md, DEPLOY.md, MCP.md, … (+ archive/)
+├── server.json           # MCP server manifest для Official MCP Registry
+├── llms-install.md       # install guide для MCP install agents (Cline и др.)
+└── CLAUDE.md             # ← полная документация проекта
 ```
+
+## MCP server
+
+Встроенный в backend MCP-сервер v1.2.0 опубликован в [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=promtlab) как `ru.promtlabs/promptvault`.
+
+**Релиз новой версии:**
+```bash
+# 1. bump в promptvault/server.json (и опционально в internal/mcpserver/server.go)
+# 2. commit + push в main
+# 3. теги:
+git tag v1.3.0 && git push origin v1.3.0
+# → workflow .github/workflows/mcp-publish.yml публикует в Registry (DNS-auth)
+# → создаётся GitHub Release
+```
+
+Подробнее в [promptvault/docs/MCP-PUBLISHING.md](promptvault/docs/MCP-PUBLISHING.md).

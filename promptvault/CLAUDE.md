@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Профилирование**: net/http/pprof (только в dev)
 - **Валидация**: go-playground/validator/v10
 - **Error tracking**: sentry-go v0.44+ с GlitchTip self-hosted (Sentry-compatible API), через feature flag `SENTRY_ENABLED`
-- **MCP**: `modelcontextprotocol/go-sdk` v1.5 — встроенный MCP-сервер (`internal/mcpserver/`) для Claude
+- **MCP**: `modelcontextprotocol/go-sdk` v1.5 — встроенный MCP-сервер (`internal/mcpserver/`) **v1.2.0**, 30 tools (CRUD промптов/коллекций/тегов, поиск, версии, корзина, команды, шаринг, `whoami`/`use_prompt`). Опубликован в [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=promtlab) как `ru.promtlabs/promptvault`, автопубликация по git-тегу `v*` через `.github/workflows/mcp-publish.yml` (DNS-верификация, Ed25519 private key в secret `MCP_DNS_PRIVATE_KEY`). Scoped API-keys с `allowed_tools` whitelist (синхронизирован между `apikey/constants.go` и `frontend/src/lib/mcp-tools.ts`). Квотирование: 13 из 30 tools едят дневную MCP-квоту (все write/destructive кроме idempotent UX-toggle `prompt_favorite`/`prompt_pin`/`prompt_increment_usage`).
 - **Email**: SMTP-клиент (`internal/infrastructure/email/`) для писем верификации/сброса пароля
 - **Миграции**: `golang-migrate/migrate` v4 (embedded SQL, папка `migrations/`)
 
@@ -169,7 +169,15 @@ backend/internal/
 │       ├── audit_context.go                #     AdminAuditContext — кладёт AdminRequestInfo в ctx
 │       └── constants.go                    #     FreshTOTPTTL = 12h
 │
-└── mcpserver/                              # встроенный MCP-сервер для Claude (go-sdk v1.5)
+└── mcpserver/                              # встроенный MCP v1.2.0 (go-sdk v1.5)
+    ├── server.go                             #   NewMCPServer — регистрация tools/resources/prompts, DNS/github auth
+    ├── tools.go                              #   30 tool handlers; parseMCPQuota/incrementMCPUsage у write-операций
+    ├── interfaces.go                         #   {Prompt,Collection,Tag,Search,Share,Team,Trash,User}Service — mock-able
+    ├── scope.go                              #   enforceScope + enforceTeamID для scoped API-keys (allowed_tools)
+    ├── errors.go                             #   mapDomainError — доменные → string для JSON-RPC
+    ├── cursor.go                             #   keyset cursor-пагинация для list_prompts
+    ├── cache.go                              #   30s in-memory TTL для list_collections/list_tags
+    └── notifier.go                           #   resources/updated подписки (SDK трекает, notifier шлёт)
 ```
 
 ## Правила разработки
@@ -216,6 +224,8 @@ backend/internal/
 - Смена пароля: через старый пароль + email-уведомление
 - Забыли пароль: публичный flow через email-код (не раскрывает существование аккаунта)
 - Единственная AI-модель: anthropic/claude-sonnet-4 (default_model в User)
+- MCP autopublish: bump `promptvault/server.json` → commit → `git tag v1.3.0 && git push --tags` → workflow сам логинится в Registry через DNS (secret `MCP_DNS_PRIVATE_KEY`), публикует и создаёт GitHub Release. Локально `mcp-publisher` ставить не нужно. Не-bump'нутые тэги падают на шаге Verify server.json version matches tag.
+- SPA chunk-load-error после деплоя: `src/components/error-boundary.tsx` детектит "Failed to fetch dynamically imported module" и один раз `location.reload()` (флаг в sessionStorage, очищается при mount в `main.tsx`).
 
 ## Документация (`docs/`)
 - `PLAN.md` — 12-фазный план разработки
@@ -224,7 +234,9 @@ backend/internal/
 - `MONETIZATION.md` — тарифы Free/Pro/Max, маржа, квоты
 - `ADMIN.md` — bootstrap админа, TOTP 2FA, audit log, admin actions
 - `SENTRY_NEXT_STEPS.md` — GlitchTip self-hosted setup, source maps
-- `MCP.md`, `MCP-PUBLISHING.md` — MCP-интеграция и публикация
+- `MCP.md` — полный справочник сервера (30 tools с квотными аннотациями, resources, use_prompt, cursor-пагинация)
+- `MCP-PUBLISHING.md` — автопубликация CI, DNS setup, roadmap по всем каталогам (Registry/Anthropic Connectors/Smithery/Glama/PulseMCP/Cline)
+- `cline-submission-draft.md` — готовые значения для формы Cline Marketplace (не подано; репо приватный)
 - `SUBSCRIPTION_PLAN.md` — модель подписок и quota enforcement
 - `archive/` — выполненные/исторические документы: `TODO.md`, `LAUNCH_PLAN.md`, `RELEASE_READINESS.md`, `ANTHROPIC_CONNECTORS_TODO.md`
 
