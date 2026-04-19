@@ -89,7 +89,7 @@ func NewMCPServer(
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "promptvault",
-		Version: "v1.3.2",
+		Version: "v1.3.3",
 	}, &mcp.ServerOptions{
 		Instructions:      serverInstructions,
 		Logger:            logger,
