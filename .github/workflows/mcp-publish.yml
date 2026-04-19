@@ -242,7 +242,7 @@ jobs:
             echo "Тело PR (скопировать при создании):"
             echo ""
             echo '```markdown'
-            cat ../self/.github/awesome-mcp-pr-body.md
+            cat self/.github/awesome-mcp-pr-body.md
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
