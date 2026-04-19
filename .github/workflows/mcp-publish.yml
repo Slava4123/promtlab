@@ -92,3 +92,169 @@ jobs:
           body: |
             Автоматически опубликовано в Official MCP Registry:
             https://registry.modelcontextprotocol.io/v0/servers?search=promtlab
+
+  # ---------------------------------------------------------------------------
+  # Публикация в Smithery (smithery.ai) — коммьюнити-хаб с one-click install.
+  # Триггер: только стабильные теги vX.Y.Z (без -rc/-alpha/-beta), чтобы не
+  # перетирать listing pre-релизами.
+  # Auth: service-token из secret SMITHERY_TOKEN (mint локально: `smithery auth token`).
+  # Идемпотентность: при повторной публикации той же версии CLI возвращает ошибку;
+  # оборачиваем в `|| true` + последующий grep логов.
+  # continue-on-error: пока секрет не настроен и flow не проверен на практике,
+  # провал smithery-job не должен блокировать релиз в Registry.
+  # ---------------------------------------------------------------------------
+  publish-smithery:
+    needs: publish
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Smithery CLI
+        run: npm install -g @smithery/cli
+
+      - name: Configure auth
+        env:
+          SMITHERY_TOKEN: ${{ secrets.SMITHERY_TOKEN }}
+        run: |
+          if [ -z "$SMITHERY_TOKEN" ]; then
+            echo "::warning::secret SMITHERY_TOKEN не установлен — пропускаем"
+            exit 0
+          fi
+          # Формат обнаружен эмпирически из local install на Windows:
+          # %APPDATA%/smithery/settings.json содержит {"apiKey": "smry_..."}.
+          # На Linux Ubuntu CLI использует XDG_CONFIG_HOME ($HOME/.config).
+          # Пишем минимальный settings.json в обе локации для совместимости.
+          for dir in "$HOME/.config/smithery" "$HOME/.smithery"; do
+            mkdir -p "$dir"
+            printf '{"apiKey":"%s","analyticsConsent":false}\n' "$SMITHERY_TOKEN" > "$dir/settings.json"
+            chmod 600 "$dir/settings.json"
+          done
+
+      - name: Publish to Smithery
+        env:
+          SMITHERY_TOKEN: ${{ secrets.SMITHERY_TOKEN }}
+          SMITHERY_API_KEY: ${{ secrets.SMITHERY_TOKEN }}
+        run: |
+          if [ -z "$SMITHERY_TOKEN" ]; then
+            echo "::warning::SMITHERY_TOKEN отсутствует — публикация пропущена"
+            exit 0
+          fi
+          OUTPUT=$(smithery mcp publish "https://promtlabs.ru/mcp" \
+            -n Slava4123/promptvault 2>&1) || PUBLISH_EXIT=$?
+          echo "$OUTPUT"
+          if [ "${PUBLISH_EXIT:-0}" != "0" ]; then
+            # Идемпотентность: если ошибка про существующую версию — ок.
+            if echo "$OUTPUT" | grep -qiE "already (exists|published)|duplicate|same version"; then
+              echo "::notice::version уже опубликована, пропускаем"
+              exit 0
+            fi
+            exit "$PUBLISH_EXIT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Авто-PR в punkpeye/awesome-mcp-servers (GitHub-список, 40k+ ★).
+  # Идемпотентно: peter-evans/create-pull-request обновляет существующий PR
+  # при повторном push на ту же ветку. Скрипт add_awesome_mcp.py выходит
+  # с кодом 78, если строка уже есть — тогда PR-шаг просто skip.
+  # Нужен секрет AWESOME_MCP_PAT: fine-grained PAT с contents:write +
+  # pull-requests:write на Slava4123/awesome-mcp-servers (форк).
+  # ---------------------------------------------------------------------------
+  publish-awesome-mcp:
+    needs: publish
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
+    continue-on-error: true
+    steps:
+      - name: Checkout our repo (for the script)
+        uses: actions/checkout@v4
+        with:
+          path: self
+
+      - name: Checkout upstream awesome-mcp-servers
+        uses: actions/checkout@v4
+        with:
+          repository: punkpeye/awesome-mcp-servers
+          token: ${{ secrets.AWESOME_MCP_PAT }}
+          path: awesome
+          fetch-depth: 1
+
+      - name: Insert PromptVault entry
+        id: insert
+        run: |
+          set +e
+          python3 self/.github/scripts/add_awesome_mcp.py awesome
+          RC=$?
+          set -e
+          if [ "$RC" = "78" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::entry уже есть — PR не нужен"
+            exit 0
+          fi
+          if [ "$RC" != "0" ]; then
+            exit "$RC"
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create/update PR
+        if: steps.insert.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          path: awesome
+          token: ${{ secrets.AWESOME_MCP_PAT }}
+          push-to-fork: Slava4123/awesome-mcp-servers
+          branch: add-promptvault
+          commit-message: "Add PromptVault (ПромтЛаб) — self-hosted AI prompt library"
+          title: "Add PromptVault (ПромтЛаб) — self-hosted AI prompt library"
+          body-path: self/.github/awesome-mcp-pr-body.md
+          delete-branch: true
+
+  # ---------------------------------------------------------------------------
+  # Passive verify: через ~30 мин после публикации проверяем, что сервер
+  # появился в сторонних каталогах-агрегаторах.
+  # Glama — HTML-grep (публичный API не документирован).
+  # PulseMCP — JSON API /v0.1/servers?search=… (требует X-API-Key).
+  # Оба проверены мягко (continue-on-error), задача — сигнал в логах.
+  # ---------------------------------------------------------------------------
+  verify-catalogs:
+    needs: publish
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
+    continue-on-error: true
+    steps:
+      - name: Wait for downstream indexers
+        run: sleep 1800  # 30 мин
+
+      - name: Check PulseMCP
+        env:
+          PULSEMCP_API_KEY: ${{ secrets.PULSEMCP_API_KEY }}
+          PULSEMCP_TENANT_ID: ${{ secrets.PULSEMCP_TENANT_ID }}
+        run: |
+          if [ -z "$PULSEMCP_API_KEY" ]; then
+            echo "::warning::PULSEMCP_API_KEY не установлен — пробуем без auth"
+          fi
+          RESP=$(curl -fsS \
+            ${PULSEMCP_API_KEY:+-H "X-API-Key: $PULSEMCP_API_KEY"} \
+            ${PULSEMCP_TENANT_ID:+-H "X-Tenant-ID: $PULSEMCP_TENANT_ID"} \
+            "https://api.pulsemcp.com/v0.1/servers?search=promtlab&limit=10" || echo '{}')
+          echo "$RESP" | jq . 2>/dev/null || echo "$RESP"
+          if echo "$RESP" | jq -e '.servers | length > 0' > /dev/null 2>&1; then
+            echo "::notice::PulseMCP: найдено"
+          else
+            echo "::warning::PulseMCP: не найдено (autosync может занимать до нескольких дней)"
+          fi
+
+      - name: Check Glama
+        run: |
+          # Glama без публичного JSON API — парсим HTML search-страницу.
+          HTML=$(curl -fsS -L "https://glama.ai/mcp/servers?query=promtlab" || true)
+          if echo "$HTML" | grep -q "promtlabs/promptvault"; then
+            echo "::notice::Glama: найдено"
+          else
+            echo "::warning::Glama: не найдено (autosync может занимать до недели)"
+          fi
