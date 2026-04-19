@@ -33,7 +33,8 @@ func TestNew_Unique(t *testing.T) {
 }
 
 func TestHash_Deterministic(t *testing.T) {
-	if Hash("x") != Hash("x") {
+	a, b := Hash("x"), Hash("x")
+	if a != b {
 		t.Fatal("Hash must be deterministic")
 	}
 	if Hash("x") == Hash("y") {

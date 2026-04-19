@@ -463,7 +463,7 @@ func validateRedirectURI(raw string) error {
 		return errors.New("redirect_uri must not contain fragment")
 	}
 	// Allow https:// всегда; http:// только для localhost (OAuth 2.1 §2.3.3).
-	if u.Scheme != "https" && !(u.Scheme == "http" && isLoopback(u.Hostname())) {
+	if u.Scheme != "https" && (u.Scheme != "http" || !isLoopback(u.Hostname())) {
 		return errors.New("redirect_uri must use https:// (http:// only for localhost)")
 	}
 	return nil
