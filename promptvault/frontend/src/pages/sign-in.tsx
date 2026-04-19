@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate, Link } from "react-router-dom"
+import { useNavigate, useSearchParams, Link } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -35,8 +35,18 @@ interface TOTPStep {
   email: string
 }
 
+// safeReturnURL защищает от open-redirect: принимает только same-origin пути,
+// начинающиеся с "/" (но НЕ "//" — protocol-relative атака).
+function safeReturnURL(raw: string | null): string | null {
+  if (!raw) return null
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null
+  return raw
+}
+
 export default function SignIn() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const returnURL = safeReturnURL(searchParams.get("return_url"))
   const login = useAuthStore((s) => s.login)
   const verifyTOTP = useAuthStore((s) => s.verifyTOTP)
   const checkout = useCheckout()
@@ -71,6 +81,12 @@ export default function SignIn() {
       switch (result.kind) {
         case "ok":
           if (resumeAfterLogin()) return
+          if (returnURL) {
+            // OAuth authorize и другие сценарии с return_url: редиректим
+            // на abs-URL, чтобы попасть на backend endpoint (не SPA route).
+            window.location.href = returnURL
+            return
+          }
           navigate("/dashboard")
           return
         case "totp_required":
@@ -101,6 +117,10 @@ export default function SignIn() {
         // Опционально можно показать toast; для MVP — тихий redirect.
       }
       if (resumeAfterLogin()) return
+      if (returnURL) {
+        window.location.href = returnURL
+        return
+      }
       navigate("/admin/users")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Неверный код")

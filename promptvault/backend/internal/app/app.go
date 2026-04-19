@@ -390,7 +390,21 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		subscriptionHandler:  subscriptionhttp.NewHandler(subscriptionSvc, quotaSvc),
 		webhookHandler:       webhookhttp.NewHandler(subscriptionSvc),
 		seoHandler:           seohttp.NewHandler(promptSvc, cfg.Server.FrontendURL),
-		oauthServerHandler:   oauthsrvhttp.NewHandler(oauthSrvSvc),
+		oauthServerHandler: oauthsrvhttp.NewHandler(
+			oauthSrvSvc,
+			func(ctx context.Context, refreshToken string) (uint, error) {
+				// Переиспользуем auth.Service.Refresh: валидируем refresh cookie
+				// и возвращаем userID. Side-effect (rotation пары токенов)
+				// для OAuth-authorize flow не важен — Claude получит свой
+				// OAuth access token, а не refresh пользовательской сессии.
+				user, _, err := authSvc.Refresh(ctx, refreshToken)
+				if err != nil {
+					return 0, err
+				}
+				return user.ID, nil
+			},
+			cfg.Server.FrontendURL,
+		),
 		metadataHandler: metadatahttp.NewHandler(metadatahttp.Config{
 			Issuer:         strings.TrimRight(cfg.Server.FrontendURL, "/"),
 			ResourceServer: canonicalResource,
@@ -476,10 +490,11 @@ func (a *App) MountRoutes(r chi.Router) {
 		r.Post("/register", a.oauthServerHandler.Register)
 		r.Post("/token", a.oauthServerHandler.Token)
 		r.Post("/revoke", a.oauthServerHandler.Revoke)
-		r.Group(func(r chi.Router) {
-			r.Use(authMiddleware)
-			r.Get("/authorize", a.oauthServerHandler.Authorize)
-		})
+		// /oauth/authorize НЕ под authMiddleware: браузерный OAuth-flow
+		// приносит сессию через refresh_token HttpOnly cookie, а не через
+		// Authorization: Bearer. Handler читает cookie сам и редиректит
+		// на /sign-in?return_url=... если сессии нет.
+		r.Get("/authorize", a.oauthServerHandler.Authorize)
 	})
 	slog.Info("oauth.server.mounted", "endpoints", []string{
 		"/oauth/register", "/oauth/token", "/oauth/authorize", "/oauth/revoke",

@@ -9,6 +9,7 @@
 package oauth_server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -19,12 +20,23 @@ import (
 	uc "promptvault/internal/usecases/oauth_server"
 )
 
+// AuthLookup — функция обмена refresh_token cookie на userID. Даёт handler'у
+// возможность поднять сессию браузера без Authorization header.
+// Реализация ожидается в app.go, где auth.Service уже построен.
+type AuthLookup func(ctx context.Context, refreshToken string) (uint, error)
+
 type Handler struct {
-	svc *uc.Service
+	svc         *uc.Service
+	lookupUser  AuthLookup
+	frontendURL string
 }
 
-func NewHandler(svc *uc.Service) *Handler {
-	return &Handler{svc: svc}
+// NewHandler принимает:
+//   - svc: OAuth authorization server сервис
+//   - lookupUser: берёт refresh_token cookie (raw), возвращает userID или error
+//   - frontendURL: базовый URL SPA (для redirect на /sign-in при отсутствии сессии)
+func NewHandler(svc *uc.Service, lookupUser AuthLookup, frontendURL string) *Handler {
+	return &Handler{svc: svc, lookupUser: lookupUser, frontendURL: strings.TrimRight(frontendURL, "/")}
 }
 
 // -----------------------------------------------------------------------------
@@ -64,11 +76,33 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 // чтобы не сливать код злоумышленнику). При остальных ошибках — redirect
 // c ?error=… согласно RFC 6749 §4.1.2.1.
 func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
+	// Приоритет 1: если middleware уже пробросил userID через Authorization header — используем.
 	userID := auth.GetUserID(r.Context())
+
+	// Приоритет 2: для браузерного OAuth-flow (Claude.ai открывает /oauth/authorize
+	// в новой вкладке) Authorization header отсутствует. Читаем refresh_token
+	// HttpOnly cookie, которая устанавливается при логине в SPA.
+	if userID == 0 && h.lookupUser != nil {
+		if c, err := r.Cookie("refresh_token"); err == nil && c.Value != "" {
+			if uid, err := h.lookupUser(r.Context(), c.Value); err == nil {
+				userID = uid
+			} else {
+				slog.Debug("oauth.authorize.cookie_invalid", "error", err)
+			}
+		}
+	}
+
+	// Не залогинен → редирект на frontend /sign-in с сохранением оригинального
+	// authorize URL в параметре return_url. Frontend после успешного логина
+	// вернёт пользователя сюда, и cookie refresh_token уже будет установлена.
 	if userID == 0 {
-		// Не залогинен → редирект на login с return-URL. Здесь просто 401,
-		// потому что full login flow завязан на frontend redirect.
-		writeOAuthError(w, http.StatusUnauthorized, errCodeInvalidRequest, "user not authenticated")
+		if h.frontendURL == "" {
+			writeOAuthError(w, http.StatusUnauthorized, errCodeInvalidRequest, "user not authenticated")
+			return
+		}
+		returnURL := r.URL.RequestURI()
+		loginURL := h.frontendURL + "/sign-in?return_url=" + url.QueryEscape(returnURL)
+		http.Redirect(w, r, loginURL, http.StatusFound)
 		return
 	}
 
