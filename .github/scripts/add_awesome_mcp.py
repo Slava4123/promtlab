@@ -18,7 +18,14 @@ ENTRY_LINE = (
     "- ПромтЛаб — self-hosted AI prompt library with collections, tags, versioning "
     "and team collaboration. Remote MCP via Streamable HTTP."
 )
-CATEGORY_HEADER_RE = re.compile(r"^###\s*🧠\s*[-–—]?\s*Knowledge\s*&\s*Memory\s*$", re.IGNORECASE)
+# Заголовок в punkpeye/awesome-mcp-servers имеет вид:
+#   "### 🧠 <a name="knowledge--memory"></a>Knowledge & Memory"
+# Inline HTML anchor tag между эмодзи и названием игнорируем. Дефис/длинное
+# тире между эмодзи и словами тоже допустим (другие категории их используют).
+CATEGORY_HEADER_RE = re.compile(
+    r'^###\s*🧠\s*(?:<a[^>]*></a>)?\s*[-–—]?\s*Knowledge\s*&\s*Memory\s*$',
+    re.IGNORECASE,
+)
 
 
 def extract_name(line: str) -> str:
