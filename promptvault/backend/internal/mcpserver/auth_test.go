@@ -50,7 +50,7 @@ func setupAuth(t *testing.T) (*mockRepo, func(http.Handler) http.Handler) {
 	t.Helper()
 	r := new(mockRepo)
 	svc := apikeyuc.NewService(r, 5)
-	return r, APIKeyAuth(svc)
+	return r, APIKeyAuth(svc, nil, "")
 }
 
 func capturedUserID(ctx context.Context) uint {
