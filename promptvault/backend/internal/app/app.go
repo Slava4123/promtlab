@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -37,6 +38,8 @@ import (
 	streakhttp "promptvault/internal/delivery/http/streak"
 	sharehttp "promptvault/internal/delivery/http/share"
 	starterhttp "promptvault/internal/delivery/http/starter"
+	metadatahttp "promptvault/internal/delivery/http/metadata"
+	oauthsrvhttp "promptvault/internal/delivery/http/oauth_server"
 	taghttp "promptvault/internal/delivery/http/tag"
 	teamhttp "promptvault/internal/delivery/http/team"
 	trashhttp "promptvault/internal/delivery/http/trash"
@@ -62,6 +65,7 @@ import (
 	streakuc "promptvault/internal/usecases/streak"
 	shareuc "promptvault/internal/usecases/share"
 	engagementuc "promptvault/internal/usecases/engagement"
+	oauthsrvuc "promptvault/internal/usecases/oauth_server"
 	subscriptionuc "promptvault/internal/usecases/subscription"
 	starteruc "promptvault/internal/usecases/starter"
 	taguc "promptvault/internal/usecases/tag"
@@ -162,6 +166,8 @@ type App struct {
 	subscriptionHandler   *subscriptionhttp.Handler
 	webhookHandler        *webhookhttp.Handler
 	seoHandler            *seohttp.Handler
+	oauthServerHandler    *oauthsrvhttp.Handler
+	metadataHandler       *metadatahttp.Handler
 	// Следующие поля используются в MountRoutes для admin-middleware chain:
 	userLookup adminmw.UserLookup
 	auditSvc   *auditsvc.Service
@@ -258,10 +264,19 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	shareLinkRepo := pgrepo.NewShareLinkRepository(db)
 	shareSvc := shareuc.NewService(shareLinkRepo, promptRepo, teamRepo, cfg.Server.FrontendURL, quotaSvc)
 
+	// OAuth 2.1 Authorization Server для внешних MCP-клиентов (Claude.ai и т.д.).
+	// Canonical resource = public URL MCP-сервера + "/mcp" (RFC 8707 audience).
+	oauthClientRepo := pgrepo.NewOAuthClientRepository(db)
+	oauthCodeRepo := pgrepo.NewOAuthAuthorizationCodeRepository(db)
+	oauthTokenRepo := pgrepo.NewOAuthTokenRepository(db)
+	canonicalResource := strings.TrimRight(cfg.Server.FrontendURL, "/") + "/mcp"
+	oauthSrvSvc := oauthsrvuc.NewService(oauthClientRepo, oauthCodeRepo, oauthTokenRepo, canonicalResource)
+
 	// MCP Server — promptSvc и collectionSvc оборачиваются в адаптеры, которые
 	// скрывают возвращаемые badges-slices (MCP-клиенты не показывают toast-ов).
 	var mcpSrv *mcpserver.MCPServer
 	if cfg.MCP.Enabled {
+		resourceMetadataURL := strings.TrimRight(cfg.Server.FrontendURL, "/") + "/.well-known/oauth-protected-resource"
 		mcpSrv = mcpserver.NewMCPServer(
 			apiKeySvc,
 			&mcpPromptAdapter{Service: promptSvc},
@@ -272,8 +287,12 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			teamSvc,
 			trashSvc,
 			userSvc,
-			60,
 			quotaSvc,
+			mcpserver.Options{
+				UserRPM:             60,
+				OAuthValidator:      oauthSrvSvc,
+				ResourceMetadataURL: resourceMetadataURL,
+			},
 		)
 	}
 
@@ -371,6 +390,11 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		subscriptionHandler:  subscriptionhttp.NewHandler(subscriptionSvc, quotaSvc),
 		webhookHandler:       webhookhttp.NewHandler(subscriptionSvc),
 		seoHandler:           seohttp.NewHandler(promptSvc, cfg.Server.FrontendURL),
+		oauthServerHandler:   oauthsrvhttp.NewHandler(oauthSrvSvc),
+		metadataHandler: metadatahttp.NewHandler(metadatahttp.Config{
+			Issuer:         strings.TrimRight(cfg.Server.FrontendURL, "/"),
+			ResourceServer: canonicalResource,
+		}),
 		mcpServer:            mcpSrv,
 		expirationLoop:       expirationLoop,
 		renewalLoop:          renewalLoop,
@@ -438,6 +462,29 @@ func (a *App) MountRoutes(r chi.Router) {
 		r.Method(http.MethodDelete, "/mcp", mcpHandler)
 		slog.Info("mcp.server.mounted", "path", "/mcp")
 	}
+
+	// OAuth 2.1 metadata endpoints (RFC 9728 + RFC 8414). Публичные, без auth.
+	// Rate-limit 60/IP — типичный discovery-rate для клиентов.
+	r.With(byIP(60)).Get("/.well-known/oauth-protected-resource", a.metadataHandler.ProtectedResource)
+	r.With(byIP(60)).Get("/.well-known/oauth-authorization-server", a.metadataHandler.AuthorizationServer)
+
+	// OAuth 2.1 Authorization Server endpoints.
+	// /register, /token, /revoke — публичные (RFC 7591/6749/7009), PKCE защищает code exchange.
+	// /authorize — требует JWT-сессии залогиненного пользователя.
+	r.Route("/oauth", func(r chi.Router) {
+		r.Use(byIP(30)) // защита от brute-force /token
+		r.Post("/register", a.oauthServerHandler.Register)
+		r.Post("/token", a.oauthServerHandler.Token)
+		r.Post("/revoke", a.oauthServerHandler.Revoke)
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware)
+			r.Get("/authorize", a.oauthServerHandler.Authorize)
+		})
+	})
+	slog.Info("oauth.server.mounted", "endpoints", []string{
+		"/oauth/register", "/oauth/token", "/oauth/authorize", "/oauth/revoke",
+		"/.well-known/oauth-protected-resource", "/.well-known/oauth-authorization-server",
+	})
 
 	r.Route("/api", func(r chi.Router) {
 		// public — plans (rate limited: 60 req/min per IP)

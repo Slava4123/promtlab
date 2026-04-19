@@ -3,12 +3,23 @@
 ## Статус
 
 - ✅ **Official MCP Registry** — v1.2.0 опубликована 2026-04-18, автопубликация новых версий по git-тегу настроена (§8).
-- ⏳ **Anthropic Connectors Directory** — **приоритет #1**. Аудитория десятки миллионов пользователей Claude.ai, remote-серверы поддерживаются. Подача: Google-форма https://forms.gle/tyiAZvch1kDADKoP9, ~15 мин. Кураторский отбор.
-- ⏳ **Smithery** — **приоритет #2**. Коммьюнити-хаб с one-click install. Подача одной командой: `smithery mcp publish https://promtlabs.ru/mcp -n Slava4123/promptvault`. ~5 мин.
-- ⏳ **Awesome MCP Servers** — **приоритет #3**. GitHub-список https://github.com/punkpeye/awesome-mcp-servers, 40k+ ★. Подача: PR с одной строкой в README, ~5 мин.
-- ⏳ **Glama.ai** — автосинк из Official Registry, должны появиться в течение ~недели без действий. После появления можно claim listing и добавить доп. метаданные.
-- ⏳ **PulseMCP** — автосинк, аналогично Glama.
-- 🔒 **Cline Marketplace** — **отложено до перевода репо в public**. Cline требует открытый GitHub-репозиторий для ревью кода; пока `Slava4123/promtlab` приватный, подача не имеет смысла. Артефакты (логотип, `llms-install.md`, `docs/cline-submission-draft.md`) оставлены в репо — если репо будет сделан публичным, подача делается одним шагом.
+- ✅ **Smithery** — автопубликация job `publish-smithery` в `mcp-publish.yml` на стабильные теги. Secret `SMITHERY_TOKEN` настроен (API key из smithery.ai/account/api-keys).
+- ⏳ **Awesome MCP Servers** — автоматика готова (job `publish-awesome-mcp` + `.github/scripts/add_awesome_mcp.py`). **Блокировано:** требует fork `punkpeye/awesome-mcp-servers` под `Slava4123` + PAT `AWESOME_MCP_PAT`. **Требует публичный основной репо** — иначе PR будет отклонён (ссылка на репо возвращает 404 для ревьюеров). Активируется после открытия репо.
+- ⏳ **Anthropic Connectors Directory** — большой импакт (десятки млн Claude.ai пользователей). **Статус: OAuth 2.1 server реализован** (`usecases/oauth_server/`, миграция `000037`). Осталось: подать Google-форму https://forms.gle/tyiAZvch1kDADKoP9 с 3 use-case'ами и тест-аккаунтом.
+- ⏳ **Glama.ai** — автосинк из Official Registry. Passive verify-job `verify-catalogs` проверяет появление через 30 мин после релиза (HTML grep, public API не документирован).
+- ⏳ **PulseMCP** — автосинк. Passive verify-job через `/v0.1/servers?search=` API. Optional secrets `PULSEMCP_API_KEY` + `PULSEMCP_TENANT_ID` — без них деградирует до HTML-check.
+- 🔒 **Cline Marketplace** — **отложено до перевода репо в public**. Cline требует открытый GitHub-репозиторий для ревью кода. Артефакты (логотип, `llms-install.md`, `docs/cline-submission-draft.md`) оставлены в репо — если репо будет сделан публичным, подача делается одним шагом.
+
+### OAuth 2.1 Authorization Server (для Anthropic Connectors)
+
+- ✅ **Models:** `internal/models/oauth.go` (OAuthClient, OAuthAuthorizationCode, OAuthToken) + shared `internal/models/policy.go`.
+- ✅ **Migration:** `000037_oauth_server.{up,down}.sql`.
+- ✅ **Repositories:** `interface/repository/oauth.go` + `infrastructure/postgres/repository/oauth_repo.go` (с атомарным `Consume` + recursive CTE `RevokeChain` для replay detection).
+- ✅ **Shared utils:** `internal/pkg/pkce/` (RFC 7636 S256) + `internal/pkg/tokens/` (opaque tokens: `pvoat_*` access, `pvort_*` refresh, `pvoac_*` codes).
+- ✅ **Usecase:** `internal/usecases/oauth_server/` — Register (RFC 7591) / Authorize / ExchangeCode / RefreshToken (с rotation + replay detection) / Revoke (RFC 7009) / ValidateAccessToken.
+- ✅ **HTTP delivery:** `delivery/http/oauth_server/` + `delivery/http/metadata/` (RFC 9728 + RFC 8414).
+- ✅ **MCP integration:** `mcpserver/auth.go` — dual-path authentication (`pvlt_*` API-keys OR `pvoat_*` OAuth access) + `WWW-Authenticate: Bearer … resource_metadata=…` header на 401.
+- ✅ **Endpoints смонтированы:** `POST /oauth/register`, `GET /oauth/authorize` (требует JWT), `POST /oauth/token`, `POST /oauth/revoke`, `GET /.well-known/oauth-protected-resource`, `GET /.well-known/oauth-authorization-server`.
 
 ---
 
@@ -64,13 +75,35 @@ git tag v1.3.0
 git push --tags
 ```
 
-Дальше всё делает workflow:
+Дальше всё делает workflow. Для **стабильных тегов** (`v1.3.0` без `-rc`/`-alpha`/`-beta`) запустятся ВСЕ jobs параллельно:
+
+**Job `publish`** (всегда):
 - Проверяет что tag_version == server.json.version.
 - Устанавливает `mcp-publisher`.
 - Логинится через DNS (secret `MCP_DNS_PRIVATE_KEY`).
 - `mcp-publisher publish`.
 - Проверяет что новая версия реально появилась в реестре.
 - Создаёт GitHub Release с автогенерируемыми release notes.
+
+**Job `publish-smithery`** (только стабильные теги, `continue-on-error: true`):
+- Устанавливает `@smithery/cli`.
+- Пишет `$HOME/.config/smithery/settings.json` с `apiKey` из секрета `SMITHERY_TOKEN`.
+- Вызывает `smithery mcp publish https://promtlabs.ru/mcp -n Slava4123/promptvault`.
+- Идемпотентен: при «already published» не падает.
+
+**Job `publish-awesome-mcp`** (только стабильные теги, `continue-on-error: true`):
+- Клонирует `punkpeye/awesome-mcp-servers` (через PAT `AWESOME_MCP_PAT`).
+- Запускает `.github/scripts/add_awesome_mcp.py` — вставляет строку в категорию `🧠 Knowledge & Memory`.
+- Если строки уже нет — exit 78 → skip (идемпотентно).
+- Открывает PR через `peter-evans/create-pull-request@v8` с `push-to-fork: Slava4123/awesome-mcp-servers`.
+
+**Job `verify-catalogs`** (только стабильные теги, `continue-on-error: true`):
+- Ждёт 30 минут (autosync в Glama/PulseMCP).
+- Проверяет PulseMCP API `/v0.1/servers?search=promtlab`.
+- Проверяет Glama HTML `glama.ai/mcp/servers?query=promtlab`.
+- Алёртит через `::warning::` если не появились.
+
+**RC-теги** (`v1.3.0-rc1`) триггерят **только `publish`** — в Registry как pre-release. Smithery/Awesome/verify пропускаются (защита от спама PR и перетирания Smithery listing).
 
 ### PR-guard `mcp-validate.yml`
 
