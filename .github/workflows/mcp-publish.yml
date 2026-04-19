@@ -201,18 +201,50 @@ jobs:
           fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Create/update PR
+      # Push измененного README в наш форк. Создание cross-repo PR из fork
+      # в upstream (punkpeye/awesome-mcp-servers) через REST API требует
+      # permissions, которые fine-grained PAT не даёт для чужих репо
+      # (ошибка "Resource not accessible by personal access token").
+      # Вместо peter-evans/create-pull-request делаем push сами и выводим
+      # URL формы создания PR — пользователь кликает раз в релиз (30 сек).
+      - name: Push branch to fork
         if: steps.insert.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v8
-        with:
-          path: awesome
-          token: ${{ secrets.AWESOME_MCP_PAT }}
-          push-to-fork: Slava4123/awesome-mcp-servers
-          branch: add-promptvault
-          commit-message: "Add PromptVault (ПромтЛаб) — self-hosted AI prompt library"
-          title: "Add PromptVault (ПромтЛаб) — self-hosted AI prompt library"
-          body-path: self/.github/awesome-mcp-pr-body.md
-          delete-branch: true
+        working-directory: awesome
+        env:
+          AWESOME_MCP_PAT: ${{ secrets.AWESOME_MCP_PAT }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          git config user.email "noreply@promtlabs.ru"
+          git config user.name "promtlab-bot"
+          BRANCH="add-promptvault-${TAG}"
+          git checkout -b "$BRANCH"
+          git add README.md
+          git commit -m "Add PromptVault (ПромтЛаб) — self-hosted AI prompt library"
+          git remote set-url origin "https://x-access-token:${AWESOME_MCP_PAT}@github.com/Slava4123/awesome-mcp-servers.git"
+          git push --force origin "HEAD:${BRANCH}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+        id: push
+
+      - name: Output PR creation URL
+        if: steps.insert.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ steps.push.outputs.branch }}
+        run: |
+          URL="https://github.com/punkpeye/awesome-mcp-servers/compare/main...Slava4123:awesome-mcp-servers:${BRANCH}?expand=1"
+          echo "::notice title=Open this URL to create PR::$URL"
+          {
+            echo "## awesome-mcp-servers PR"
+            echo ""
+            echo "Ветка запушена: [\`Slava4123:awesome-mcp-servers:${BRANCH}\`](https://github.com/Slava4123/awesome-mcp-servers/tree/${BRANCH})"
+            echo ""
+            echo "**[→ Открыть форму создания PR](${URL})**"
+            echo ""
+            echo "Тело PR (скопировать при создании):"
+            echo ""
+            echo '```markdown'
+            cat ../self/.github/awesome-mcp-pr-body.md
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # Passive verify: через ~30 мин после публикации проверяем, что сервер
