@@ -1,27 +1,15 @@
 package apikey
 
 import (
-	"slices"
 	"time"
+
+	"promptvault/internal/models"
 )
 
-// KeyPolicy — scope-параметры API-ключа. Копия из БД, живёт в ctx на время запроса.
-// Zero-value (ReadOnly=false, всё остальное nil) означает полный доступ — backward-compat.
-type KeyPolicy struct {
-	ReadOnly     bool
-	TeamID       *uint
-	AllowedTools []string
-	ExpiresAt    *time.Time
-}
-
-// IsToolAllowed возвращает true, если tool разрешён текущим whitelist'ом.
-// nil/пустой AllowedTools означает "все разрешены".
-func (p *KeyPolicy) IsToolAllowed(toolName string) bool {
-	if p == nil || len(p.AllowedTools) == 0 {
-		return true
-	}
-	return slices.Contains(p.AllowedTools, toolName)
-}
+// KeyPolicy — алиас на shared models.Policy. Определение перенесено в models,
+// чтобы переиспользовать тот же scope-тип для OAuth access-токенов без
+// циклических импортов (usecases/oauth_server → models.Policy ← usecases/apikey).
+type KeyPolicy = models.Policy
 
 type APIKeyInfo struct {
 	ID           uint       `json:"id"`
