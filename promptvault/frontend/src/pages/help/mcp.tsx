@@ -172,8 +172,8 @@ const CATALOGS: Catalog[] = [
   {
     name: "Smithery",
     description: "Маркетплейс MCP-серверов с one-click установкой в Claude/Cursor",
-    url: null,
-    status: "soon",
+    url: "https://smithery.ai/server/@slava24122003/promptvault",
+    status: "ready",
   },
   {
     name: "MCP Registry",
@@ -182,14 +182,14 @@ const CATALOGS: Catalog[] = [
     status: "ready",
   },
   {
-    name: "Anthropic Connectors",
-    description: "Официальный каталог коннекторов в Claude.ai — самый широкий охват (миллионы пользователей)",
-    url: null,
-    status: "soon",
-  },
-  {
     name: "Awesome MCP Servers",
     description: "GitHub-список курируемых MCP-серверов комьюнити (40k+ звёзд)",
+    url: "https://github.com/punkpeye/awesome-mcp-servers",
+    status: "ready",
+  },
+  {
+    name: "Anthropic Connectors",
+    description: "Официальный каталог коннекторов в Claude.ai — самый широкий охват (миллионы пользователей)",
     url: null,
     status: "soon",
   },

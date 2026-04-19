@@ -107,7 +107,8 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
-    continue-on-error: true
+    # continue-on-error снят: Smithery стабилизирован на v1.3.4, failure
+    # теперь красит релиз и требует исправления.
     steps:
       - uses: actions/checkout@v4
 
