@@ -51,13 +51,48 @@ func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint
 		s.upsertSafe(ctx, userID, teamID, models.InsightDeclining, declining)
 	}
 
-	// 4. MOST EDITED, POSSIBLE DUPLICATES, ORPHAN TAGS, EMPTY COLLECTIONS —
-	//    оставлены заглушками под тикет M8 (Levenshtein через pg_trgm для
-	//    duplicates, SQL-агрегации для остальных). Скрыты за
-	//    Analytics.ExperimentalInsights feature-flag (Q2) — default false.
+	// 4-7. MOST EDITED / POSSIBLE DUPLICATES / ORPHAN TAGS / EMPTY COLLECTIONS.
+	// Скрыты за Analytics.ExperimentalInsights feature-flag (Q2) — default false.
+	// Включать после проверки pg_trgm в prod (PossibleDuplicates требует его).
 	if s.experimentalInsights {
-		// Реализация появится в M8.
 		_ = now
+
+		// 4. MOST EDITED — по количеству версий.
+		edited, err := s.analytics.MostEditedPrompts(ctx, userID, teamID, 5)
+		if err != nil {
+			slog.WarnContext(ctx, "analytics.insights.most_edited_failed",
+				"err", err, "user_id", userID, "team_id", teamID)
+		} else if len(edited) > 0 {
+			s.upsertSafe(ctx, userID, teamID, models.InsightMostEdited, edited)
+		}
+
+		// 5. POSSIBLE DUPLICATES — через pg_trgm similarity(). Если extension
+		// не установлен на managed PG — тихо fail и пропускаем.
+		dups, err := s.analytics.PossibleDuplicates(ctx, userID, teamID, 0.8, 10)
+		if err != nil {
+			slog.WarnContext(ctx, "analytics.insights.duplicates_failed",
+				"err", err, "user_id", userID, "team_id", teamID)
+		} else if len(dups) > 0 {
+			s.upsertSafe(ctx, userID, teamID, models.InsightPossibleDuplicates, dups)
+		}
+
+		// 6. ORPHAN TAGS — теги без промптов.
+		orphans, err := s.analytics.OrphanTags(ctx, userID, teamID, 10)
+		if err != nil {
+			slog.WarnContext(ctx, "analytics.insights.orphan_tags_failed",
+				"err", err, "user_id", userID, "team_id", teamID)
+		} else if len(orphans) > 0 {
+			s.upsertSafe(ctx, userID, teamID, models.InsightOrphanTags, orphans)
+		}
+
+		// 7. EMPTY COLLECTIONS — коллекции без промптов.
+		empties, err := s.analytics.EmptyCollections(ctx, userID, teamID, 10)
+		if err != nil {
+			slog.WarnContext(ctx, "analytics.insights.empty_collections_failed",
+				"err", err, "user_id", userID, "team_id", teamID)
+		} else if len(empties) > 0 {
+			s.upsertSafe(ctx, userID, teamID, models.InsightEmptyCollections, empties)
+		}
 	}
 
 	return nil
@@ -68,6 +103,7 @@ func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint
 
 // upsertSafe сериализует payload и вызывает UpsertInsight. Ошибки логируются,
 // не возвращаются — один insight не должен ломать пересчёт остальных.
+// После успешного upsert дергает notifier (по умолчанию Noop).
 func (s *Service) upsertSafe(ctx context.Context, userID uint, teamID *uint, insightType string, payload any) {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -82,6 +118,10 @@ func (s *Service) upsertSafe(ctx context.Context, userID uint, teamID *uint, ins
 	}
 	if err := s.analytics.UpsertInsight(ctx, insight); err != nil {
 		slog.WarnContext(ctx, "analytics.insights.upsert_failed", "err", err, "type", insightType)
+		return
+	}
+	if s.notifier != nil {
+		s.notifier.OnInsightsChanged(ctx, userID, teamID, insightType, payload)
 	}
 }
 

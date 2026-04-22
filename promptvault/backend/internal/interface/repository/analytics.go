@@ -13,6 +13,18 @@ type DateRange struct {
 	To   time.Time
 }
 
+// AnalyticsFilter — расширенный фильтр для drill-down по тегам/коллекциям
+// (Phase 14 продолжение, задача #9 бэклога). Методы AnalyticsRepository
+// постепенно мигрируют на приём этой структуры вместо отдельных args.
+// TagID/CollectionID — опциональные, DateRange — обязательный.
+type AnalyticsFilter struct {
+	UserID       uint
+	TeamID       *uint
+	TagID        *uint
+	CollectionID *uint
+	Range        DateRange
+}
+
 // UsagePoint — точка таймсерии (день + count). Дата — day-precision UTC.
 type UsagePoint struct {
 	Day   time.Time `json:"day"`
@@ -135,4 +147,43 @@ type AnalyticsRepository interface {
 	// растёт линейно с usage — 100 записей/день активного Max-юзера ×
 	// 10k юзеров × 5 лет = миллиард строк.
 	CleanupPromptUsageByRetention(ctx context.Context) (int64, error)
+
+	// --- SMART INSIGHTS M8 (feature-flag experimentalInsights) ---
+
+	// MostEditedPrompts — промпты с наибольшим числом версий за период.
+	// Использует COUNT(pv.id) GROUP BY p.id.
+	MostEditedPrompts(ctx context.Context, userID uint, teamID *uint, limit int) ([]PromptUsageRow, error)
+
+	// PossibleDuplicates — пары похожих промптов через pg_trgm.similarity().
+	// threshold 0.8 по умолчанию — эмпирически выбрано, tuned during QA.
+	// Требует CREATE EXTENSION pg_trgm (миграция 000048).
+	PossibleDuplicates(ctx context.Context, userID uint, teamID *uint, threshold float32, limit int) ([]DuplicatePair, error)
+
+	// OrphanTags — теги без единого промпта (тег был создан, но никогда
+	// не ассоциирован или все ассоциации удалены).
+	OrphanTags(ctx context.Context, userID uint, teamID *uint, limit int) ([]TagRow, error)
+
+	// EmptyCollections — коллекции без промптов.
+	EmptyCollections(ctx context.Context, userID uint, teamID *uint, limit int) ([]CollectionRow, error)
+}
+
+// DuplicatePair — пара потенциально дублирующих промптов с similarity-скором.
+type DuplicatePair struct {
+	PromptAID    uint    `json:"prompt_a_id"`
+	PromptATitle string  `json:"prompt_a_title"`
+	PromptBID    uint    `json:"prompt_b_id"`
+	PromptBTitle string  `json:"prompt_b_title"`
+	Similarity   float32 `json:"similarity"`
+}
+
+// TagRow — минимальное представление тега для insights.
+type TagRow struct {
+	TagID uint   `json:"tag_id"`
+	Name  string `json:"name"`
+}
+
+// CollectionRow — минимальное представление коллекции для insights.
+type CollectionRow struct {
+	CollectionID uint   `json:"collection_id"`
+	Name         string `json:"name"`
 }

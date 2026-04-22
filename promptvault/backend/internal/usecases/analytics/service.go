@@ -28,6 +28,9 @@ type Service struct {
 	// experimentalInsights включает 4 неготовых Smart Insight типа (Q2).
 	// Default false, toggle через Analytics.ExperimentalInsights.
 	experimentalInsights bool
+	// notifier — опциональный hook на изменение insights (email/push).
+	// Default NoopNotifier.
+	notifier InsightsNotifier
 }
 
 func NewService(
@@ -44,6 +47,7 @@ func NewService(
 		users:     users,
 		quotas:    quotas,
 		nowFn:     time.Now,
+		notifier:  NoopNotifier{},
 	}
 }
 
@@ -53,6 +57,16 @@ func (s *Service) SetNowFn(fn func() time.Time) { s.nowFn = fn }
 // SetExperimentalInsights включает/выключает расчёт 4 заглушечных
 // Smart Insight типов (Q2). Вызывается из app.go на основе config.
 func (s *Service) SetExperimentalInsights(v bool) { s.experimentalInsights = v }
+
+// SetNotifier заменяет NoopNotifier на реальную реализацию (например,
+// EmailInsightsNotifier из infrastructure/email). Вызывать после NewService.
+func (s *Service) SetNotifier(n InsightsNotifier) {
+	if n == nil {
+		s.notifier = NoopNotifier{}
+		return
+	}
+	s.notifier = n
+}
 
 // GetInsightsGated — проверка плана + чтение insights. Free/Pro получают
 // ErrMaxRequired. Логика плана вынесена из handler'а в service (H5).

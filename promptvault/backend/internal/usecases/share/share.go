@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 	activityuc "promptvault/internal/usecases/activity"
@@ -144,10 +145,11 @@ func (s *Service) CreateOrGet(ctx context.Context, promptID, userID uint) (*Shar
 
 	// Increment daily counter AFTER successful INSERT. Best-effort: если инкремент
 	// fail'ит, это не откатывает создание (юзер получил ссылку, но счётчик
-	// недосчитал). Error-level — revenue-leak сигнал для SRE/метрик (M2).
+	// недосчитал). Error-level + Prometheus counter — revenue-leak сигнал для SRE.
 	if s.quotas != nil {
 		if err := s.quotas.IncrementShareCreation(ctx, userID); err != nil {
 			slog.ErrorContext(ctx, "share.quota.increment_failed", "user_id", userID, "error", err)
+			metrics.ShareQuotaIncrementFailed.Inc()
 		}
 	}
 

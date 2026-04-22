@@ -10,6 +10,10 @@ type ServerConfig struct {
 	// Ставить true ТОЛЬКО если backend за доверенным reverse-proxy (nginx/cloudflare),
 	// который затирает incoming XFF. Иначе атакующий подменяет заголовок и обходит rate-limit.
 	TrustProxy bool `koanf:"trust_proxy"`
+	// MetricsEnabled — включает /metrics endpoint (Prometheus text exposition).
+	// По умолчанию false — endpoint возвращает 404. Нужен IP-allowlist на
+	// reverse-proxy уровне; endpoint не содержит auth.
+	MetricsEnabled bool `koanf:"metrics_enabled"`
 }
 
 func (c ServerConfig) IsDev() bool {

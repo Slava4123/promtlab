@@ -143,12 +143,13 @@ func TestIsWithinLimit(t *testing.T) {
 		limit int
 		want  bool
 	}{
-		{"unlimited (-1) always allows", 1_000_000, -1, true},
+		// Sentinel -1 "unlimited" удалён в Phase 14.3 после миграции 000046 — все лимиты теперь неотрицательные.
 		{"used < limit allows", 9, 10, true},
 		{"used = limit blocks (strict <)", 10, 10, false},
 		{"used > limit blocks", 11, 10, false},
 		{"zero limit blocks any use", 0, 0, false},
 		{"zero used with limit=0 blocks", 0, 0, false},
+		{"large limit still honoured", 9_999_998, 9_999_999, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -171,7 +172,7 @@ func TestCheckPromptQuota(t *testing.T) {
 		{"free within limit", 49, 50, false},
 		{"free at limit", 50, 50, true},
 		{"free over limit", 51, 50, true},
-		{"unlimited plan", 9_999_999, -1, false},
+		{"max with large finite limit", 9_998, 9_999, false},
 	}
 	user := &models.User{ID: 1, PlanID: "free"}
 	for _, tc := range cases {

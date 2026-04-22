@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
 )
 
@@ -55,17 +56,20 @@ func (l *CleanupLoop) cleanup() {
 		slog.Error("analytics.cleanup.activity.failed", "error", err)
 	} else if n > 0 {
 		slog.Info("analytics.cleanup.activity", "deleted", n)
+		metrics.AnalyticsCleanupDeleted.WithLabelValues("team_activity").Add(float64(n))
 	}
 
 	if n, err := l.analytics.CleanupShareViewsByRetention(ctx); err != nil {
 		slog.Error("analytics.cleanup.share_views.failed", "error", err)
 	} else if n > 0 {
 		slog.Info("analytics.cleanup.share_views", "deleted", n)
+		metrics.AnalyticsCleanupDeleted.WithLabelValues("share_views").Add(float64(n))
 	}
 
 	if n, err := l.analytics.CleanupPromptUsageByRetention(ctx); err != nil {
 		slog.Error("analytics.cleanup.prompt_usage.failed", "error", err)
 	} else if n > 0 {
 		slog.Info("analytics.cleanup.prompt_usage", "deleted", n)
+		metrics.AnalyticsCleanupDeleted.WithLabelValues("prompt_usage").Add(float64(n))
 	}
 }

@@ -188,6 +188,10 @@ func toActivityItemResponses(events []models.TeamActivityLog, requester models.T
 		}
 		if showEmail {
 			items[i].ActorEmail = e.ActorEmail
+		} else {
+			// GDPR вариант C: viewer видит маску (a***@domain.com) вместо пустого
+			// поля — достаточно, чтобы отличать контрибьюторов, но без PII.
+			items[i].ActorEmail = utils.MaskEmail(e.ActorEmail)
 		}
 		if len(e.Metadata) > 0 {
 			items[i].Metadata = e.Metadata

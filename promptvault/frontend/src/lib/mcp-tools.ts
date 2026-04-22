@@ -27,6 +27,8 @@ export const MCP_TOOLS: McpTool[] = [
   { name: "team_activity_feed", group: "read", label: "Лента активности команды" },
   { name: "analytics_summary", group: "read", label: "Сводка аналитики (личная)" },
   { name: "analytics_team_summary", group: "read", label: "Сводка аналитики (команда)" },
+  // Псевдо-tool — доступ к HTTP /api/analytics/* через API-key (Max-only).
+  { name: "analytics_read", group: "read", label: "HTTP analytics API (Max)" },
   // Write
   { name: "create_prompt", group: "write", label: "Создать промпт" },
   { name: "update_prompt", group: "write", label: "Обновить промпт" },

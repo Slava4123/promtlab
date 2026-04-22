@@ -6,7 +6,8 @@ import (
 )
 
 // SubscriptionPlan — тарифный план (free/pro/max). Хранится в БД,
-// кэшируется in-memory (TTL 5 мин). Конвенция: -1 = безлимит.
+// кэшируется in-memory (TTL 5 мин). Все лимиты — конкретные неотрицательные
+// числа (миграция 000046 убрала legacy sentinel -1 "безлимит").
 type SubscriptionPlan struct {
 	ID                   string          `gorm:"primaryKey;size:20" json:"id"`
 	Name                 string          `gorm:"size:50;not null" json:"name"`
@@ -31,9 +32,6 @@ type SubscriptionPlan struct {
 }
 
 func (SubscriptionPlan) TableName() string { return "subscription_plans" }
-
-// IsUnlimited проверяет, что лимит = -1 (безлимит).
-func IsUnlimited(limit int) bool { return limit == -1 }
 
 // SubscriptionStatus — статус подписки.
 //

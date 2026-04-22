@@ -46,12 +46,10 @@ func (s *Service) getPlan(ctx context.Context, userID uint) (string, *models.Sub
 	return user.PlanID, plan, nil
 }
 
-// isWithinLimit — проверка used < limit. Sentinel -1 (legacy "безлимит")
-// сохранён для старых данных в БД, хотя миграция 000046 заменила все -1
-// на конкретные положительные лимиты. После полного прогона down-миграций
-// эту ветку можно удалить.
+// isWithinLimit — проверка used < limit. После миграции 000046 все лимиты —
+// неотрицательные числа; legacy sentinel -1 "безлимит" полностью выведен.
 func isWithinLimit(used int64, limit int) bool {
-	return limit == -1 || used < int64(limit)
+	return used < int64(limit)
 }
 
 func (s *Service) CheckPromptQuota(ctx context.Context, userID uint) error {
@@ -296,9 +294,6 @@ func (s *Service) GetDowngradePreview(ctx context.Context, userID uint, targetPl
 	}
 
 	over := func(used int64, limit int) int {
-		if limit == -1 {
-			return 0
-		}
 		diff := int(used) - limit
 		if diff < 0 {
 			return 0

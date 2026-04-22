@@ -1,4 +1,5 @@
 import type { BrandingInfo } from "@/api/branding"
+import { isSafeHttpsUrl } from "@/lib/url"
 
 interface BrandedHeaderProps {
   branding: BrandingInfo
@@ -20,7 +21,9 @@ export function BrandedHeader({ branding }: BrandedHeaderProps) {
     />
   ) : null
 
-  const logoContainer = branding.website ? (
+  // Defense-in-depth: backend уже валидирует схему, но если прорвётся
+  // javascript:/data:/file: — не рендерим <a>, показываем просто логотип.
+  const logoContainer = isSafeHttpsUrl(branding.website) ? (
     <a href={branding.website} target="_blank" rel="noopener noreferrer">
       {logo}
     </a>

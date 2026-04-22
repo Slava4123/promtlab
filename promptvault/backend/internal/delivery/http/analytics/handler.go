@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/go-chi/chi/v5"
 
 	httperr "promptvault/internal/delivery/http/errors"
@@ -12,6 +13,21 @@ import (
 	authmw "promptvault/internal/middleware/auth"
 	analyticsuc "promptvault/internal/usecases/analytics"
 )
+
+// addBreadcrumb кладёт запись в Sentry-hub для диагностики ошибок Max-юзеров.
+// Намеренно не пишем PII (email, prompt_id допустим — уже не PII).
+func addBreadcrumb(r *http.Request, category, message string, data map[string]any) {
+	hub := sentry.GetHubFromContext(r.Context())
+	if hub == nil {
+		return
+	}
+	hub.Scope().AddBreadcrumb(&sentry.Breadcrumb{
+		Category: category,
+		Message:  message,
+		Level:    sentry.LevelInfo,
+		Data:     data,
+	}, 10)
+}
 
 // Handler — HTTP делегат analytics.Service.
 // Endpoints (Phase 14 B.4):
@@ -99,6 +115,10 @@ func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RefreshInsights(w http.ResponseWriter, r *http.Request) {
 	userID := authmw.GetUserID(r.Context())
 
+	addBreadcrumb(r, "analytics", "insights.refresh.trigger", map[string]any{
+		"user_id": userID,
+	})
+
 	insights, err := h.svc.RefreshInsightsGated(r.Context(), userID, nil)
 	if err != nil {
 		respondError(w, r, err)
@@ -133,6 +153,13 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 		scope = "personal"
 	}
 	rng := parseRange(q.Get("range"))
+
+	addBreadcrumb(r, "analytics", "export.trigger", map[string]any{
+		"user_id": userID,
+		"format":  format,
+		"scope":   scope,
+		"range":   string(rng),
+	})
 
 	switch scope {
 	case "personal":

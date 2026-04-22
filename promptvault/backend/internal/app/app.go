@@ -13,6 +13,7 @@ import (
 
 	"promptvault/internal/infrastructure/config"
 	"promptvault/internal/infrastructure/email"
+	"promptvault/internal/infrastructure/metrics"
 	pgrepo "promptvault/internal/infrastructure/postgres/repository"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
@@ -512,6 +513,11 @@ func (a *App) MountRoutes(r chi.Router) {
 	// sitemap через HEAD перед GET. Без HEAD получают 405 → «Недопустимый адрес».
 	r.With(byIP(60)).Method(http.MethodGet, "/sitemap.xml", http.HandlerFunc(a.seoHandler.Sitemap))
 	r.With(byIP(60)).Method(http.MethodHead, "/sitemap.xml", http.HandlerFunc(a.seoHandler.Sitemap))
+
+	// Prometheus /metrics — text exposition. 404 если METRICS_ENABLED=false.
+	// Путь защитить IP-allowlist на nginx уровне (ingress-only). Scrape
+	// rate-limit не нужен — endpoint кешируется в client_golang registry.
+	r.Method(http.MethodGet, "/metrics", metrics.Handler(a.cfg.Server.MetricsEnabled))
 
 	// /p/{slug} — server-rendered HTML. nginx роутит сюда ТОЛЬКО bot-UA
 	// (Yandexbot/Googlebot/Telegram/VK/...). Обычные юзеры получают SPA.

@@ -1,0 +1,36 @@
+groups:
+  - name: analytics-loops
+    interval: 5m
+    rules:
+      - alert: InsightsComputeLoopStalled
+        expr: increase(analytics_insights_refresh_total{result="success"}[25h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "InsightsComputeLoop не проработал 25+ часов"
+          description: "Нет успешных пересчётов Smart Insights. Проверить analytics.insights_loop.*"
+
+      - alert: InsightsComputeLoopDead
+        expr: absent_over_time(analytics_insights_refresh_total{result="success"}[48h])
+        labels:
+          severity: critical
+        annotations:
+          summary: "InsightsComputeLoop мёртв > 48 часов"
+
+      - alert: CleanupLoopStalled
+        expr: increase(analytics_cleanup_deleted_total[25h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "CleanupLoop не проработал 25+ часов"
+
+      - alert: ShareQuotaIncrementLeak
+        expr: rate(share_quota_increment_failed_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Revenue-leak: share quota increments fail"
+          description: "Share-ссылки создаются, но daily quota counter не инкрементится."

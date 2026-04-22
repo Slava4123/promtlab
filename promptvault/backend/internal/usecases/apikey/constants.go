@@ -42,6 +42,10 @@ var KnownTools = map[string]bool{
 	"tag_delete":             true,
 	"restore_prompt":         true, // v1.2
 	"purge_prompt":           true, // v1.2
+
+	// Phase 14 B.4 — HTTP analytics через API-key (Max-only; проверка плана в handler'ах).
+	// Псевдо-tool: не MCP, но используется как allowed_tools scope.
+	"analytics_read": true,
 }
 
 // IsKnownTool проверяет, существует ли tool с таким именем.

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
 )
 
@@ -60,15 +61,18 @@ func (l *InsightsComputeLoop) compute() {
 	ids, err := l.users.ListMaxUsers(ctx)
 	if err != nil {
 		slog.Error("analytics.insights_loop.list_failed", "error", err)
+		metrics.InsightsRefresh.WithLabelValues("error").Inc()
 		return
 	}
 	var okCount, failCount int
 	for _, uid := range ids {
 		if cerr := l.svc.ComputeInsights(ctx, uid, nil); cerr != nil {
 			failCount++
+			metrics.InsightsRefresh.WithLabelValues("error").Inc()
 			continue
 		}
 		okCount++
+		metrics.InsightsRefresh.WithLabelValues("success").Inc()
 		// Персональный scope посчитан. Для команд владельца — отдельный проход
 		// потребует TeamRepository.ListByOwnerID, который пока отсутствует;
 		// TODO: расширить, когда Max-юзер с командой реально запросит.

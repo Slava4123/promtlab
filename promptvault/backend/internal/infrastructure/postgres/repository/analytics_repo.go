@@ -383,3 +383,99 @@ WHERE pul.user_id = u.id
 	res := r.db.WithContext(ctx).Exec(query)
 	return res.RowsAffected, res.Error
 }
+
+// --- SMART INSIGHTS M8 (за feature-flag experimentalInsights в Service) ---
+
+// MostEditedPrompts — промпты с наибольшим числом версий (prompt_versions).
+// LIMIT ограничивает выдачу; WHERE фильтрует team/personal scope + soft-delete.
+func (r *analyticsRepo) MostEditedPrompts(ctx context.Context, userID uint, teamID *uint, limit int) ([]repo.PromptUsageRow, error) {
+	if limit < 1 || limit > 50 {
+		limit = 5
+	}
+	q := r.db.WithContext(ctx).
+		Table("prompts AS p").
+		Select("p.id AS prompt_id, p.title AS title, COUNT(pv.id) AS uses").
+		Joins("JOIN prompt_versions pv ON pv.prompt_id = p.id").
+		Where("p.user_id = ? AND p.deleted_at IS NULL", userID)
+	q = scopeTeam(q, "p.team_id", teamID)
+
+	var rows []repo.PromptUsageRow
+	err := q.Group("p.id, p.title").
+		Having("COUNT(pv.id) > 1"). // >1 т.к. версия 1 = исходный промпт
+		Order("uses DESC").
+		Limit(limit).
+		Scan(&rows).Error
+	return rows, err
+}
+
+// PossibleDuplicates — пары похожих промптов через pg_trgm.similarity().
+// Защита от O(n²): WHERE a.updated_at >= NOW() - INTERVAL '30 days' ограничивает
+// candidate pool, threshold и LIMIT режут выхлоп.
+// a.id < b.id избавляет от симметричных дубликатов (A-B и B-A).
+func (r *analyticsRepo) PossibleDuplicates(ctx context.Context, userID uint, teamID *uint, threshold float32, limit int) ([]repo.DuplicatePair, error) {
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	if threshold <= 0 || threshold > 1 {
+		threshold = 0.8
+	}
+	teamFilter := "a.team_id IS NULL AND b.team_id IS NULL"
+	args := []any{userID, userID}
+	if teamID != nil {
+		teamFilter = "a.team_id = ? AND b.team_id = ?"
+		args = append(args, *teamID, *teamID)
+	}
+	query := `
+SELECT a.id AS prompt_a_id, a.title AS prompt_a_title,
+       b.id AS prompt_b_id, b.title AS prompt_b_title,
+       similarity(a.content, b.content) AS similarity
+FROM prompts a
+JOIN prompts b ON a.id < b.id
+WHERE a.user_id = ? AND b.user_id = ?
+  AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+  AND ` + teamFilter + `
+  AND a.updated_at >= NOW() - INTERVAL '30 days'
+  AND similarity(a.content, b.content) >= ?
+ORDER BY similarity DESC
+LIMIT ?`
+	args = append(args, threshold, limit)
+
+	var rows []repo.DuplicatePair
+	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&rows).Error
+	return rows, err
+}
+
+// OrphanTags — теги без ни одного промпта через LEFT JOIN + IS NULL.
+func (r *analyticsRepo) OrphanTags(ctx context.Context, userID uint, teamID *uint, limit int) ([]repo.TagRow, error) {
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	q := r.db.WithContext(ctx).
+		Table("tags AS t").
+		Select("t.id AS tag_id, t.name AS name").
+		Joins("LEFT JOIN prompt_tags pt ON pt.tag_id = t.id").
+		Where("t.user_id = ? AND pt.tag_id IS NULL", userID)
+	q = scopeTeam(q, "t.team_id", teamID)
+
+	var rows []repo.TagRow
+	err := q.Group("t.id, t.name").Limit(limit).Scan(&rows).Error
+	return rows, err
+}
+
+// EmptyCollections — коллекции без промптов. Аналогично OrphanTags через
+// LEFT JOIN prompt_collections.
+func (r *analyticsRepo) EmptyCollections(ctx context.Context, userID uint, teamID *uint, limit int) ([]repo.CollectionRow, error) {
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	q := r.db.WithContext(ctx).
+		Table("collections AS c").
+		Select("c.id AS collection_id, c.name AS name").
+		Joins("LEFT JOIN prompt_collections pc ON pc.collection_id = c.id").
+		Where("c.user_id = ? AND c.deleted_at IS NULL AND pc.collection_id IS NULL", userID)
+	q = scopeTeam(q, "c.team_id", teamID)
+
+	var rows []repo.CollectionRow
+	err := q.Group("c.id, c.name").Limit(limit).Scan(&rows).Error
+	return rows, err
+}

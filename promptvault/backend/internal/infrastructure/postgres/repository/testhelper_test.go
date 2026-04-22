@@ -78,6 +78,10 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.OAuthClient{},
 		&models.OAuthAuthorizationCode{},
 		&models.OAuthToken{},
+		&models.PromptUsageLog{},
+		&models.ShareLink{},
+		&models.ShareView{},
+		&models.SmartInsight{},
 	)
 	if err != nil {
 		t.Fatalf("failed to run migrations: %v", err)

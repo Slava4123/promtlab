@@ -1113,6 +1113,9 @@ func (t *toolHandlers) teamActivityFeed(ctx context.Context, _ *sdkmcp.CallToolR
 		}
 		if showActorEmail {
 			items[i].ActorEmail = e.ActorEmail
+		} else {
+			// GDPR вариант C: маска вместо скрытия (a***@domain).
+			items[i].ActorEmail = maskEmail(e.ActorEmail)
 		}
 	}
 	payload := map[string]any{"items": items}
