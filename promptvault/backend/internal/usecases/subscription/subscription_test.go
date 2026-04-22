@@ -133,6 +133,7 @@ func TestBuildReceipt(t *testing.T) {
 
 		if r == nil {
 			t.Fatal("ожидался Receipt, получено nil")
+			return // staticcheck SA5011: сигнал что далее r.* безопасен
 		}
 		if r.Email != email {
 			t.Errorf("Email = %q, want %q", r.Email, email)
@@ -175,6 +176,7 @@ func TestBuildReceipt(t *testing.T) {
 
 		if r == nil {
 			t.Fatal("ожидался Receipt")
+			return
 		}
 		if r.Items[0].AmountKop != 129900 {
 			t.Errorf("Amount = %d, want 129900 для Max", r.Items[0].AmountKop)
@@ -200,6 +202,7 @@ func TestBuildReceipt(t *testing.T) {
 		r := buildReceipt(cfg, "", plan)
 		if r == nil {
 			t.Fatal("buildReceipt должен возвращать Receipt даже с пустым email")
+			return
 		}
 		if r.Email != "" {
 			t.Errorf("Email = %q, want empty", r.Email)
