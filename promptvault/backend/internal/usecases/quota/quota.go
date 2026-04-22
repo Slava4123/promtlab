@@ -32,9 +32,6 @@ func (s *Service) SetEmailNotifier(email iservice.EmailSender, frontendURL strin
 	s.frontendURL = frontendURL
 }
 
-// quotaWarningThreshold — доля использования, при достижении которой шлём email.
-const quotaWarningThreshold = 0.8
-
 // getPlan загружает план юзера. PlanRepository кэширован (5 мин TTL),
 // UserRepository — PK lookup (микросекунды).
 func (s *Service) getPlan(ctx context.Context, userID uint) (string, *models.SubscriptionPlan, error) {
