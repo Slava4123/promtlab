@@ -28,7 +28,10 @@ func (h *Handler) GetPublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := h.svc.GetPublicPrompt(r.Context(), token)
+	info, err := h.svc.GetPublicPrompt(r.Context(), token, shareuc.ViewMeta{
+		Referer:   r.Referer(),
+		UserAgent: r.UserAgent(),
+	})
 	if err != nil {
 		respondError(w, r, err)
 		return

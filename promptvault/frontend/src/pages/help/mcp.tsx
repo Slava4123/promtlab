@@ -20,7 +20,6 @@ import {
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
-import { AIShareBlock } from "@/components/help/ai-share-block"
 
 // --- Конфиги клиентов ---
 
@@ -109,7 +108,7 @@ const CLIENTS: ClientConfig[] = [
 // --- Tools ---
 
 const TOOLS_READ = [
-  ["whoami", "Текущий пользователь (id, email, plan, default_model)"],
+  ["whoami", "Текущий пользователь (id, email, plan)"],
   ["search_prompts", "Поиск по промптам, коллекциям, тегам"],
   ["search_suggest", "Автодополнение по префиксу"],
   ["list_prompts", "Список промптов с фильтрами (коллекция, теги, избранное)"],
@@ -236,12 +235,6 @@ export default function HelpMCPPage() {
             ПромтЛаб реализует <a href="https://modelcontextprotocol.io/" target="_blank" rel="noreferrer" className="underline decoration-dotted hover:text-foreground">Model Context Protocol</a> — открытый стандарт для подключения данных к AI-клиентам. Через MCP ваши промпты, коллекции и теги становятся доступны прямо из Claude Code, Claude Desktop, Cursor, Windsurf и других совместимых клиентов.
           </p>
         </header>
-
-        <AIShareBlock
-          mdUrl="/help/mcp.md"
-          topic="настроить MCP-сервер ПромтЛаб для Claude Code, Claude Desktop, Cursor или Windsurf"
-          className="mb-8"
-        />
 
         {/* --- Быстрый старт --- */}
         <Section icon={Sparkles} title="Быстрый старт">

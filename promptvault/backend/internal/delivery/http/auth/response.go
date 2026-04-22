@@ -28,7 +28,6 @@ type UserResponse struct {
 	AvatarURL             string     `json:"avatar_url,omitempty"`
 	EmailVerified         bool       `json:"email_verified"`
 	HasPassword           bool       `json:"has_password"`
-	DefaultModel          string     `json:"default_model"`
 	PlanID                string     `json:"plan_id"`
 	Role                  string     `json:"role"`
 	Status                string     `json:"status"`
@@ -45,7 +44,6 @@ func NewUserResponse(u models.User) UserResponse {
 		AvatarURL:             u.AvatarURL,
 		EmailVerified:         u.EmailVerified,
 		HasPassword:           u.HasPassword(),
-		DefaultModel:          u.DefaultModel,
 		PlanID:                cmp.Or(u.PlanID, "free"),
 		Role:                  string(u.Role),
 		Status:                string(u.Status),

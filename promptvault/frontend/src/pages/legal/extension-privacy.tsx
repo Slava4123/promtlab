@@ -1,8 +1,6 @@
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 
-import { AIShareBlock } from "@/components/help/ai-share-block"
-
 export default function ExtensionPrivacyPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -21,7 +19,7 @@ export default function ExtensionPrivacyPage() {
               Политика конфиденциальности Chrome-расширения
             </h1>
             <p className="text-sm text-muted-foreground">
-              Расширение: <strong className="text-foreground">ПромтЛаб — библиотека AI-промптов</strong>
+              Расширение: <strong className="text-foreground">ПромтЛаб — библиотека промптов</strong>
               <br />
               Дата вступления в силу: 11 апреля 2026 г.
               <br />
@@ -29,11 +27,6 @@ export default function ExtensionPrivacyPage() {
             </p>
           </header>
 
-          <AIShareBlock
-            mdUrl="/legal/extension-privacy.md"
-            topic="разобраться в Политике конфиденциальности Chrome-расширения ПромтЛаб (что собирается, какие permissions нужны)"
-            compact
-          />
 
           <Section title="Краткая версия">
             <p>

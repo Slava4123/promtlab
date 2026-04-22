@@ -21,7 +21,6 @@ export interface AdminUserDetail {
   role: UserRole
   status: UserStatus
   email_verified: boolean
-  default_model: string
   created_at: string
   updated_at: string
   prompt_count: number

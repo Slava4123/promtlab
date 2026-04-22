@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	repo "promptvault/internal/interface/repository"
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/models"
+	activityuc "promptvault/internal/usecases/activity"
 	badgeuc "promptvault/internal/usecases/badge"
 	promptuc "promptvault/internal/usecases/prompt"
 	quotauc "promptvault/internal/usecases/quota"
@@ -25,10 +27,22 @@ type Handler struct {
 	svc      *promptuc.Service
 	quotas   *quotauc.Service
 	validate *validator.Validate
+	// activity — опциональный source для GetHistory (Phase 14).
+	// Nil → GetHistory возвращает только versions, без team activity событий.
+	activity *activityuc.Service
+	// users — lookup для ChangedByEmail/ChangedByName в VersionResponse.
+	users repo.UserRepository
 }
 
 func NewHandler(svc *promptuc.Service, quotas *quotauc.Service) *Handler {
 	return &Handler{svc: svc, quotas: quotas, validate: validator.New()}
+}
+
+// SetHistoryDeps подключает activity service и users repo для GET /api/prompts/:id/history.
+// Опционально: если не вызван — endpoint вернёт только versions без actor info.
+func (h *Handler) SetHistoryDeps(activity *activityuc.Service, users repo.UserRepository) {
+	h.activity = activity
+	h.users = users
 }
 
 // GET /api/prompts
@@ -300,7 +314,123 @@ func (h *Handler) ListVersions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WritePaginated(w, NewVersionListResponse(versions), total, page, pageSize)
+	responses := NewVersionListResponse(versions)
+	_ = h.enrichVersionsWithActors(r.Context(), versions, responses)
+	utils.WritePaginated(w, responses, total, page, pageSize)
+}
+
+// enrichVersionsWithActors — добавляет ChangedByEmail/Name в response items.
+// N ≤ 100 (pageSize cap), per-row lookup приемлем для MVP.
+// Nil-safe: если h.users не подключён — no-op.
+//
+// M6: возвращает true, если хотя бы один lookup fail'нулся (используется
+// для флага actors_partial в ответе, чтобы UI мог показать «Неизвестный
+// автор — данные неполные»).
+func (h *Handler) enrichVersionsWithActors(ctx context.Context, versions []models.PromptVersion, responses []VersionResponse) bool {
+	if h.users == nil {
+		return false
+	}
+	actorIDs := make(map[uint]struct{})
+	for _, v := range versions {
+		if v.ChangedBy != nil {
+			actorIDs[*v.ChangedBy] = struct{}{}
+		}
+	}
+	actorMap := make(map[uint]*models.User, len(actorIDs))
+	var partial bool
+	var failCount int
+	for uid := range actorIDs {
+		u, err := h.users.GetByID(ctx, uid)
+		if err != nil {
+			if !partial {
+				slog.WarnContext(ctx, "prompt.history.actor_lookup_failed",
+					"err", err, "actor_id", uid)
+			}
+			partial = true
+			failCount++
+			continue
+		}
+		actorMap[uid] = u
+	}
+	if partial {
+		slog.WarnContext(ctx, "prompt.history.actors_partial",
+			"fail_count", failCount, "total", len(actorIDs))
+	}
+	for i := range responses {
+		if responses[i].ChangedByID != nil {
+			if u, ok := actorMap[*responses[i].ChangedByID]; ok {
+				responses[i].ChangedByEmail = u.Email
+				responses[i].ChangedByName = u.Name
+			}
+		}
+	}
+	return partial
+}
+
+// GetHistory — GET /api/prompts/{id}/history (Phase 14).
+// Склейка prompt_versions + team_activity_log (для team-промптов) в одном ответе.
+// Версии — всегда; activity — только если activity service подключён
+// И промпт принадлежит команде (для личных промптов team_activity_log пустой).
+func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
+	userID := authmw.GetUserID(r.Context())
+	id, err := parseID(r)
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest("Неверный ID"))
+		return
+	}
+
+	// Access check + подгрузка промпта одним вызовом.
+	prompt, err := h.svc.GetByID(r.Context(), id, userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	// Fetch version-снапшоты. 100 последних — типичный предел истории одного промпта.
+	versions, _, err := h.svc.ListVersions(r.Context(), id, userID, 1, 100)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	versionResps := NewVersionListResponse(versions)
+	actorsPartial := h.enrichVersionsWithActors(r.Context(), versions, versionResps)
+
+	// Activity events (только для team-промптов и если activity подключён).
+	// H1: repo/timeout fail больше не молчаливый — логируем Warn и возвращаем
+	// флаг activity_partial, чтобы UI мог отличить «событий нет» от «данные
+	// временно недоступны».
+	activityItems := []any{}
+	activityPartial := false
+	if h.activity != nil && prompt.TeamID != nil {
+		events, err := h.activity.GetPromptHistory(r.Context(), id, 100)
+		if err != nil {
+			slog.WarnContext(r.Context(), "prompt.history.activity_failed",
+				"err", err, "prompt_id", id, "team_id", *prompt.TeamID)
+			activityPartial = true
+		} else {
+			for _, e := range events {
+				activityItems = append(activityItems, map[string]any{
+					"id":           e.ID,
+					"actor_id":     e.ActorID,
+					"actor_email":  e.ActorEmail,
+					"actor_name":   e.ActorName,
+					"event_type":   e.EventType,
+					"target_type":  e.TargetType,
+					"target_id":    e.TargetID,
+					"target_label": e.TargetLabel,
+					"metadata":     e.Metadata,
+					"created_at":   e.CreatedAt,
+				})
+			}
+		}
+	}
+
+	utils.WriteOK(w, map[string]any{
+		"versions":         versionResps,
+		"activity":         activityItems,
+		"actors_partial":   actorsPartial,
+		"activity_partial": activityPartial,
+	})
 }
 
 // POST /api/prompts/{id}/revert/{versionId}

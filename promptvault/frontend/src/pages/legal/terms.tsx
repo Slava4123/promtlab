@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 
-import { AIShareBlock } from "@/components/help/ai-share-block"
 
 export default function TermsPage() {
   return (
@@ -29,12 +28,6 @@ export default function TermsPage() {
             </p>
           </header>
 
-          <AIShareBlock
-            mdUrl="/legal/terms.md"
-            topic="разобраться в Пользовательском соглашении ПромтЛаб (объясни простыми словами)"
-            compact
-          />
-
           <Section title="1. Общие положения">
             <p>
               Настоящее Пользовательское соглашение (далее — «Соглашение») регулирует отношения между
@@ -50,13 +43,13 @@ export default function TermsPage() {
           <Section title="2. Описание Сервиса">
             <p>
               ПромтЛаб — веб-приложение для создания, хранения, организации и совместного использования
-              AI-промптов. Сервис предоставляет:
+              промптов для AI-клиентов. Сервис предоставляет:
             </p>
             <ul>
               <li>Хранение промптов с версионированием и тегами</li>
               <li>Командные пространства с ролевым доступом</li>
-              <li>AI-инструменты для улучшения промптов</li>
-              <li>API и MCP-интеграцию для внешних приложений</li>
+              <li>MCP-сервер для Claude Desktop, Cursor, Windsurf и других клиентов</li>
+              <li>API-ключи для внешних интеграций</li>
               <li>Браузерное расширение для вставки промптов</li>
             </ul>
           </Section>

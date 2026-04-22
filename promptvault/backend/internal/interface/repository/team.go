@@ -9,6 +9,8 @@ import (
 type TeamRepository interface {
 	CreateWithOwner(ctx context.Context, team *models.Team, ownerUserID uint) error
 	GetBySlug(ctx context.Context, slug string) (*models.Team, error)
+	// Phase 14: GetByID для share.GetPublicPrompt (есть только prompt.team_id, не slug).
+	GetByID(ctx context.Context, id uint) (*models.Team, error)
 	ListByUserID(ctx context.Context, userID uint) ([]models.Team, error)
 	ListByUserIDWithRolesAndCounts(ctx context.Context, userID uint) ([]models.TeamWithRoleAndCount, error)
 	Update(ctx context.Context, team *models.Team) error
@@ -28,4 +30,7 @@ type TeamRepository interface {
 	UpdateInvitationStatus(ctx context.Context, id uint, status models.InvitationStatus) error
 	DeleteInvitation(ctx context.Context, id uint) error
 	AcceptInvitationTx(ctx context.Context, invID uint, member *models.TeamMember) error
+
+	// Phase 14 Branded share pages — точечный UPDATE brand_* полей.
+	UpdateBranding(ctx context.Context, teamID uint, logoURL, tagline, website, primaryColor string) error
 }

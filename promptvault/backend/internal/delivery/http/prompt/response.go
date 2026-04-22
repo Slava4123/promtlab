@@ -95,13 +95,18 @@ func NewPromptListResponse(prompts []models.Prompt, pinStatuses map[uint]repo.Pi
 }
 
 type VersionResponse struct {
-	ID            uint      `json:"id"`
-	VersionNumber uint      `json:"version_number"`
-	Title         string    `json:"title"`
-	Content       string    `json:"content"`
-	Model         string    `json:"model,omitempty"`
-	ChangeNote    string    `json:"change_note,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID             uint      `json:"id"`
+	VersionNumber  uint      `json:"version_number"`
+	Title          string    `json:"title"`
+	Content        string    `json:"content"`
+	Model          string    `json:"model,omitempty"`
+	ChangeNote     string    `json:"change_note,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	// Phase 14: автор версии. ChangedByID=nil для записей до миграции 000039
+	// (backfill сработает при миграции; для текущих — актор владельца промпта).
+	ChangedByID    *uint     `json:"changed_by_id,omitempty"`
+	ChangedByEmail string    `json:"changed_by_email,omitempty"`
+	ChangedByName  string    `json:"changed_by_name,omitempty"`
 }
 
 func NewVersionResponse(v models.PromptVersion) VersionResponse {
@@ -113,6 +118,7 @@ func NewVersionResponse(v models.PromptVersion) VersionResponse {
 		Model:         v.Model,
 		ChangeNote:    v.ChangeNote,
 		CreatedAt:     v.CreatedAt,
+		ChangedByID:   v.ChangedBy,
 	}
 }
 

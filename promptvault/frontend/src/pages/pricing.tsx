@@ -59,21 +59,15 @@ function planFeatures(plan: Plan): string[] {
       : `${plan.max_collections} коллекции`,
   )
   features.push(
-    plan.max_ai_requests_daily === -1
-      ? "Безлимитные AI-запросы"
-      : plan.ai_requests_is_total
-        ? `${plan.max_ai_requests_daily} AI-запросов всего`
-        : `${plan.max_ai_requests_daily} AI-запросов в день`,
-  )
-  features.push(
     plan.max_teams === -1
       ? "Безлимитные команды"
       : `${plan.max_teams} ${plan.max_teams === 1 ? "команда" : "команд"} (до ${formatLimit(plan.max_team_members)} участников)`,
   )
+  // Phase 14: daily create лимит (основной показатель использования share).
   features.push(
-    plan.max_share_links === -1
-      ? "Безлимитный шаринг"
-      : `${plan.max_share_links} публичных ссылок`,
+    plan.max_daily_shares === -1
+      ? "Безлимитное создание share-ссылок"
+      : `${plan.max_daily_shares} share-ссылок/день`,
   )
   features.push(
     plan.max_ext_uses_daily === -1
@@ -85,6 +79,18 @@ function planFeatures(plan: Plan): string[] {
       ? "Безлимитные MCP-вызовы"
       : `${plan.max_mcp_uses_daily} MCP-вызовов/день`,
   )
+  // Phase 14: retention аналитики и флагманские фичи.
+  const base = basePlanId(plan.id)
+  if (base === "free") {
+    features.push("Аналитика: 7 дней истории")
+  } else if (base === "pro") {
+    features.push("Аналитика: 90 дней истории + CSV export")
+    features.push("Активность команды и история промптов")
+  } else if (base === "max") {
+    features.push("Аналитика: 365 дней истории + CSV export + API")
+    features.push("Smart Insights: забытые, популярные, дубликаты")
+    features.push("Branded share-страницы (логотип команды)")
+  }
   if (plan.features.includes("priority_support")) {
     features.push("Приоритетная поддержка")
   }
@@ -349,33 +355,33 @@ export default function Pricing() {
 
           <div className="mt-8 rounded-2xl border border-border bg-card/50 p-6">
             <h2 className="mb-3 text-[0.95rem] font-semibold text-foreground">
-              Как ПромтЛаб Pro сравнивается с ChatGPT Plus?
+              Что вы получаете на Pro
             </h2>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-border/60 p-3">
-                <p className="mb-1 text-[0.7rem] uppercase tracking-wide text-muted-foreground">ChatGPT Plus</p>
-                <p className="text-lg font-semibold text-foreground">~1 800 ₽/мес</p>
-                <p className="mt-1 text-[0.72rem] text-muted-foreground">
-                  $20 + сложности оплаты из РФ
-                </p>
-              </div>
               <div
                 className="rounded-lg border p-3"
                 style={{ borderColor: `${planColors.pro}50`, background: `${planColors.pro}08` }}
               >
                 <p className="mb-1 text-[0.7rem] uppercase tracking-wide" style={{ color: planColors.pro }}>
-                  ПромтЛаб Pro
+                  MCP для Claude / Cursor / Cline
                 </p>
-                <p className="text-lg font-semibold text-foreground">599 ₽/мес</p>
+                <p className="text-lg font-semibold text-foreground">Свои промпты — в любом AI-клиенте</p>
                 <p className="mt-1 text-[0.72rem] text-muted-foreground">
-                  В 3× дешевле + MCP + расширение + AI-улучшение
+                  Подключите PromptVault через MCP и вставляйте промпты одной командой.
                 </p>
               </div>
               <div className="rounded-lg border border-border/60 p-3">
-                <p className="mb-1 text-[0.7rem] uppercase tracking-wide text-muted-foreground">Экономия</p>
-                <p className="text-lg font-semibold text-emerald-500">~1 200 ₽/мес</p>
+                <p className="mb-1 text-[0.7rem] uppercase tracking-wide text-muted-foreground">Команды</p>
+                <p className="text-lg font-semibold text-foreground">Общая библиотека</p>
                 <p className="mt-1 text-[0.72rem] text-muted-foreground">
-                  14 400 ₽ в год — полтора месяца Max
+                  Делитесь промптами внутри команды, роли owner / editor / viewer.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 p-3">
+                <p className="mb-1 text-[0.7rem] uppercase tracking-wide text-muted-foreground">Безлимит хранения</p>
+                <p className="text-lg font-semibold text-foreground">Промпты, коллекции, теги</p>
+                <p className="mt-1 text-[0.72rem] text-muted-foreground">
+                  История версий каждого промпта, публичные ссылки, расширение для браузера.
                 </p>
               </div>
             </div>

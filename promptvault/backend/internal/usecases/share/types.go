@@ -1,6 +1,10 @@
 package share
 
-import "time"
+import (
+	"time"
+
+	"promptvault/internal/models"
+)
 
 type ShareLinkInfo struct {
 	ID           uint       `json:"id"`
@@ -20,6 +24,8 @@ type PublicPromptInfo struct {
 	Author    PublicAuthor `json:"author"`
 	CreatedAt time.Time    `json:"created_at"`
 	UpdatedAt time.Time    `json:"updated_at"`
+	// Phase 14 Branded share pages (Max-only). nil для Free/Pro и не-team промптов.
+	Branding *models.BrandingInfo `json:"branding,omitempty"`
 }
 
 type PublicTag struct {

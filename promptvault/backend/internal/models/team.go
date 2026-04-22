@@ -10,8 +10,28 @@ type Team struct {
 	CreatedBy   uint         `gorm:"not null" json:"created_by"`
 	Creator     User         `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
 	Members     []TeamMember `json:"members,omitempty"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	// Phase 14: Branded share pages (Max-only). Все nullable — не возвращаем
+	// в publicах не-Max'ам.
+	BrandLogoURL      string    `gorm:"column:brand_logo_url;size:500" json:"brand_logo_url,omitempty"`
+	BrandTagline      string    `gorm:"column:brand_tagline;size:200" json:"brand_tagline,omitempty"`
+	BrandWebsite      string    `gorm:"column:brand_website;size:500" json:"brand_website,omitempty"`
+	BrandPrimaryColor string    `gorm:"column:brand_primary_color;size:7" json:"brand_primary_color,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// BrandingInfo — DTO для публичного ответа /s/:token. Заполняется только
+// если owner команды на тарифе Max. nil в response если не Max.
+type BrandingInfo struct {
+	LogoURL      string `json:"logo_url,omitempty"`
+	Tagline      string `json:"tagline,omitempty"`
+	Website      string `json:"website,omitempty"`
+	PrimaryColor string `json:"primary_color,omitempty"`
+}
+
+// IsEmpty — true если ни одно поле не заполнено.
+func (b *BrandingInfo) IsEmpty() bool {
+	return b == nil || (b.LogoURL == "" && b.Tagline == "" && b.Website == "" && b.PrimaryColor == "")
 }
 
 type TeamRole string

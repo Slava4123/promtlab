@@ -9,6 +9,7 @@ import (
 	repo "promptvault/internal/interface/repository"
 	iservice "promptvault/internal/interface/service"
 	"promptvault/internal/models"
+	activityuc "promptvault/internal/usecases/activity"
 	quotauc "promptvault/internal/usecases/quota"
 )
 
@@ -17,6 +18,8 @@ type Service struct {
 	users  repo.UserRepository
 	email  iservice.EmailSender
 	quotas *quotauc.Service
+	// activity — опциональный team activity feed (Phase 14).
+	activity *activityuc.Service
 }
 
 func NewService(teams repo.TeamRepository, users repo.UserRepository, quotas *quotauc.Service) *Service {
@@ -26,6 +29,11 @@ func NewService(teams repo.TeamRepository, users repo.UserRepository, quotas *qu
 // SetEmail sets the email service for team notifications.
 func (s *Service) SetEmail(email iservice.EmailSender) {
 	s.email = email
+}
+
+// SetActivity подключает team_activity_log хуки (Phase 14).
+func (s *Service) SetActivity(activity *activityuc.Service) {
+	s.activity = activity
 }
 
 func (s *Service) Create(ctx context.Context, userID uint, input CreateInput) (*models.Team, error) {
@@ -248,7 +256,32 @@ func (s *Service) AcceptInvitation(ctx context.Context, invitationID, userID uin
 		UserID: inv.UserID,
 		Role:   inv.Role,
 	}
-	return s.teams.AcceptInvitationTx(ctx, inv.ID, member)
+	if err := s.teams.AcceptInvitationTx(ctx, inv.ID, member); err != nil {
+		return err
+	}
+
+	// Activity feed hook — только если activity подключена (не делаем лишний
+	// users.GetByID когда фича выключена).
+	if s.activity != nil {
+		targetLabel := ""
+		if u, err := s.users.GetByID(ctx, inv.UserID); err == nil {
+			targetLabel = u.Email
+			if u.Username != "" {
+				targetLabel = "@" + u.Username
+			}
+		}
+		targetID := inv.UserID
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      inv.TeamID,
+			ActorID:     userID,
+			EventType:   models.ActivityMemberAdded,
+			TargetType:  models.TargetMember,
+			TargetID:    &targetID,
+			TargetLabel: targetLabel,
+			Metadata:    map[string]any{"role": string(inv.Role)},
+		})
+	}
+	return nil
 }
 
 func (s *Service) DeclineInvitation(ctx context.Context, invitationID, userID uint) error {
@@ -318,7 +351,32 @@ func (s *Service) UpdateMemberRole(ctx context.Context, slug string, userID, tar
 		return ErrCannotChangeOwnerRole
 	}
 
-	return s.teams.UpdateMemberRole(ctx, team.ID, targetUserID, role)
+	oldRole := targetMember.Role
+	if err := s.teams.UpdateMemberRole(ctx, team.ID, targetUserID, role); err != nil {
+		return err
+	}
+
+	// Activity feed hook — только если activity подключена.
+	if s.activity != nil {
+		targetLabel := ""
+		if u, err := s.users.GetByID(ctx, targetUserID); err == nil {
+			targetLabel = u.Email
+			if u.Username != "" {
+				targetLabel = "@" + u.Username
+			}
+		}
+		tid := targetUserID
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      team.ID,
+			ActorID:     userID,
+			EventType:   models.ActivityRoleChanged,
+			TargetType:  models.TargetMember,
+			TargetID:    &tid,
+			TargetLabel: targetLabel,
+			Metadata:    map[string]any{"from_role": string(oldRole), "to_role": string(role)},
+		})
+	}
+	return nil
 }
 
 func (s *Service) RemoveMember(ctx context.Context, slug string, userID, targetUserID uint) error {
@@ -344,7 +402,31 @@ func (s *Service) RemoveMember(ctx context.Context, slug string, userID, targetU
 		return ErrCannotRemoveOwner
 	}
 
-	return s.teams.RemoveMember(ctx, team.ID, targetUserID)
+	if err := s.teams.RemoveMember(ctx, team.ID, targetUserID); err != nil {
+		return err
+	}
+
+	// Activity feed hook — только если activity подключена.
+	if s.activity != nil {
+		targetLabel := ""
+		if u, err := s.users.GetByID(ctx, targetUserID); err == nil {
+			targetLabel = u.Email
+			if u.Username != "" {
+				targetLabel = "@" + u.Username
+			}
+		}
+		tid := targetUserID
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      team.ID,
+			ActorID:     userID,
+			EventType:   models.ActivityMemberRemoved,
+			TargetType:  models.TargetMember,
+			TargetID:    &tid,
+			TargetLabel: targetLabel,
+			Metadata:    map[string]any{"role": string(targetMember.Role), "self_leave": userID == targetUserID},
+		})
+	}
+	return nil
 }
 
 // IsMember проверяет, что userID является участником команды teamID (в любой роли).

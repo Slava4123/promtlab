@@ -6,6 +6,8 @@ import { toast, Toaster } from "sonner"
 import { usePublicPrompt } from "@/hooks/use-share"
 import { Button } from "@/components/ui/button"
 import { ApiError } from "@/api/client"
+import { PromptView } from "@/components/prompts/prompt-view"
+import { BrandedHeader } from "@/components/teams/branded-header"
 
 export default function SharedPrompt() {
   const { token } = useParams<{ token: string }>()
@@ -97,6 +99,13 @@ export default function SharedPrompt() {
         </div>
       </header>
 
+      {/* Phase 14 D: Branded header — только если Max-владелец настроил brand. */}
+      {prompt.branding && (
+        <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
+          <BrandedHeader branding={prompt.branding} />
+        </div>
+      )}
+
       {/* Hero / Title Section */}
       <div className="border-b border-border/50 bg-gradient-to-b from-violet-500/[0.07] to-transparent">
         <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
@@ -166,9 +175,7 @@ export default function SharedPrompt() {
             <div className="h-1 bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500" />
 
             <div className="p-5 sm:p-6">
-              <pre className="whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-foreground/90">
-                {prompt.content}
-              </pre>
+              <PromptView content={prompt.content} storageKey="shared-prompt-view" />
             </div>
 
             {/* Copy button */}
@@ -211,7 +218,7 @@ export default function SharedPrompt() {
                 Создайте свою библиотеку промптов
               </h2>
               <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                Сохраняйте, версионируйте и делитесь промптами. AI-ассистент поможет улучшить каждый промпт.
+                Сохраняйте, версионируйте и делитесь промптами — прямо из Claude, Cursor и других клиентов через MCP.
               </p>
 
               <Link to="/sign-up">
@@ -225,7 +232,7 @@ export default function SharedPrompt() {
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 <div className="flex items-center gap-1.5 rounded-full border border-border/50 bg-background/50 px-3 py-1.5 text-xs text-muted-foreground">
                   <Zap className="h-3 w-3 text-amber-400" />
-                  AI-улучшение
+                  MCP-сервер
                 </div>
                 <div className="flex items-center gap-1.5 rounded-full border border-border/50 bg-background/50 px-3 py-1.5 text-xs text-muted-foreground">
                   <BookOpen className="h-3 w-3 text-blue-400" />
@@ -256,7 +263,7 @@ export default function SharedPrompt() {
       <footer className="border-t border-border/30 py-6">
         <div className="mx-auto max-w-4xl px-4 text-center text-xs text-muted-foreground sm:px-6">
           <Link to="/" className="transition-colors hover:text-violet-400">ПромтЛаб</Link>
-          {" "}· Управление AI-промптами
+          {" "}· Менеджер промптов с MCP
         </div>
       </footer>
     </div>

@@ -12,8 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Go 1.25** + Chi v5 (роутер) + GORM v2 (ORM) + PostgreSQL 18
 - **Config**: koanf/v2 (env + .env → struct с вложенными секциями)
 - **Auth**: JWT (golang-jwt/jwt v5) access 15m + refresh 7d, bcrypt, OAuth2 + PKCE (GitHub/Google/Yandex)
-- **Rate Limiting**: in-memory sliding window (middleware/ratelimit — auth 20rpm/IP, AI per-user)
-- **AI**: OpenRouter API, серверный ключ, SSE-стриминг
+- **Rate Limiting**: in-memory sliding window (middleware/ratelimit — auth 20rpm/IP)
 - **Логи**: slog (text в dev, JSON в prod)
 - **Профилирование**: net/http/pprof (только в dev)
 - **Валидация**: go-playground/validator/v10
@@ -107,13 +106,12 @@ backend/internal/
 │
 ├── infrastructure/
 │   ├── config/                             # koanf конфигурация
-│   │   ├── config.go                       #   Config { Server, Database, JWT, OAuth, SMTP, AI, Sentry, MCP }
+│   │   ├── config.go                       #   Config { Server, Database, JWT, OAuth, SMTP, Sentry, MCP, Payment }
 │   │   ├── server.go                       #   ServerConfig + IsDev(), IsProd()
 │   │   ├── database.go                     #   DatabaseConfig { Host, Port, User, ... } + DSN()
 │   │   ├── jwt.go                          #   JWTConfig
 │   │   ├── oauth.go                        #   OAuthConfig + OAuthProvider
 │   │   ├── smtp.go                         #   SMTPConfig (email для верификации/сброса)
-│   │   ├── ai.go                           #   AIConfig + ModelConfig
 │   │   ├── sentry.go                       #   SentryConfig { Enabled, Dsn, Environment, Release, TracesSampleRate, Debug }
 │   │   ├── mcp.go                          #   MCPConfig (встроенный MCP-сервер)
 │   │   └── loader.go                       #   Load() + defaults
@@ -122,7 +120,6 @@ backend/internal/
 │   │   ├── migrate.go                      #   golang-migrate (embedded SQL, 5+ миграций)
 │   │   └── repository/                     #   GORM реализации интерфейсов
 │   │       └── user_repo.go
-│   ├── openrouter/                         #   клиент OpenRouter API (AI, SSE-стриминг)
 │   └── email/                              #   SMTP-клиент
 │
 ├── models/                                 # GORM entities (один пакет, НЕ разносить по папкам)
@@ -145,7 +142,7 @@ backend/internal/
 │       ├── response.go                     #   response DTOs + конверторы
 │       └── errors.go                       #   маппинг доменных ошибок → HTTP
 │       #
-│       # Актуальные фичи: admin, adminauth, ai, apikey, auth, badge,
+│       # Актуальные фичи: admin, adminauth, apikey, auth, badge,
 │       # changelog, collection, feedback, prompt, search, share, starter,
 │       # streak, tag, team, trash, user
 │
@@ -161,7 +158,7 @@ backend/internal/
 │   ├── logger/
 │   │   └── logger.go                       #   slog request logger
 │   ├── ratelimit/
-│   │   └── ratelimit.go                    #   Rate limiting (sliding window): IP для auth, userID для AI
+│   │   └── ratelimit.go                    #   Rate limiting (sliding window): IP для auth
 │   ├── sentry/                             #   Sentry/GlitchTip error tracking
 │   │   └── sentry.go                       #     Handler() + UserContext (sentry.User{ID} из JWT claims)
 │   └── admin/                              #   Admin panel middleware
@@ -185,7 +182,6 @@ backend/internal/
 ### Общие
 - Язык интерфейса: русский
 - Никаких западных SaaS (без Clerk, без Vercel hosting) — self-hosted
-- AI-ключ серверный: один `OPENROUTER_API_KEY` в `.env`, пользователи НЕ вводят свои ключи
 - Все переменные окружения через `.env` → koanf, Docker-compose только `env_file: .env`
 - Error tracking: GlitchTip self-hosted (НЕ Sentry.io — заблокирован для РФ с сентября 2024), SDK совместим с Sentry (drop-in replacement через DSN swap при необходимости)
 
@@ -206,7 +202,7 @@ backend/internal/
 - Zustand с devtools middleware для auth/theme
 - shadcn/ui компоненты, НЕ кастомные с нуля
 - fetch wrapper с JWT auto-refresh, НЕ axios
-- Структура: api/, components/{ui,layout,auth,prompts,ai,teams,collections,tags,settings,feedback}, pages/, hooks/, stores/, lib/, test/
+- Структура: api/, components/{ui,layout,auth,prompts,teams,collections,tags,settings,feedback}, pages/, hooks/, stores/, lib/, test/
 
 ### Docker
 - Отдельные файлы: `docker-compose.dev.yml`, `docker-compose.prod.yml` (без base)
@@ -214,16 +210,14 @@ backend/internal/
 - НЕ дублировать env переменные в docker-compose — всё через `env_file: .env`
 
 ## Ключевые решения
-- Rate limiting: по userID для AI, по IP для auth (middleware/ratelimit)
+- Rate limiting: по IP для auth (middleware/ratelimit)
 - Команды с ролями: owner / editor / viewer
 - Версионирование промптов: каждое изменение = новая PromptVersion
-- SSE streaming для AI-ответов
 - Error tracking: GlitchTip (Sentry-compatible) self-hosted в `docker-compose.prod.yml` (web+worker+valkey), external Postgres (отдельная БД `glitchtip` на том же managed инстансе), source maps upload через `sentry-cli` в GitHub Actions (НЕ `@sentry/vite-plugin` — Vite 8 slowdown), feature flag `SENTRY_ENABLED` для gradual rollout, `RespondWithRequest(w,r,err)` в `delivery/http/errors` для захвата 5xx с user.id из Sentry Hub
 - OAuth Account Linking: HMAC-подписанная cookie (oauth_link) + PKCE (S256) на всех провайдерах
 - Установка пароля: двухшаговая через email-код (OAuth-юзеры)
 - Смена пароля: через старый пароль + email-уведомление
 - Забыли пароль: публичный flow через email-код (не раскрывает существование аккаунта)
-- Единственная AI-модель: anthropic/claude-sonnet-4 (default_model в User)
 - MCP autopublish: bump `promptvault/server.json` → commit → `git tag v1.3.0 && git push --tags` → workflow сам логинится в Registry через DNS (secret `MCP_DNS_PRIVATE_KEY`), публикует и создаёт GitHub Release. Локально `mcp-publisher` ставить не нужно. Не-bump'нутые тэги падают на шаге Verify server.json version matches tag.
 - SPA chunk-load-error после деплоя: `src/components/error-boundary.tsx` детектит "Failed to fetch dynamically imported module" и один раз `location.reload()` (флаг в sessionStorage, очищается при mount в `main.tsx`).
 

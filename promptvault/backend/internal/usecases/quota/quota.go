@@ -2,7 +2,6 @@ package quota
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
 	iservice "promptvault/internal/interface/service"
@@ -84,32 +83,6 @@ func (s *Service) CheckCollectionQuota(ctx context.Context, userID uint) error {
 	return nil
 }
 
-func (s *Service) CheckAIQuota(ctx context.Context, userID uint) error {
-	planID, plan, err := s.getPlan(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	var used int
-	if plan.AIRequestsIsTotal {
-		used, err = s.quotas.GetTotalUsage(ctx, userID, FeatureAI)
-	} else {
-		used, err = s.quotas.GetDailyUsage(ctx, userID, time.Now(), FeatureAI)
-	}
-	if err != nil {
-		return err
-	}
-
-	if !isWithinLimit(int64(used), plan.MaxAIRequestsDaily) {
-		quotaType := "ai_daily"
-		if plan.AIRequestsIsTotal {
-			quotaType = "ai_total"
-		}
-		return newQuotaExceeded(quotaType, planID, used, plan.MaxAIRequestsDaily, "AI-запросов")
-	}
-	return nil
-}
-
 func (s *Service) CheckTeamQuota(ctx context.Context, userID uint) error {
 	planID, plan, err := s.getPlan(ctx, userID)
 	if err != nil {
@@ -186,79 +159,31 @@ func (s *Service) CheckMCPQuota(ctx context.Context, userID uint) error {
 	return nil
 }
 
-func (s *Service) IncrementAIUsage(ctx context.Context, userID uint) error {
-	if err := s.quotas.IncrementDailyUsage(ctx, userID, time.Now(), FeatureAI); err != nil {
+// CheckDailyShareCreation — Phase 14. Fixed-window счётчик создаваемых
+// share-ссылок за календарный день UTC. Семантика отличается от
+// CheckShareLinkQuota (total active, stateful): сюда попадает каждое
+// CREATE, даже если ссылка была сразу деактивирована. Re-activation
+// тоже считается (см. usecases/share).
+func (s *Service) CheckDailyShareCreation(ctx context.Context, userID uint) error {
+	planID, plan, err := s.getPlan(ctx, userID)
+	if err != nil {
 		return err
 	}
-	// Проверка на 80% квоты и email делается в background, чтобы не блокировать
-	// AI-запрос. Ошибки swallow'им — warning email некритичен.
-	go s.maybeSendAIQuotaWarning(userID)
+	used, err := s.quotas.GetDailyUsage(ctx, userID, time.Now(), FeatureShareCreate)
+	if err != nil {
+		return err
+	}
+	if !isWithinLimit(int64(used), plan.MaxDailyShares) {
+		return newQuotaExceeded("daily_shares", planID, used, plan.MaxDailyShares, "публичных ссылок в день")
+	}
 	return nil
 }
 
-// maybeSendAIQuotaWarning — если юзер пересёк 80% AI-квоты и ему ещё не отправляли
-// warning сегодня (или никогда для ai_total), шлём email (M-5c).
-// Выполняется в background; ctx — context.Background() чтобы не отменился при
-// завершении parent-request.
-func (s *Service) maybeSendAIQuotaWarning(userID uint) {
-	if s.email == nil || !s.email.Configured() {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	user, err := s.users.GetByID(ctx, userID)
-	if err != nil || user == nil || user.Email == "" {
-		return
-	}
-	plan, err := s.plans.GetByID(ctx, user.PlanID)
-	if err != nil || plan == nil {
-		return
-	}
-	// Безлимитный план или 0 — warning не нужен.
-	if plan.MaxAIRequestsDaily <= 0 {
-		return
-	}
-
-	var used int
-	var quotaType string
-	if plan.AIRequestsIsTotal {
-		used, err = s.quotas.GetTotalUsage(ctx, userID, FeatureAI)
-		quotaType = "ai_total"
-	} else {
-		used, err = s.quotas.GetDailyUsage(ctx, userID, time.Now(), FeatureAI)
-		quotaType = "ai_daily"
-	}
-	if err != nil {
-		return
-	}
-
-	// Порог 80% — и не выше limit (иначе это quota exceeded, а не warning).
-	if float64(used) < float64(plan.MaxAIRequestsDaily)*quotaWarningThreshold || used >= plan.MaxAIRequestsDaily {
-		return
-	}
-
-	// Не слать повторно в тот же день. Для ai_total — никогда повторно:
-	// quota_warning_sent_on не nil → уже слали.
-	today := time.Now().UTC().Truncate(24 * time.Hour)
-	if user.QuotaWarningSentOn != nil {
-		sent := user.QuotaWarningSentOn.UTC().Truncate(24 * time.Hour)
-		if quotaType == "ai_total" {
-			// Для total — один email на всю жизнь квоты.
-			return
-		}
-		if !sent.Before(today) {
-			return
-		}
-	}
-
-	if err := s.email.SendQuotaWarning(user.Email, user.Name, quotaType, used, plan.MaxAIRequestsDaily, s.frontendURL); err != nil {
-		slog.Warn("quota.warning.email_failed", "user_id", userID, "error", err)
-		return
-	}
-	if err := s.users.SetQuotaWarningSentOn(ctx, userID, today); err != nil {
-		slog.Warn("quota.warning.mark_sent_failed", "user_id", userID, "error", err)
-	}
+// IncrementShareCreation — best-effort инкремент дневного счётчика.
+// Вызывается ПОСЛЕ успешного INSERT в share_links. Если инкремент падает,
+// ссылка уже создана — это журналируется в usecases/share (slog.Warn).
+func (s *Service) IncrementShareCreation(ctx context.Context, userID uint) error {
+	return s.quotas.IncrementDailyUsage(ctx, userID, time.Now(), FeatureShareCreate)
 }
 
 func (s *Service) IncrementExtensionUsage(ctx context.Context, userID uint) error {
@@ -287,21 +212,15 @@ func (s *Service) GetUsageSummary(ctx context.Context, userID uint) (*UsageSumma
 		return nil, err
 	}
 
-	var aiUsed int
-	if plan.AIRequestsIsTotal {
-		aiUsed, err = s.quotas.GetTotalUsage(ctx, userID, FeatureAI)
-	} else {
-		aiUsed, err = s.quotas.GetDailyUsage(ctx, userID, now, FeatureAI)
-	}
-	if err != nil {
-		return nil, err
-	}
-
 	teams, err := s.quotas.CountTeamsOwned(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	shares, err := s.quotas.CountActiveShareLinks(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	dailyShares, err := s.quotas.GetDailyUsage(ctx, userID, now, FeatureShareCreate)
 	if err != nil {
 		return nil, err
 	}
@@ -315,20 +234,20 @@ func (s *Service) GetUsageSummary(ctx context.Context, userID uint) (*UsageSumma
 	}
 
 	return &UsageSummary{
-		PlanID:       planID,
-		Prompts:      QuotaInfo{Used: int(prompts), Limit: plan.MaxPrompts},
-		Collections:  QuotaInfo{Used: int(collections), Limit: plan.MaxCollections},
-		AIRequests:   QuotaInfo{Used: aiUsed, Limit: plan.MaxAIRequestsDaily, IsTotal: plan.AIRequestsIsTotal},
-		Teams:        QuotaInfo{Used: int(teams), Limit: plan.MaxTeams},
-		ShareLinks:   QuotaInfo{Used: int(shares), Limit: plan.MaxShareLinks},
-		ExtUsesToday: QuotaInfo{Used: extUsed, Limit: plan.MaxExtUsesDaily},
-		MCPUsesToday: QuotaInfo{Used: mcpUsed, Limit: plan.MaxMCPUsesDaily},
+		PlanID:           planID,
+		Prompts:          QuotaInfo{Used: int(prompts), Limit: plan.MaxPrompts},
+		Collections:      QuotaInfo{Used: int(collections), Limit: plan.MaxCollections},
+		Teams:            QuotaInfo{Used: int(teams), Limit: plan.MaxTeams},
+		ShareLinks:       QuotaInfo{Used: int(shares), Limit: plan.MaxShareLinks},
+		DailySharesToday: QuotaInfo{Used: dailyShares, Limit: plan.MaxDailyShares},
+		ExtUsesToday:     QuotaInfo{Used: extUsed, Limit: plan.MaxExtUsesDaily},
+		MCPUsesToday:     QuotaInfo{Used: mcpUsed, Limit: plan.MaxMCPUsesDaily},
 	}, nil
 }
 
 // DowngradePreview — превышения лимитов целевого плана (M-10).
 // Учитываем только persistent-ресурсы: prompts, collections, teams, share_links.
-// AI/MCP/extension — daily, сбросятся через день, downgrade не блокирует.
+// MCP/extension — daily, сбросятся через день, downgrade не блокирует.
 // Поле Over — абсолютное превышение (used - limit), 0 если в пределах.
 type DowngradePreview struct {
 	TargetPlanID  string `json:"target_plan_id"`

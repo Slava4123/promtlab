@@ -1,0 +1,44 @@
+/*
+ * Стили подсветки кода для <PromptContent/>.
+ * Две темы highlight.js — github (light) и github-dark — со scope-селекторами.
+ * В light-теме активна первая, в dark — вторая.
+ *
+ * Также перекрываем стандартный prose background у code/pre — чтобы вписать
+ * в наш dark-background без светлых плашек.
+ */
+
+@import "highlight.js/styles/github.css" layer(hljs-light);
+@import "highlight.js/styles/github-dark.css" layer(hljs-dark);
+
+/* По умолчанию используем light, в .dark режиме — dark. */
+@layer hljs-light {
+  :root:not(.dark) .prose pre {
+    background: oklch(from var(--muted) l c h / 50%);
+    border: 1px solid oklch(from var(--border) l c h);
+  }
+  :root:not(.dark) .prose code {
+    background: oklch(from var(--muted) l c h / 70%);
+    color: oklch(from var(--foreground) l c h);
+  }
+}
+
+@layer hljs-dark {
+  .dark .prose pre {
+    background: oklch(from var(--background) l c h / 70%);
+    border: 1px solid oklch(from var(--border) l c h);
+  }
+  .dark .prose pre code.hljs {
+    background: transparent;
+    padding: 0;
+  }
+  .dark .prose code {
+    background: oklch(from var(--muted) l c h / 60%);
+    color: oklch(from var(--foreground) l c h);
+  }
+}
+
+/* Inline-code — убрать ": прозрачные кавычки" которые prose по умолчанию ставит. */
+.prose code::before,
+.prose code::after {
+  content: "";
+}

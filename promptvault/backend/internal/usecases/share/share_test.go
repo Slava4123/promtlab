@@ -120,6 +120,10 @@ func (m *mockTeamRepo) GetMember(ctx context.Context, teamID, userID uint) (*mod
 // Stubs — share service uses only GetMember via teamcheck.
 func (m *mockTeamRepo) CreateWithOwner(context.Context, *models.Team, uint) error { return nil }
 func (m *mockTeamRepo) GetBySlug(context.Context, string) (*models.Team, error)   { return nil, nil }
+func (m *mockTeamRepo) GetByID(context.Context, uint) (*models.Team, error)       { return nil, nil }
+func (m *mockTeamRepo) UpdateBranding(context.Context, uint, string, string, string, string) error {
+	return nil
+}
 func (m *mockTeamRepo) ListByUserID(context.Context, uint) ([]models.Team, error) { return nil, nil }
 func (m *mockTeamRepo) ListByUserIDWithRolesAndCounts(context.Context, uint) ([]models.TeamWithRoleAndCount, error) {
 	return nil, nil
@@ -263,7 +267,7 @@ func TestGetPublicPrompt(t *testing.T) {
 	}, nil)
 	sr.On("IncrementViewCount", mock.Anything, uint(1)).Return(nil)
 
-	info, err := svc.GetPublicPrompt(ctx, "ps_abc")
+	info, err := svc.GetPublicPrompt(ctx, "ps_abc", ViewMeta{})
 	require.NoError(t, err)
 	assert.Equal(t, "Test", info.Title)
 	assert.Equal(t, "Hello", info.Content)
@@ -277,7 +281,7 @@ func TestGetPublicPrompt_NotFound(t *testing.T) {
 
 	sr.On("GetByToken", ctx, "ps_invalid").Return(nil, repo.ErrNotFound)
 
-	_, err := svc.GetPublicPrompt(ctx, "ps_invalid")
+	_, err := svc.GetPublicPrompt(ctx, "ps_invalid", ViewMeta{})
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
@@ -430,7 +434,7 @@ func TestGetPublicPrompt_SoftDeletedPrompt(t *testing.T) {
 		Prompt: models.Prompt{}, // zero-value, ID == 0
 	}, nil)
 
-	_, err := svc.GetPublicPrompt(ctx, "ps_deleted")
+	_, err := svc.GetPublicPrompt(ctx, "ps_deleted", ViewMeta{})
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 

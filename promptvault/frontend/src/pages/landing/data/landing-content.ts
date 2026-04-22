@@ -1,7 +1,8 @@
 import {
-  FileText, Sparkles, History, Cpu,
-  Wand2, Shuffle, BarChart3, Zap, Puzzle,
+  FileText, History, Cpu,
+  Puzzle,
   Globe, Server, GitBranch, Trophy, Terminal, KeyRound,
+  Share2,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -13,12 +14,6 @@ export interface FeaturePillar {
   title: string
   desc: string
   bullets: string[]
-}
-
-export interface AiAction {
-  icon: LucideIcon
-  title: string
-  desc: string
 }
 
 export interface Integration {
@@ -41,8 +36,8 @@ export interface Advantage {
 export const hero = {
   badge: "Открытый бета-тест",
   headline: "Все промпты — в одном месте",
-  headlineGradient: "С ИИ-ассистентом. На русском.",
-  sub: "Хватит терять промпты в чатах и закладках. Храни, улучшай с ИИ и используй повторно.",
+  headlineGradient: "С историей версий. На русском.",
+  sub: "Хватит терять промпты в чатах и закладках. Храни, версионируй и используй повторно — прямо из Claude, Cursor и других AI-клиентов через MCP.",
   cta: "Начать бесплатно",
   note: "Бесплатно в бета-тесте. Без карты.",
 }
@@ -57,7 +52,6 @@ export const compatibleWith = ["ChatGPT", "Claude", "Gemini", "Perplexity"]
 /* ------------------------------------------------------------------ */
 export const demoTabs = [
   { id: "library", label: "Библиотека" },
-  { id: "ai", label: "ИИ-улучшение" },
   { id: "versions", label: "Версии" },
 ] as const
 
@@ -67,14 +61,6 @@ export const mockPrompts = [
   { title: "SQL-оптимизатор", tags: ["базы данных", "скорость"], fav: true },
   { title: "Промпт для собеседования", tags: ["ии", "помощник"], fav: false },
 ]
-
-export const mockAiOriginal = `Напиши код на Python который парсит CSV файл и выводит статистику.`
-
-export const mockAiImproved = `Напиши Python-скрипт, который:
-1. Принимает путь к CSV-файлу как аргумент командной строки
-2. Читает файл через pandas с обработкой ошибок
-3. Выводит: количество строк, типы столбцов, describe() для числовых полей
-4. Сохраняет отчёт в JSON рядом с исходным файлом`
 
 export const mockDiffOld = `Ты — помощник для проверки кода.
 Проверяй код и пиши комментарии.`
@@ -100,14 +86,14 @@ export const featurePillars: FeaturePillar[] = [
     ],
   },
   {
-    icon: Sparkles,
-    title: "ИИ-ассистент",
-    desc: "Claude Sonnet 4 улучшает промпты прямо в редакторе. Результат появляется в реальном времени.",
+    icon: Cpu,
+    title: "MCP для AI-клиентов",
+    desc: "Подключите ПромтЛаб в Claude Desktop, Cursor, Windsurf через Model Context Protocol. Промпты доступны напрямую — одной командой.",
     bullets: [
-      "Улучшить — точнее и эффективнее",
-      "Переписать — другой стиль или тон",
-      "Анализ — оценка качества",
-      "Вариации — 4 альтернативы",
+      "30 инструментов: поиск, получение, переменные",
+      "Вызов промпта с подстановкой {{переменных}}",
+      "Scoped API-ключи с whitelist",
+      "Зарегистрирован в Official MCP Registry",
     ],
   },
   {
@@ -124,16 +110,6 @@ export const featurePillars: FeaturePillar[] = [
 ]
 
 /* ------------------------------------------------------------------ */
-/*  ИИ-действия (для демо-таба)                                         */
-/* ------------------------------------------------------------------ */
-export const aiActions: AiAction[] = [
-  { icon: Wand2, title: "Улучшить", desc: "Сделать промпт точнее" },
-  { icon: Shuffle, title: "Переписать", desc: "Другой стиль" },
-  { icon: BarChart3, title: "Анализ", desc: "Оценка качества" },
-  { icon: Zap, title: "Вариации", desc: "4 альтернативы" },
-]
-
-/* ------------------------------------------------------------------ */
 /*  Интеграции                                                          */
 /* ------------------------------------------------------------------ */
 export const integrations: Integration[] = [
@@ -145,7 +121,12 @@ export const integrations: Integration[] = [
   {
     icon: Cpu,
     title: "MCP-сервер",
-    desc: "24 инструмента для Claude Desktop и Cursor",
+    desc: "30 инструментов для Claude Desktop, Cursor, Windsurf и Cline",
+  },
+  {
+    icon: Share2,
+    title: "Публичные ссылки",
+    desc: "Делись промптами с коллегами — без регистрации у получателя",
   },
   {
     icon: Terminal,
@@ -226,6 +207,5 @@ export const betaBanner = {
 /* ------------------------------------------------------------------ */
 export const navLinks = [
   { href: "#features", label: "Возможности" },
-  { href: "#ai", label: "ИИ" },
   { href: "#integrations", label: "Интеграции" },
 ]

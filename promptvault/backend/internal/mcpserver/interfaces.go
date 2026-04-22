@@ -2,9 +2,11 @@ package mcpserver
 
 import (
 	"context"
+	"time"
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	analyticsuc "promptvault/internal/usecases/analytics"
 	promptuc "promptvault/internal/usecases/prompt"
 	searchuc "promptvault/internal/usecases/search"
 	shareuc "promptvault/internal/usecases/share"
@@ -63,4 +65,17 @@ type TrashService interface {
 
 type UserService interface {
 	GetByID(ctx context.Context, id uint) (*models.User, error)
+}
+
+// ActivityService — MCP-интерфейс для team_activity_feed (Phase 14, B.3).
+// Только read-path; запись через hooks в других usecases.
+type ActivityService interface {
+	ListByTeam(ctx context.Context, filter repo.TeamActivityFilter) ([]models.TeamActivityLog, *time.Time, error)
+}
+
+// AnalyticsService — MCP-интерфейс для analytics_summary / analytics_team_summary.
+// Возвращает готовые dashboard-структуры из usecases/analytics.
+type AnalyticsService interface {
+	GetPersonalDashboard(ctx context.Context, userID uint, requestedRange analyticsuc.RangeID) (*analyticsuc.PersonalDashboard, error)
+	GetTeamDashboard(ctx context.Context, userID, teamID uint, requestedRange analyticsuc.RangeID) (*analyticsuc.TeamDashboard, error)
 }

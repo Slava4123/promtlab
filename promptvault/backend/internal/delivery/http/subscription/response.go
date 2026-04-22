@@ -16,8 +16,6 @@ type PlanResponse struct {
 	PeriodDays         int             `json:"period_days"`
 	MaxPrompts         int             `json:"max_prompts"`
 	MaxCollections     int             `json:"max_collections"`
-	MaxAIRequestsDaily int             `json:"max_ai_requests_daily"`
-	AIRequestsIsTotal  bool            `json:"ai_requests_is_total"`
 	MaxTeams           int             `json:"max_teams"`
 	MaxTeamMembers     int             `json:"max_team_members"`
 	MaxShareLinks      int             `json:"max_share_links"`
@@ -36,8 +34,6 @@ func NewPlanResponse(p models.SubscriptionPlan) PlanResponse {
 		PeriodDays:         p.PeriodDays,
 		MaxPrompts:         p.MaxPrompts,
 		MaxCollections:     p.MaxCollections,
-		MaxAIRequestsDaily: p.MaxAIRequestsDaily,
-		AIRequestsIsTotal:  p.AIRequestsIsTotal,
 		MaxTeams:           p.MaxTeams,
 		MaxTeamMembers:     p.MaxTeamMembers,
 		MaxShareLinks:      p.MaxShareLinks,
@@ -108,7 +104,6 @@ type UsageResponse struct {
 	PlanID       string             `json:"plan_id"`
 	Prompts      quotauc.QuotaInfo  `json:"prompts"`
 	Collections  quotauc.QuotaInfo  `json:"collections"`
-	AIRequests   quotauc.QuotaInfo  `json:"ai_requests"`
 	Teams        quotauc.QuotaInfo  `json:"teams"`
 	ShareLinks   quotauc.QuotaInfo  `json:"share_links"`
 	ExtUsesToday quotauc.QuotaInfo  `json:"ext_uses_today"`
@@ -121,7 +116,6 @@ func NewUsageResponse(s *quotauc.UsageSummary) UsageResponse {
 		PlanID:       s.PlanID,
 		Prompts:      s.Prompts,
 		Collections:  s.Collections,
-		AIRequests:   s.AIRequests,
 		Teams:        s.Teams,
 		ShareLinks:   s.ShareLinks,
 		ExtUsesToday: s.ExtUsesToday,

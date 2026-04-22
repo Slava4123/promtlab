@@ -129,6 +129,12 @@ export default function Versions() {
                       {v.change_note}
                     </span>
                   )}
+                  {/* Phase 14: автор версии */}
+                  {(v.changed_by_name || v.changed_by_email) && (
+                    <span className="line-clamp-1 text-[0.7rem] text-muted-foreground">
+                      {v.changed_by_name || v.changed_by_email}
+                    </span>
+                  )}
                   {v.title && (
                     <span className="line-clamp-1 text-[0.7rem] text-muted-foreground">
                       {v.title}

@@ -46,7 +46,6 @@ const TEST_USER = {
   avatar_url: undefined,
   email_verified: true,
   has_password: true,
-  default_model: "anthropic/claude-sonnet-4",
   plan_id: "free",
   role: "user",
   status: "active",

@@ -58,7 +58,7 @@ claude mcp add promptvault --transport http https://ваш-домен/mcp --head
 
 | Tool | Описание | Viewer |
 |------|----------|--------|
-| `whoami` | Текущий пользователь (id, email, plan, default_model) | ✅ |
+| `whoami` | Текущий пользователь (id, email, plan) | ✅ |
 | `search_prompts` | Поиск по промптам, коллекциям, тегам (топ-K, без курсора) | ✅ |
 | `search_suggest` | Автодополнение по префиксу | ✅ |
 | `list_prompts` | Список промптов с фильтрами и **cursor pagination** (см. ниже) | ✅ |

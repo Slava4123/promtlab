@@ -10,7 +10,7 @@ if [ ! -f .env.prod ]; then
 fi
 
 # Check required vars
-for var in DOMAIN CERTBOT_EMAIL DATABASE_HOST DATABASE_USER DATABASE_PASSWORD DATABASE_NAME JWT_SECRET SERVER_FRONTEND_URL AI_OPENROUTER_API_KEY; do
+for var in DOMAIN CERTBOT_EMAIL DATABASE_HOST DATABASE_USER DATABASE_PASSWORD DATABASE_NAME JWT_SECRET SERVER_FRONTEND_URL; do
     if ! grep -qE "^${var}=.+" .env.prod; then
         echo "ERROR: ${var} is not set in .env.prod"
         exit 1

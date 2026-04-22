@@ -7,11 +7,14 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	activityuc "promptvault/internal/usecases/activity"
 	quotauc "promptvault/internal/usecases/quota"
+	"promptvault/internal/usecases/subscription"
 	"promptvault/internal/usecases/teamcheck"
 )
 
@@ -27,6 +30,28 @@ type Service struct {
 	teams       repo.TeamRepository
 	frontendURL string
 	quotas      *quotauc.Service
+	// activity — опциональный team activity feed (Phase 14).
+	activity *activityuc.Service
+	// viewLogger — опциональный write-path в share_view_log. Пишет только для
+	// Pro+ owner'ов (план читается из уже preload'ленного link.Prompt.User).
+	// Phase 14, B.2.
+	viewLogger repo.AnalyticsRepository
+	// brandingProvider — опциональный lookup для branded share pages (Phase 14 D).
+	// Возвращает BrandingInfo только если владелец team на Max. nil в остальных случаях.
+	brandingProvider BrandingProvider
+}
+
+// BrandingProvider — интерфейс подгрузки branding по team_id. Избегает прямой
+// зависимости share.Service от team.Service (DIP) и mock-friendly.
+type BrandingProvider interface {
+	GetBrandingForShare(ctx context.Context, teamID uint) (*models.BrandingInfo, error)
+}
+
+// ViewMeta — дополнительный контекст HTTP-запроса для логирования просмотров.
+// Передаётся из handler'а (referer/user-agent недоступны в usecase-слое напрямую).
+type ViewMeta struct {
+	Referer   string
+	UserAgent string
 }
 
 func NewService(
@@ -43,6 +68,25 @@ func NewService(
 		frontendURL: frontendURL,
 		quotas:      quotas,
 	}
+}
+
+// SetActivity подключает team_activity_log хуки (Phase 14).
+func (s *Service) SetActivity(activity *activityuc.Service) {
+	s.activity = activity
+}
+
+// SetViewLogger подключает write-path в share_view_log (Phase 14, B.2).
+// Nil-safe: если не подключён — LogShareView в GetPublicPrompt no-op'ит.
+// План владельца читается из уже preload'ленного link.Prompt.User.PlanID —
+// отдельный UserRepository здесь не нужен (H7/M9).
+func (s *Service) SetViewLogger(analytics repo.AnalyticsRepository) {
+	s.viewLogger = analytics
+}
+
+// SetBrandingLookup подключает branded share pages (Phase 14 D).
+// Nil-safe: если не подключён — Branding в PublicPromptInfo = nil.
+func (s *Service) SetBrandingLookup(p BrandingProvider) {
+	s.brandingProvider = p
 }
 
 // CreateOrGet creates a new share link or returns the existing active one (idempotent).
@@ -65,8 +109,13 @@ func (s *Service) CreateOrGet(ctx context.Context, promptID, userID uint) (*Shar
 		return nil, false, err
 	}
 
-	// Проверка квоты share links (только при создании новой)
+	// Проверка квот (только при создании новой).
+	// Phase 14: daily лимит создаваемых ссылок (fixed window UTC-полночь).
+	// Unchanged: total active cap (опциональный soft cap, -1 = unlimited).
 	if s.quotas != nil {
+		if err := s.quotas.CheckDailyShareCreation(ctx, userID); err != nil {
+			return nil, false, err
+		}
 		if err := s.quotas.CheckShareLinkQuota(ctx, userID); err != nil {
 			return nil, false, err
 		}
@@ -90,6 +139,28 @@ func (s *Service) CreateOrGet(ctx context.Context, promptID, userID uint) (*Shar
 			return s.toInfo(existing), false, nil
 		}
 		return nil, false, err
+	}
+
+	// Increment daily counter AFTER successful INSERT. Best-effort: если инкремент
+	// fail'ит, это не откатывает создание (юзер получил ссылку, но счётчик
+	// недосчитал). Error-level — revenue-leak сигнал для SRE/метрик (M2).
+	if s.quotas != nil {
+		if err := s.quotas.IncrementShareCreation(ctx, userID); err != nil {
+			slog.ErrorContext(ctx, "share.quota.increment_failed", "user_id", userID, "error", err)
+		}
+	}
+
+	// Activity feed hook (Phase 14) — только для team-промптов.
+	if prompt.TeamID != nil {
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      *prompt.TeamID,
+			ActorID:     userID,
+			EventType:   models.ActivityShareCreated,
+			TargetType:  models.TargetShare,
+			TargetID:    &link.ID,
+			TargetLabel: prompt.Title,
+			Metadata:    map[string]any{"prompt_id": prompt.ID, "token": link.Token},
+		})
 	}
 
 	return s.toInfo(link), true, nil
@@ -134,11 +205,25 @@ func (s *Service) Deactivate(ctx context.Context, promptID, userID uint) error {
 		}
 		return err
 	}
+
+	// Activity feed hook.
+	if prompt.TeamID != nil {
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      *prompt.TeamID,
+			ActorID:     userID,
+			EventType:   models.ActivityShareRevoked,
+			TargetType:  models.TargetShare,
+			TargetLabel: prompt.Title,
+			Metadata:    map[string]any{"prompt_id": prompt.ID},
+		})
+	}
 	return nil
 }
 
 // GetPublicPrompt returns a sanitized prompt for public viewing (no auth required).
-func (s *Service) GetPublicPrompt(ctx context.Context, token string) (*PublicPromptInfo, error) {
+// Phase 14 (B.2): если viewLogger подключён и owner на Pro+, async пишет запись
+// в share_view_log через ViewMeta с referer/user-agent из HTTP-запроса.
+func (s *Service) GetPublicPrompt(ctx context.Context, token string, meta ViewMeta) (*PublicPromptInfo, error) {
 	link, err := s.shares.GetByToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, repo.ErrNotFound) {
@@ -166,13 +251,20 @@ func (s *Service) GetPublicPrompt(ctx context.Context, token string) (*PublicPro
 		}
 	}(link.ID)
 
+	// Async timeline log в share_view_log (Phase 14, B.2). Только для Pro+ owner'ов.
+	// План владельца читается из уже preload'ленного link.Prompt.User.PlanID —
+	// избегаем лишнего users.GetByID на hot-path /s/:token (M9).
+	if s.viewLogger != nil {
+		go s.logShareView(link.ID, link.Prompt.User.PlanID, meta)
+	}
+
 	p := &link.Prompt
 	tags := make([]PublicTag, len(p.Tags))
 	for i, t := range p.Tags {
 		tags[i] = PublicTag{Name: t.Name, Color: t.Color}
 	}
 
-	return &PublicPromptInfo{
+	info := &PublicPromptInfo{
 		Title:   p.Title,
 		Content: p.Content,
 		Model:   p.Model,
@@ -183,7 +275,71 @@ func (s *Service) GetPublicPrompt(ctx context.Context, token string) (*PublicPro
 		},
 		CreatedAt: p.CreatedAt,
 		UpdatedAt: p.UpdatedAt,
-	}, nil
+	}
+
+	// Phase 14 D: branded share pages — если промпт в команде и provider подключён.
+	if p.TeamID != nil && s.brandingProvider != nil {
+		if branding, berr := s.brandingProvider.GetBrandingForShare(ctx, *p.TeamID); berr == nil && branding != nil && !branding.IsEmpty() {
+			info.Branding = branding
+		}
+	}
+	return info, nil
+}
+
+// logShareView — goroutine, пишет в share_view_log если владелец на Pro+.
+// Best-effort: любая ошибка → slog.Warn, не блокирует основную операцию.
+// План владельца приходит уже resolved из preload'ленного User (M9) —
+// это избегает лишний users.GetByID на hot-path /s/:token.
+func (s *Service) logShareView(shareLinkID uint, ownerPlanID string, meta ViewMeta) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("share.view_log.panic", "error", r)
+		}
+	}()
+	// Free не пишет в timeline — фича Pro+.
+	if !subscription.IsPaid(ownerPlanID) {
+		return
+	}
+	bgCtx, cancel := context.WithTimeout(context.Background(), viewCountTimeout)
+	defer cancel()
+
+	view := &models.ShareView{
+		ShareLinkID:     shareLinkID,
+		Referer:         truncateString(meta.Referer, 500),
+		UserAgentFamily: uaFamily(meta.UserAgent),
+	}
+	if err := s.viewLogger.LogShareView(bgCtx, view); err != nil {
+		slog.Warn("share.view_log.insert_failed", "share_link_id", shareLinkID, "error", err)
+	}
+}
+
+// truncateString — безопасно обрезает до max байт (без выхода за границы рун).
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	// Обрезаем по байтам — для DB VARCHAR достаточно.
+	return s[:maxLen]
+}
+
+// uaFamily — возвращает короткий идентификатор браузера (Chrome/Safari/Firefox/Edge/Other).
+// Простая эвристика без зависимости от user-agent-parser — для dashboard-метрик достаточно.
+func uaFamily(ua string) string {
+	ua = strings.ToLower(ua)
+	switch {
+	case strings.Contains(ua, "edg/"):
+		return "Edge"
+	case strings.Contains(ua, "chrome/"):
+		return "Chrome"
+	case strings.Contains(ua, "firefox/"):
+		return "Firefox"
+	case strings.Contains(ua, "safari/"):
+		return "Safari"
+	case ua == "":
+		return ""
+	default:
+		return "Other"
+	}
 }
 
 // --- helpers ---

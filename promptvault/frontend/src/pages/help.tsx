@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { ArrowLeft, ChevronDown, LifeBuoy, Lock, Mail, Search, Users } from "lucide-react"
 import { RolePermissionsTable } from "@/components/teams/role-permissions-table"
-import { AIShareBlock } from "@/components/help/ai-share-block"
 import { useAuthStore } from "@/stores/auth-store"
 
 interface FaqItem {
@@ -15,7 +14,7 @@ const FAQ: FaqItem[] = [
   {
     question: "Что такое ПромтЛаб?",
     answer:
-      "Self-hosted хранилище AI-промптов с версионированием, AI-улучшением, командной работой, расширением для браузера и MCP-сервером для Claude.",
+      "Self-hosted менеджер промптов с версионированием, командной работой, расширением для браузера и MCP-сервером для Claude, Cursor и других AI-клиентов.",
     tags: ["общее"],
   },
   {
@@ -150,12 +149,6 @@ export default function Help() {
           , обычно отвечаем в течение рабочего дня.
         </p>
       </header>
-
-      <AIShareBlock
-        mdUrl="/help.md"
-        topic="разобраться с ПромтЛаб — тарифы, оплата, расширение, MCP, безопасность"
-        className="mb-6"
-      />
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />

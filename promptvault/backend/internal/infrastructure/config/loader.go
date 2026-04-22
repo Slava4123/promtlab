@@ -127,12 +127,6 @@ func defaults() map[string]any {
 		"oauth": map[string]any{
 			"callback_base": "http://localhost:8080",
 		},
-		"ai": map[string]any{
-			"openrouter_api_key":       "",
-			"openrouter_base_url":      "https://openrouter.ai/api/v1",
-			"openrouter_timeout_seconds": 300,
-			"rate_limit_rpm":           10,
-		},
 		"sentry": map[string]any{
 			"enabled":            false,
 			"dsn":                "",
@@ -158,6 +152,9 @@ func defaults() map[string]any {
 			"recurrent_enabled":    true,
 			"webhook_allowed_ips":  []string{},
 			"webhook_trust_xff":    false,
+		},
+		"analytics": map[string]any{
+			"experimental_insights": false,
 		},
 	}
 }

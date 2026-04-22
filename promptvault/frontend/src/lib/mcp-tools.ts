@@ -24,6 +24,9 @@ export const MCP_TOOLS: McpTool[] = [
   { name: "collection_get", group: "read", label: "Получить коллекцию" },
   { name: "search_suggest", group: "read", label: "Автодополнение поиска" },
   { name: "list_prompt_vars", group: "read", label: "Переменные промпта" },
+  { name: "team_activity_feed", group: "read", label: "Лента активности команды" },
+  { name: "analytics_summary", group: "read", label: "Сводка аналитики (личная)" },
+  { name: "analytics_team_summary", group: "read", label: "Сводка аналитики (команда)" },
   // Write
   { name: "create_prompt", group: "write", label: "Создать промпт" },
   { name: "update_prompt", group: "write", label: "Обновить промпт" },

@@ -83,6 +83,7 @@ func (m *mockUserRepo) MarkReferralRewarded(ctx context.Context, userID uint) (b
 	args := m.Called(ctx, userID)
 	return args.Bool(0), args.Error(1)
 }
+func (m *mockUserRepo) ListMaxUsers(_ context.Context) ([]uint, error) { return nil, nil }
 
 type mockStarterRepo struct{ mock.Mock }
 

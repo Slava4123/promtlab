@@ -4,11 +4,11 @@ import { featurePillars } from "../data/landing-content"
 
 export function FeatureDeepDivesSection() {
   const pillarPrompts = featurePillars[0]
-  const pillarAi = featurePillars[1]
+  const pillarMcp = featurePillars[1]
   const pillarVersions = featurePillars[2]
 
   const PromptsIcon = pillarPrompts.icon
-  const AiIcon = pillarAi.icon
+  const McpIcon = pillarMcp.icon
   const VersionsIcon = pillarVersions.icon
 
   return (
@@ -59,28 +59,26 @@ export function FeatureDeepDivesSection() {
             </div>
           </FadeIn>
 
-          {/* Right column: AI + Versions stacked */}
+          {/* Right column: MCP + Versions stacked */}
           <div className="flex flex-col gap-4 lg:col-span-2">
-            {/* AI Assistant */}
+            {/* MCP */}
             <FadeIn delay={150} direction="right">
               <div className="group rounded-2xl border border-border/50 bg-card/30 p-6 transition-all duration-300 hover:border-violet-500/15 ring-1 ring-white/[0.02]">
                 <div className="mb-4 inline-flex rounded-lg bg-violet-500/10 p-2.5">
-                  <AiIcon className="h-5 w-5 text-violet-400" />
+                  <McpIcon className="h-5 w-5 text-violet-400" />
                 </div>
-                <h3 className="mb-2 text-lg font-semibold">{pillarAi.title}</h3>
-                <p className="mb-4 text-sm leading-relaxed text-muted-foreground">{pillarAi.desc}</p>
+                <h3 className="mb-2 text-lg font-semibold">{pillarMcp.title}</h3>
+                <p className="mb-4 text-sm leading-relaxed text-muted-foreground">{pillarMcp.desc}</p>
 
-                {/* AI actions grid */}
-                <div className="grid grid-cols-2 gap-2" aria-hidden="true">
-                  {pillarAi.bullets.map(b => {
-                    const label = b.split(" — ")[0]
-                    return (
-                      <div key={b} className="rounded-md border border-border/20 bg-background/30 px-2.5 py-2 text-center">
-                        <span className="text-[0.65rem] text-muted-foreground/70">{label}</span>
-                      </div>
-                    )
-                  })}
-                </div>
+                {/* MCP bullet highlights */}
+                <ul className="grid gap-1.5" aria-hidden="true">
+                  {pillarMcp.bullets.map(b => (
+                    <li key={b} className="flex items-start gap-2 text-[0.7rem] text-muted-foreground/80">
+                      <div className="mt-1 h-1 w-1 shrink-0 rounded-full bg-violet-400/60" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </FadeIn>
 

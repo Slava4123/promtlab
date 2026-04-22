@@ -75,6 +75,10 @@ func (m *mockTeamRepo) GetBySlug(ctx context.Context, slug string) (*models.Team
 	}
 	return args.Get(0).(*models.Team), args.Error(1)
 }
+func (m *mockTeamRepo) GetByID(_ context.Context, _ uint) (*models.Team, error) { return nil, nil }
+func (m *mockTeamRepo) UpdateBranding(_ context.Context, _ uint, _, _, _, _ string) error {
+	return nil
+}
 func (m *mockTeamRepo) ListByUserID(ctx context.Context, userID uint) ([]models.Team, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {

@@ -21,6 +21,10 @@ var KnownTools = map[string]bool{
 	"search_suggest":      true,
 	"list_prompt_vars":    true, // добавлен в фиче B
 	"whoami":              true, // v1.2
+	// Phase 14 read-tools
+	"team_activity_feed":     true, // Phase 14
+	"analytics_summary":      true, // Phase 14
+	"analytics_team_summary": true, // Phase 14
 	// Write
 	"create_prompt":          true,
 	"update_prompt":          true,

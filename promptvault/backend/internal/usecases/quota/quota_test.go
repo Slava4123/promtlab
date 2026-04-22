@@ -56,6 +56,7 @@ func (r *fakeUserRepo) GetByReferralCode(context.Context, string) (*models.User,
 func (r *fakeUserRepo) MarkReferralRewarded(context.Context, uint) (bool, error) {
 	return false, nil
 }
+func (r *fakeUserRepo) ListMaxUsers(context.Context) ([]uint, error) { return nil, nil }
 
 type fakePlanRepo struct {
 	plans map[string]*models.SubscriptionPlan
@@ -193,85 +194,6 @@ func TestCheckPromptQuota(t *testing.T) {
 	}
 }
 
-// --- CheckAIQuota (total vs daily — критично для Free) ---
-
-func TestCheckAIQuota_Total(t *testing.T) {
-	user := &models.User{ID: 1, PlanID: "free"}
-	plan := &models.SubscriptionPlan{
-		ID:                 "free",
-		MaxAIRequestsDaily: 5,
-		AIRequestsIsTotal:  true,
-	}
-
-	cases := []struct {
-		name    string
-		total   int
-		wantErr bool
-		quotaT  string
-	}{
-		{"free 0/5 allows", 0, false, ""},
-		{"free 4/5 allows", 4, false, ""},
-		{"free 5/5 blocks with ai_total", 5, true, "ai_total"},
-		{"free 10/5 blocks with ai_total", 10, true, "ai_total"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			q := &fakeQuotaRepo{totalUsage: map[string]int{FeatureAI: tc.total}}
-			svc := newService(user, plan, q)
-			err := svc.CheckAIQuota(context.Background(), 1)
-			if tc.wantErr {
-				var qe *QuotaExceededError
-				if !errors.As(err, &qe) {
-					t.Fatalf("want QuotaExceededError, got %v", err)
-				}
-				if qe.QuotaType != tc.quotaT {
-					t.Fatalf("quota_type = %q, want %q", qe.QuotaType, tc.quotaT)
-				}
-			} else if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
-func TestCheckAIQuota_Daily(t *testing.T) {
-	user := &models.User{ID: 1, PlanID: "pro"}
-	plan := &models.SubscriptionPlan{
-		ID:                 "pro",
-		MaxAIRequestsDaily: 10,
-		AIRequestsIsTotal:  false,
-	}
-
-	cases := []struct {
-		name    string
-		daily   int
-		wantErr bool
-		quotaT  string
-	}{
-		{"pro 0/10 allows", 0, false, ""},
-		{"pro 9/10 allows", 9, false, ""},
-		{"pro 10/10 blocks with ai_daily", 10, true, "ai_daily"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			q := &fakeQuotaRepo{dailyUsage: map[string]int{FeatureAI: tc.daily}}
-			svc := newService(user, plan, q)
-			err := svc.CheckAIQuota(context.Background(), 1)
-			if tc.wantErr {
-				var qe *QuotaExceededError
-				if !errors.As(err, &qe) {
-					t.Fatalf("want QuotaExceededError, got %v", err)
-				}
-				if qe.QuotaType != tc.quotaT {
-					t.Fatalf("quota_type = %q, want %q", qe.QuotaType, tc.quotaT)
-				}
-			} else if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
 // --- CheckExtensionQuota / CheckMCPQuota — единая логика, один smoke-test ---
 
 func TestCheckExtensionAndMCPQuota(t *testing.T) {
@@ -298,43 +220,24 @@ func TestCheckExtensionAndMCPQuota(t *testing.T) {
 	}
 }
 
-// --- Increment ---
-
-func TestIncrementAIUsage_WritesFeatureAI(t *testing.T) {
-	user := &models.User{ID: 1, PlanID: "pro"}
-	plan := &models.SubscriptionPlan{ID: "pro"}
-	q := &fakeQuotaRepo{}
-	svc := newService(user, plan, q)
-
-	if err := svc.IncrementAIUsage(context.Background(), 42); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(q.incrementLog) != 1 || q.incrementLog[0].feature != FeatureAI || q.incrementLog[0].userID != 42 {
-		t.Fatalf("expected one Increment call for user=42 feature=ai, got %+v", q.incrementLog)
-	}
-}
-
 // --- GetUsageSummary ---
 
-func TestGetUsageSummary_ReturnsIsTotalForFree(t *testing.T) {
+func TestGetUsageSummary_ReturnsAllCounters(t *testing.T) {
 	user := &models.User{ID: 1, PlanID: "free"}
 	plan := &models.SubscriptionPlan{
-		ID:                 "free",
-		MaxPrompts:         50,
-		MaxCollections:     3,
-		MaxAIRequestsDaily: 5,
-		AIRequestsIsTotal:  true,
-		MaxTeams:           1,
-		MaxShareLinks:      2,
-		MaxExtUsesDaily:    5,
-		MaxMCPUsesDaily:    5,
+		ID:              "free",
+		MaxPrompts:      50,
+		MaxCollections:  3,
+		MaxTeams:        1,
+		MaxShareLinks:   2,
+		MaxExtUsesDaily: 5,
+		MaxMCPUsesDaily: 5,
 	}
 	q := &fakeQuotaRepo{
 		prompts:     12,
 		collections: 2,
 		teamsOwned:  1,
 		shareLinks:  0,
-		totalUsage:  map[string]int{FeatureAI: 3},
 		dailyUsage:  map[string]int{FeatureExtension: 1, FeatureMCP: 0},
 	}
 	svc := newService(user, plan, q)
@@ -346,13 +249,13 @@ func TestGetUsageSummary_ReturnsIsTotalForFree(t *testing.T) {
 	if summary.PlanID != "free" {
 		t.Fatalf("plan_id = %q, want free", summary.PlanID)
 	}
-	if !summary.AIRequests.IsTotal {
-		t.Fatalf("AIRequests.IsTotal = false, want true для Free плана")
-	}
-	if summary.AIRequests.Used != 3 || summary.AIRequests.Limit != 5 {
-		t.Fatalf("AIRequests = %+v, want used=3 limit=5", summary.AIRequests)
-	}
 	if summary.Prompts.Used != 12 || summary.Prompts.Limit != 50 {
 		t.Fatalf("Prompts = %+v, want used=12 limit=50", summary.Prompts)
+	}
+	if summary.ExtUsesToday.Used != 1 || summary.ExtUsesToday.Limit != 5 {
+		t.Fatalf("ExtUsesToday = %+v, want used=1 limit=5", summary.ExtUsesToday)
+	}
+	if summary.MCPUsesToday.Used != 0 || summary.MCPUsesToday.Limit != 5 {
+		t.Fatalf("MCPUsesToday = %+v, want used=0 limit=5", summary.MCPUsesToday)
 	}
 }

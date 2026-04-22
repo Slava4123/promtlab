@@ -27,6 +27,16 @@ func (m *mockTeamRepo) GetBySlug(ctx context.Context, slug string) (*models.Team
 	}
 	return args.Get(0).(*models.Team), args.Error(1)
 }
+func (m *mockTeamRepo) GetByID(ctx context.Context, id uint) (*models.Team, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Team), args.Error(1)
+}
+func (m *mockTeamRepo) UpdateBranding(ctx context.Context, teamID uint, logoURL, tagline, website, primaryColor string) error {
+	return m.Called(ctx, teamID, logoURL, tagline, website, primaryColor).Error(0)
+}
 func (m *mockTeamRepo) ListByUserID(ctx context.Context, userID uint) ([]models.Team, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
@@ -179,6 +189,7 @@ func (m *mockUserRepo) MarkReferralRewarded(ctx context.Context, userID uint) (b
 	args := m.Called(ctx, userID)
 	return args.Bool(0), args.Error(1)
 }
+func (m *mockUserRepo) ListMaxUsers(_ context.Context) ([]uint, error) { return nil, nil }
 
 // ===================== Helpers =====================
 

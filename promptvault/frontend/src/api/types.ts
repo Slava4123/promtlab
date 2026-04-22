@@ -9,7 +9,6 @@ export interface User {
   avatar_url?: string
   email_verified: boolean
   has_password: boolean
-  default_model: string
   plan_id?: PlanID
   role?: UserRole
   status?: UserStatus
@@ -137,6 +136,10 @@ export interface PromptVersion {
   model?: string
   change_note?: string
   created_at: string
+  /** Phase 14: автор версии. Для записей до миграции 000039 поля могут быть пустыми. */
+  changed_by_id?: number
+  changed_by_email?: string
+  changed_by_name?: string
 }
 
 // Settings (Phase 10)
@@ -155,18 +158,6 @@ export interface UpdateProfileRequest {
 export interface ChangePasswordRequest {
   old_password: string
   new_password: string
-}
-
-// AI (Phase 8)
-
-export type AIAction = "enhance" | "rewrite" | "analyze" | "variations"
-
-export interface AIModel {
-  id: string
-  name: string
-  provider: string
-  description: string
-  max_tokens: number
 }
 
 // Search (Phase 11)
@@ -406,6 +397,13 @@ export interface PublicPrompt {
   author: { name: string; avatar_url?: string }
   created_at: string
   updated_at: string
+  /** Phase 14 D: Branded share pages (Max-only). undefined для Free/Pro и не-team промптов. */
+  branding?: {
+    logo_url?: string
+    tagline?: string
+    website?: string
+    primary_color?: string
+  }
 }
 
 export interface CreatedAPIKey {
@@ -467,11 +465,11 @@ export interface Plan {
   period_days: number
   max_prompts: number
   max_collections: number
-  max_ai_requests_daily: number
-  ai_requests_is_total: boolean
   max_teams: number
   max_team_members: number
   max_share_links: number
+  /** Phase 14: Fixed-window лимит создаваемых share-ссылок в день (Free 10 / Pro 100 / Max 1000). */
+  max_daily_shares: number
   max_ext_uses_daily: number
   max_mcp_uses_daily: number
   features: string[]
@@ -496,16 +494,16 @@ export interface Subscription {
 export interface QuotaInfo {
   used: number
   limit: number
-  is_total?: boolean
 }
 
 export interface UsageSummary {
   plan_id: PlanID
   prompts: QuotaInfo
   collections: QuotaInfo
-  ai_requests: QuotaInfo
   teams: QuotaInfo
   share_links: QuotaInfo
+  /** Phase 14: fixed-window лимит создаваемых share-ссылок за сутки (UTC-полночь). */
+  daily_shares_today: QuotaInfo
   ext_uses_today: QuotaInfo
   mcp_uses_today: QuotaInfo
 }

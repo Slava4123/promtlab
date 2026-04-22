@@ -45,6 +45,10 @@ import SettingsAppearance from "@/pages/settings/appearance"
 const Teams = lazy(() => import("@/pages/teams"))
 const TeamView = lazy(() => import("@/pages/team-view"))
 const Pricing = lazy(() => import("@/pages/pricing"))
+const Analytics = lazy(() => import("@/pages/analytics"))
+const TeamAnalytics = lazy(() => import("@/pages/team-analytics"))
+const TeamActivity = lazy(() => import("@/pages/team-activity"))
+const TeamBranding = lazy(() => import("@/pages/team-branding"))
 const Trash = lazy(() => import("@/pages/trash"))
 const History = lazy(() => import("@/pages/history"))
 const Welcome = lazy(() => import("@/pages/welcome"))
@@ -140,6 +144,9 @@ function AppRoutes() {
           <Route path="/collections/:id" element={<Suspense fallback={<PageFallback />}><CollectionView /></Suspense>} />
           <Route path="/teams" element={<Suspense fallback={<PageFallback />}><Teams /></Suspense>} />
           <Route path="/teams/:slug" element={<Suspense fallback={<PageFallback />}><TeamView /></Suspense>} />
+          <Route path="/teams/:slug/analytics" element={<Suspense fallback={<PageFallback />}><TeamAnalytics /></Suspense>} />
+          <Route path="/teams/:slug/activity" element={<Suspense fallback={<PageFallback />}><TeamActivity /></Suspense>} />
+          <Route path="/teams/:slug/branding" element={<Suspense fallback={<PageFallback />}><TeamBranding /></Suspense>} />
           <Route path="/settings" element={<Suspense fallback={<PageFallback />}><SettingsLayout /></Suspense>}>
             <Route index element={<Navigate to="profile" replace />} />
             <Route path="profile" element={<SettingsProfile />} />
@@ -156,6 +163,7 @@ function AppRoutes() {
           <Route path="/history" element={<Suspense fallback={<PageFallback />}><History /></Suspense>} />
           <Route path="/trash" element={<Suspense fallback={<PageFallback />}><Trash /></Suspense>} />
           <Route path="/pricing" element={<Suspense fallback={<PageFallback />}><Pricing /></Suspense>} />
+          <Route path="/analytics" element={<Suspense fallback={<PageFallback />}><Analytics /></Suspense>} />
           <Route path="/changelog" element={<Suspense fallback={<PageFallback />}><Changelog /></Suspense>} />
           <Route path="/badges" element={<Suspense fallback={<PageFallback />}><Badges /></Suspense>} />
 

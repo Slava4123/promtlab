@@ -82,6 +82,7 @@ func (f *fakeUserRepo) GetByReferralCode(_ context.Context, _ string) (*models.U
 func (f *fakeUserRepo) MarkReferralRewarded(_ context.Context, _ uint) (bool, error) {
 	return false, nil
 }
+func (f *fakeUserRepo) ListMaxUsers(_ context.Context) ([]uint, error) { return nil, nil }
 
 type fakeAdminRepo struct {
 	users          []repo.UserSummary

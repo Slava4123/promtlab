@@ -4,7 +4,6 @@ import { FadeIn } from "../components/fade-in"
 import { useAutoAdvance } from "../hooks/use-auto-advance"
 import { AppMockupFrame } from "../components/app-mockup-frame"
 import { MockupPromptList } from "../components/mockup-prompt-list"
-import { MockupAiStream } from "../components/mockup-ai-stream"
 import { MockupDiffViewer } from "../components/mockup-diff-viewer"
 import { demoTabs } from "../data/landing-content"
 
@@ -108,9 +107,6 @@ export function ProductDemoSection() {
                   <MockupPromptList />
                 </TabPanel>
                 <TabPanel active={activeIndex === 1}>
-                  <MockupAiStream active={activeIndex === 1} />
-                </TabPanel>
-                <TabPanel active={activeIndex === 2}>
                   <MockupDiffViewer />
                 </TabPanel>
               </div>

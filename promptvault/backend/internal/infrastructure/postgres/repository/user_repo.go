@@ -24,6 +24,17 @@ func (r *userRepo) Create(ctx context.Context, user *models.User) error {
 	return r.db.WithContext(ctx).Create(user).Error
 }
 
+// ListMaxUsers — ID активных Max-юзеров (Phase 14: analytics.InsightsComputeLoop).
+// Предикат plan_id LIKE 'max%' покрывает 'max' и 'max_yearly'.
+func (r *userRepo) ListMaxUsers(ctx context.Context) ([]uint, error) {
+	var ids []uint
+	err := r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("plan_id LIKE ? AND status = ?", "max%", "active").
+		Pluck("id", &ids).Error
+	return ids, err
+}
+
 func (r *userRepo) GetByID(ctx context.Context, id uint) (*models.User, error) {
 	var user models.User
 	if err := r.db.WithContext(ctx).First(&user, id).Error; err != nil {

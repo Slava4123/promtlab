@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { Copy, Link2, Link2Off, Loader2, Eye } from "lucide-react"
+import { Link as RouterLink } from "react-router-dom"
+import { Copy, Link2, Link2Off, Loader2, Eye, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -9,7 +10,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
 import { useShareLink, useCreateShareLink, useDeleteShareLink } from "@/hooks/use-share"
+import { useUsage } from "@/hooks/use-subscription"
 import { ApiError } from "@/api/client"
 
 interface ShareDialogProps {
@@ -20,9 +23,15 @@ interface ShareDialogProps {
 
 export function ShareDialog({ promptId, open, onOpenChange }: ShareDialogProps) {
   const { data: shareLink, isLoading, isError, error } = useShareLink(promptId)
+  const { data: usage } = useUsage()
   const createShare = useCreateShareLink()
   const deleteShare = useDeleteShareLink()
   const [confirming, setConfirming] = useState(false)
+
+  // Phase 14: дневной лимит создаваемых share-ссылок (fixed window UTC).
+  const daily = usage?.daily_shares_today
+  const dailyPct = daily && daily.limit > 0 ? Math.min(100, (daily.used / daily.limit) * 100) : 0
+  const dailyExhausted = !!daily && daily.limit > 0 && daily.used >= daily.limit
 
   const is404 = error instanceof ApiError && error.status === 404
   const hasLink = !isError && !!shareLink
@@ -125,10 +134,35 @@ export function ShareDialog({ promptId, open, onOpenChange }: ShareDialogProps) 
             <p className="text-sm text-muted-foreground">
               Создайте публичную ссылку — любой сможет просмотреть этот промпт без регистрации.
             </p>
+
+            {daily && daily.limit > 0 && (
+              <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Создано сегодня</span>
+                  <span className={dailyExhausted ? "font-medium text-rose-500" : "font-medium"}>
+                    {daily.used} / {daily.limit}
+                  </span>
+                </div>
+                <Progress value={dailyPct} />
+                {dailyExhausted && (
+                  <div className="flex items-start gap-2 pt-1 text-xs">
+                    <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                    <div className="flex-1">
+                      Дневной лимит исчерпан. Сбросится в 00:00 UTC или{" "}
+                      <RouterLink to="/pricing" className="underline underline-offset-2">
+                        перейдите на Pro
+                      </RouterLink>
+                      {" "}для 100 ссылок/день.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <Button
               className="w-full"
               onClick={handleCreate}
-              disabled={createShare.isPending}
+              disabled={createShare.isPending || dailyExhausted}
             >
               {createShare.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, HelpCircle, Pencil, Trash2, UserPlus, Users, Loader2 } from "lucide-react"
+import { ArrowLeft, HelpCircle, Pencil, Trash2, UserPlus, Users, Loader2, BarChart3, Activity } from "lucide-react"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
 
 import { useTeam, useUpdateTeam, useDeleteTeam, useInviteMember, useTeamInvitations, useCancelInvitation, useUpdateMemberRole, useRemoveMember } from "@/hooks/use-teams"
@@ -152,25 +153,42 @@ export default function TeamView() {
             <p className="text-[0.85rem] text-muted-foreground">{team.description}</p>
           )}
         </div>
-        {isOwner && (
-          <div className="flex gap-2">
-            <button
-              onClick={openEdit}
-              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-muted-foreground transition-colors hover:text-foreground border border-border bg-card"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              Редактировать
-            </button>
-            <button
-              onClick={() => setDeleteOpen(true)}
-              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-red-400/70 transition-colors hover:bg-red-500/10 hover:text-red-400"
-              style={{ border: "1px solid rgba(239,68,68,0.1)" }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Удалить
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {/* Phase 14 C.3: ссылки на analytics + activity. Доступны всем членам. */}
+          <Link
+            to={`/teams/${slug}/analytics`}
+            className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-muted-foreground transition-colors hover:text-foreground border border-border bg-card"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            Аналитика
+          </Link>
+          <Link
+            to={`/teams/${slug}/activity`}
+            className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-muted-foreground transition-colors hover:text-foreground border border-border bg-card"
+          >
+            <Activity className="h-3.5 w-3.5" />
+            Активность
+          </Link>
+          {isOwner && (
+            <>
+              <button
+                onClick={openEdit}
+                className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-muted-foreground transition-colors hover:text-foreground border border-border bg-card"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Редактировать
+              </button>
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-red-400/70 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                style={{ border: "1px solid rgba(239,68,68,0.1)" }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Удалить
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Members section */}

@@ -28,7 +28,6 @@ const testUser: User = {
   name: "Test User",
   email_verified: true,
   has_password: true,
-  default_model: "anthropic/claude-sonnet-4",
 }
 
 const testAuthResponse: AuthResponse = {

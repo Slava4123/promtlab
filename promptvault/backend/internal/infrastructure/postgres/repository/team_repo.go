@@ -43,6 +43,19 @@ func (r *teamRepo) GetBySlug(ctx context.Context, slug string) (*models.Team, er
 	return &team, nil
 }
 
+// GetByID — Phase 14. PK lookup. Нужен для share.GetPublicPrompt
+// (prompts.team_id есть, slug нет).
+func (r *teamRepo) GetByID(ctx context.Context, id uint) (*models.Team, error) {
+	var team models.Team
+	if err := r.db.WithContext(ctx).First(&team, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repo.ErrNotFound
+		}
+		return nil, err
+	}
+	return &team, nil
+}
+
 func (r *teamRepo) ListByUserID(ctx context.Context, userID uint) ([]models.Team, error) {
 	var teams []models.Team
 	err := r.db.WithContext(ctx).
@@ -67,6 +80,20 @@ func (r *teamRepo) ListByUserIDWithRolesAndCounts(ctx context.Context, userID ui
 
 func (r *teamRepo) Update(ctx context.Context, team *models.Team) error {
 	return r.db.WithContext(ctx).Save(team).Error
+}
+
+// UpdateBranding — Phase 14. Точечный UPDATE brand_* полей без затрагивания
+// name/description/created_by. Пустая строка сохраняется как "", что эквивалентно
+// очистке (не пишем NULL — поле VARCHAR без NOT NULL).
+func (r *teamRepo) UpdateBranding(ctx context.Context, teamID uint, logoURL, tagline, website, primaryColor string) error {
+	return r.db.WithContext(ctx).Model(&models.Team{}).
+		Where("id = ?", teamID).
+		Updates(map[string]any{
+			"brand_logo_url":      logoURL,
+			"brand_tagline":       tagline,
+			"brand_website":       website,
+			"brand_primary_color": primaryColor,
+		}).Error
 }
 
 func (r *teamRepo) Delete(ctx context.Context, id uint) error {

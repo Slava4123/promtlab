@@ -9,6 +9,7 @@ import (
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	activityuc "promptvault/internal/usecases/activity"
 	badgeuc "promptvault/internal/usecases/badge"
 	quotauc "promptvault/internal/usecases/quota"
 	streakuc "promptvault/internal/usecases/streak"
@@ -25,10 +26,20 @@ type Service struct {
 	streaks     *streakuc.Service
 	badges      *badgeuc.Service
 	quotas      *quotauc.Service
+	// activity — опциональный team activity feed (Phase 14). Nil в тестах и
+	// когда фича не подключена. Методы LogSafe безопасны для nil-receiver.
+	activity *activityuc.Service
 }
 
 func NewService(prompts repo.PromptRepository, tags repo.TagRepository, collections repo.CollectionRepository, versions repo.VersionRepository, teams repo.TeamRepository, pins repo.PinRepository, streaks *streakuc.Service, badges *badgeuc.Service, quotas *quotauc.Service) *Service {
 	return &Service{prompts: prompts, tags: tags, collections: collections, versions: versions, teams: teams, pins: pins, streaks: streaks, badges: badges, quotas: quotas}
+}
+
+// SetActivity подключает team_activity_log хуки (Phase 14). Не в NewService,
+// чтобы не ломать существующие вызовы и тесты. Nil-safe: если не вызван,
+// activity-хуки становятся no-op (через LogSafe на nil-receiver).
+func (s *Service) SetActivity(activity *activityuc.Service) {
+	s.activity = activity
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Prompt, []badgeuc.Badge, error) {
@@ -114,6 +125,19 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Prompt, [
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Activity feed hook — только для team-промптов (team_activity_log.team_id NOT NULL).
+	if in.TeamID != nil {
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      *in.TeamID,
+			ActorID:     in.UserID,
+			EventType:   models.ActivityPromptCreated,
+			TargetType:  models.TargetPrompt,
+			TargetID:    &p.ID,
+			TargetLabel: p.Title,
+		})
+	}
+
 	return result, newBadges, nil
 }
 
@@ -177,13 +201,16 @@ func (s *Service) Update(ctx context.Context, id, userID uint, in UpdateInput) (
 		return nil, nil, err
 	}
 
-	// Атомарный снимок старого состояния перед мутацией (SELECT MAX + INSERT в одной транзакции)
+	// Атомарный снимок старого состояния перед мутацией (SELECT MAX + INSERT в одной транзакции).
+	// ChangedBy = userID совершившего правку (Phase 14 — нужно для audit/history в UI).
+	uid := userID
 	version := &models.PromptVersion{
 		PromptID:   p.ID,
 		Title:      p.Title,
 		Content:    p.Content,
 		Model:      p.Model,
 		ChangeNote: in.ChangeNote,
+		ChangedBy:  &uid,
 	}
 	if err := s.versions.CreateWithNextVersion(ctx, version); err != nil {
 		return nil, nil, err
@@ -263,6 +290,24 @@ func (s *Service) Update(ctx context.Context, id, userID uint, in UpdateInput) (
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Activity feed hook — для team-промптов. Metadata несёт номер новой версии
+	// и change_note, чтобы в feed можно было показать diff-подсказку.
+	if p.TeamID != nil {
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      *p.TeamID,
+			ActorID:     userID,
+			EventType:   models.ActivityPromptUpdated,
+			TargetType:  models.TargetPrompt,
+			TargetID:    &p.ID,
+			TargetLabel: p.Title,
+			Metadata: map[string]any{
+				"version_number": version.VersionNumber,
+				"change_note":    in.ChangeNote,
+			},
+		})
+	}
+
 	return result, newBadges, nil
 }
 
@@ -274,7 +319,23 @@ func (s *Service) Delete(ctx context.Context, id, userID uint) error {
 	if err := s.checkTeamEditAccess(ctx, p, userID); err != nil {
 		return err
 	}
-	return s.prompts.SoftDelete(ctx, id)
+	if err := s.prompts.SoftDelete(ctx, id); err != nil {
+		return err
+	}
+
+	// Activity feed hook — target_label фиксирует title промпта на момент удаления
+	// (через 30 дней trash purge ссылка станет dead, label — единственный контекст).
+	if p.TeamID != nil {
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      *p.TeamID,
+			ActorID:     userID,
+			EventType:   models.ActivityPromptDeleted,
+			TargetType:  models.TargetPrompt,
+			TargetID:    &p.ID,
+			TargetLabel: p.Title,
+		})
+	}
+	return nil
 }
 
 func (s *Service) ToggleFavorite(ctx context.Context, id, userID uint) (*models.Prompt, error) {

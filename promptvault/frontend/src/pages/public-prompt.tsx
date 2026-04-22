@@ -5,6 +5,7 @@ import { Copy, Check, Loader2, Sparkles } from "lucide-react"
 import { useState } from "react"
 import { publicApi } from "@/api/client"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { PromptView } from "@/components/prompts/prompt-view"
 import type { Prompt } from "@/api/types"
 
 /**
@@ -105,9 +106,9 @@ export default function PublicPrompt() {
         )}
       </header>
 
-      <pre className="whitespace-pre-wrap rounded-xl border border-border bg-card px-5 py-4 text-[0.9rem] leading-relaxed text-foreground">
-        {data.content}
-      </pre>
+      <div className="rounded-xl border border-border bg-card px-5 py-4">
+        <PromptView content={data.content} storageKey="public-prompt-view" />
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Button size="sm" onClick={handleCopy}>
@@ -128,7 +129,7 @@ export default function PublicPrompt() {
         <Link to="/" className="font-medium text-foreground underline">
           ПромтЛаб
         </Link>
-        {" — хранилище AI-промптов с командной работой, AI-улучшением и MCP-интеграцией."}
+        {" — менеджер промптов с версионированием, командами и MCP-интеграцией для Claude, Cursor и других."}
       </footer>
     </div>
   )

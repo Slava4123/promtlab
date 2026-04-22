@@ -21,11 +21,11 @@ import (
 	"promptvault/internal/middleware/ratelimit"
 	sentrymw "promptvault/internal/middleware/sentry"
 
+	analyticshttp "promptvault/internal/delivery/http/analytics"
 	subscriptionhttp "promptvault/internal/delivery/http/subscription"
 	webhookhttp "promptvault/internal/delivery/http/webhook"
 	adminhttp "promptvault/internal/delivery/http/admin"
 	adminauthhttp "promptvault/internal/delivery/http/adminauth"
-	aihttp "promptvault/internal/delivery/http/ai"
 	apikeyhttp "promptvault/internal/delivery/http/apikey"
 	authhttp "promptvault/internal/delivery/http/auth"
 	badgehttp "promptvault/internal/delivery/http/badge"
@@ -44,14 +44,14 @@ import (
 	teamhttp "promptvault/internal/delivery/http/team"
 	trashhttp "promptvault/internal/delivery/http/trash"
 	userhttp "promptvault/internal/delivery/http/user"
-	"promptvault/internal/infrastructure/openrouter"
 	"promptvault/internal/infrastructure/payment"
 	"promptvault/internal/infrastructure/payment/tbank"
 	"promptvault/internal/mcpserver"
 	adminmw "promptvault/internal/middleware/admin"
+	activityuc "promptvault/internal/usecases/activity"
 	adminuc "promptvault/internal/usecases/admin"
 	adminauthuc "promptvault/internal/usecases/adminauth"
-	aiuc "promptvault/internal/usecases/ai"
+	analyticsuc "promptvault/internal/usecases/analytics"
 	apikeyuc "promptvault/internal/usecases/apikey"
 	auditsvc "promptvault/internal/usecases/audit"
 	authuc "promptvault/internal/usecases/auth"
@@ -149,7 +149,6 @@ type App struct {
 	promptHandler     *prompthttp.Handler
 	collectionHandler *collhttp.Handler
 	tagHandler        *taghttp.Handler
-	aiHandler         *aihttp.Handler
 	searchHandler     *searchhttp.Handler
 	teamHandler       *teamhttp.Handler
 	userHandler       *userhttp.Handler
@@ -166,6 +165,11 @@ type App struct {
 	subscriptionHandler   *subscriptionhttp.Handler
 	webhookHandler        *webhookhttp.Handler
 	seoHandler            *seohttp.Handler
+	// Phase 14 B.4
+	analyticsHandler     *analyticshttp.Handler
+	teamActivityHandler  *teamhttp.ActivityHandler
+	// Phase 14 D
+	teamBrandingHandler  *teamhttp.BrandingHandler
 	oauthServerHandler    *oauthsrvhttp.Handler
 	metadataHandler       *metadatahttp.Handler
 	// Следующие поля используются в MountRoutes для admin-middleware chain:
@@ -178,6 +182,9 @@ type App struct {
 	reminderLoop      *subscriptionuc.ReminderLoop
 	reengagementLoop  *engagementuc.ReengagementLoop
 	streakReminderLoop *engagementuc.StreakReminderLoop
+	// Phase 14: audit + analytics фоновые воркеры.
+	activityCleanupLoop *analyticsuc.CleanupLoop
+	insightsLoop        *analyticsuc.InsightsComputeLoop
 	feedbackRL        *ratelimit.Limiter[uint]
 }
 
@@ -229,8 +236,29 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	adminauthSvc := adminauthuc.NewService(totpRepo, userRepo)
 	adminRepo := pgrepo.NewAdminRepository(db)
 
+	// Team activity feed (Phase 14) — продуктовые события внутри команды
+	// (prompt/collection/share/member/role). Рядом с audit-инфраструктурой,
+	// т.к. концептуально близко, но целевая аудитория — члены команды, не админы.
+	activityRepo := pgrepo.NewTeamActivityRepository(db)
+	activitySvc := activityuc.NewService(activityRepo, userRepo)
+
+	// Analytics (Phase 14) — dashboard-агрегации, Smart Insights (Max-only),
+	// retention cleanup.
+	analyticsRepo := pgrepo.NewAnalyticsRepository(db)
+	analyticsSvc := analyticsuc.NewService(analyticsRepo, promptRepo, teamRepo, userRepo, quotaSvc)
+	// Q2: experimental insights flag — 4 неготовых типа скрыты до M8.
+	analyticsSvc.SetExperimentalInsights(cfg.Analytics.ExperimentalInsights)
+	// Phase B подключает analyticsSvc в MCP-server (ниже) и в HTTP handlers.
+
+	// Cleanup loops — ежесуточно. Retention: Free=30д, Pro=90д, Max=365д (per-plan в SQL).
+	activityCleanupLoop := analyticsuc.NewCleanupLoop(activityRepo, analyticsRepo, 24*time.Hour)
+	insightsLoop := analyticsuc.NewInsightsComputeLoop(analyticsSvc, userRepo, teamRepo, 24*time.Hour)
+
 	promptSvc := promptuc.NewService(promptRepo, tagRepo, collectionRepo, versionRepo, teamRepo, pinRepo, streakSvc, badgeSvc, quotaSvc)
+	promptSvc.SetActivity(activitySvc)
+	teamSvc.SetActivity(activitySvc)
 	collectionSvc := colluc.NewService(collectionRepo, teamRepo, badgeSvc, quotaSvc)
+	collectionSvc.SetActivity(activitySvc)
 	tagSvc := taguc.NewService(tagRepo, teamRepo)
 
 	// Subscription repos (нужны и для admin, и для subscription service)
@@ -241,10 +269,6 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	// собирается после promptSvc/collectionSvc, но до handlers.
 	adminSvc := adminuc.NewService(adminRepo, userRepo, auditSvc, authSvc, badgeSvc, planRepo, subscriptionRepo)
 	adminHealth := &adminHealthAdapter{repo: adminRepo}
-
-	// AI
-	orClient := openrouter.NewClient(cfg.AI.OpenRouterAPIKey, cfg.AI.OpenRouterBaseURL, time.Duration(cfg.AI.OpenRouterTimeoutSec)*time.Second)
-	aiSvc := aiuc.NewService(orClient, &cfg.AI)
 
 	// Search
 	searchSvc := searchuc.NewService(promptRepo, collectionRepo, tagRepo)
@@ -263,6 +287,13 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	// Share Links
 	shareLinkRepo := pgrepo.NewShareLinkRepository(db)
 	shareSvc := shareuc.NewService(shareLinkRepo, promptRepo, teamRepo, cfg.Server.FrontendURL, quotaSvc)
+	shareSvc.SetActivity(activitySvc)
+	// Phase 14 B.2: подключаем share_view_log write-path (Pro+ owner). Nil-safe.
+	// План владельца читается из уже preload'ленного link.Prompt.User (M9).
+	shareSvc.SetViewLogger(analyticsRepo)
+	// Phase 14 D: branded share pages — BrandingProvider интерфейс,
+	// teamSvc удовлетворяет ему методом GetBrandingForShare (H6).
+	shareSvc.SetBrandingLookup(teamSvc)
 
 	// OAuth 2.1 Authorization Server для внешних MCP-клиентов (Claude.ai и т.д.).
 	// Canonical resource = public URL MCP-сервера + "/mcp" (RFC 8707 audience).
@@ -287,6 +318,8 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			teamSvc,
 			trashSvc,
 			userSvc,
+			activitySvc,  // Phase 14 B.3
+			analyticsSvc, // Phase 14 B.3
 			quotaSvc,
 			mcpserver.Options{
 				UserRPM:             60,
@@ -372,10 +405,14 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		userLookup:        userRepo,
 		auditSvc:          auditSvc,
 		oauthHandler:      authhttp.NewOAuthHandler(oauthSvc, cfg.Server.FrontendURL, cfg.JWT.Secret, cfg.Server.SecureCookies),
-		promptHandler:     prompthttp.NewHandler(promptSvc, quotaSvc),
+		promptHandler: func() *prompthttp.Handler {
+			h := prompthttp.NewHandler(promptSvc, quotaSvc)
+			// Phase 14 B.4: activity+users → склейка в GET /api/prompts/:id/history
+			h.SetHistoryDeps(activitySvc, userRepo)
+			return h
+		}(),
 		collectionHandler: collhttp.NewHandler(collectionSvc),
 		tagHandler:        taghttp.NewHandler(tagSvc),
-		aiHandler:         aihttp.NewHandler(aiSvc, quotaSvc),
 		searchHandler:     searchhttp.NewHandler(searchSvc),
 		teamHandler:       teamhttp.NewHandler(teamSvc),
 		userHandler:       userhttp.NewHandler(userSvc),
@@ -390,6 +427,13 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		subscriptionHandler:  subscriptionhttp.NewHandler(subscriptionSvc, quotaSvc),
 		webhookHandler:       webhookhttp.NewHandler(subscriptionSvc),
 		seoHandler:           seohttp.NewHandler(promptSvc, cfg.Server.FrontendURL),
+		// Phase 14 B.4: analytics + team activity HTTP handlers.
+		// H5: plan-check вынесен в analytics.Service, handler больше не
+		// нуждается в UserRepository.
+		analyticsHandler:    analyticshttp.NewHandler(analyticsSvc),
+		teamActivityHandler: teamhttp.NewActivityHandler(teamSvc, activitySvc),
+		// Phase 14 D: team branding handler (GET/PUT /api/teams/:slug/branding)
+		teamBrandingHandler: teamhttp.NewBrandingHandler(teamSvc),
 		oauthServerHandler: oauthsrvhttp.NewHandler(
 			oauthSrvSvc,
 			func(ctx context.Context, refreshToken string) (uint, error) {
@@ -415,6 +459,8 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		reminderLoop:         reminderLoop,
 		reengagementLoop:     reengagementLoop,
 		streakReminderLoop:   streakReminderLoop,
+		activityCleanupLoop:  activityCleanupLoop,
+		insightsLoop:         insightsLoop,
 		purgeLoop:         purgeLoop,
 		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour, ratelimit.UintHash),
 	}
@@ -427,6 +473,8 @@ func (a *App) StartBackground() {
 	a.reminderLoop.Start()
 	a.reengagementLoop.Start()
 	a.streakReminderLoop.Start()
+	a.activityCleanupLoop.Start()
+	a.insightsLoop.Start()
 }
 
 // Shutdown waits for background tasks to complete.
@@ -437,6 +485,8 @@ func (a *App) Shutdown(timeout time.Duration) {
 	a.reminderLoop.Stop()
 	a.reengagementLoop.Stop()
 	a.streakReminderLoop.Stop()
+	a.activityCleanupLoop.Stop()
+	a.insightsLoop.Stop()
 	a.feedbackRL.Close()
 	a.authSvc.WaitBackground(timeout)
 }
@@ -646,15 +696,6 @@ func (a *App) MountRoutes(r chi.Router) {
 				r.Delete("/{id}", a.tagHandler.Delete)
 			})
 
-			// AI
-			r.Route("/ai", func(r chi.Router) {
-				r.Get("/models", a.aiHandler.Models)
-				r.Post("/enhance", a.aiHandler.Enhance)
-				r.Post("/rewrite", a.aiHandler.Rewrite)
-				r.Post("/analyze", a.aiHandler.Analyze)
-				r.Post("/variations", a.aiHandler.Variations)
-			})
-
 			// Teams
 			r.Route("/teams", func(r chi.Router) {
 				r.Get("/", a.teamHandler.List)
@@ -663,6 +704,9 @@ func (a *App) MountRoutes(r chi.Router) {
 					r.Get("/", a.teamHandler.GetBySlug)
 					r.Put("/", a.teamHandler.Update)
 					r.Delete("/", a.teamHandler.Delete)
+					r.Get("/activity", a.teamActivityHandler.List) // Phase 14 B.4
+				r.Get("/branding", a.teamBrandingHandler.Get)  // Phase 14 D
+				r.Put("/branding", a.teamBrandingHandler.Set)  // Phase 14 D
 					r.Put("/members/{userId}", a.teamHandler.UpdateMemberRole)
 					r.Delete("/members/{userId}", a.teamHandler.RemoveMember)
 					r.Post("/invitations", a.teamHandler.InviteMember)
@@ -701,10 +745,20 @@ func (a *App) MountRoutes(r chi.Router) {
 				r.Post("/{id}/pin", a.promptHandler.TogglePin)
 				r.Post("/{id}/use", a.promptHandler.IncrementUsage)
 				r.Get("/{id}/versions", a.promptHandler.ListVersions)
+				r.Get("/{id}/history", a.promptHandler.GetHistory) // Phase 14 B.4
 				r.Post("/{id}/revert/{versionId}", a.promptHandler.RevertToVersion)
 				r.Get("/{id}/share", a.shareHandler.Get)
 				r.Post("/{id}/share", a.shareHandler.Create)
 				r.Delete("/{id}/share", a.shareHandler.Delete)
+			})
+
+			// Phase 14 B.4: Analytics
+			r.Route("/analytics", func(r chi.Router) {
+				r.Get("/personal", a.analyticsHandler.Personal)
+				r.Get("/teams/{id}", a.analyticsHandler.Team)
+				r.Get("/prompts/{id}", a.analyticsHandler.Prompt)
+				r.Get("/insights", a.analyticsHandler.Insights)
+				r.Get("/export", a.analyticsHandler.Export)
 			})
 
 			// Feedback (5/hour per user)

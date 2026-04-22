@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
-import { useForm, useWatch, type Control } from "react-hook-form"
+import { useForm, useWatch, Controller, type Control } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, History, Copy, Trash2, Share2, MoreHorizontal } from "lucide-react"
@@ -12,7 +12,14 @@ import { useCollections } from "@/hooks/use-collections"
 import { useWorkspaceStore } from "@/stores/workspace-store"
 import { TagInput } from "@/components/tags/tag-input"
 import { CollectionsCombobox } from "@/components/prompts/collections-combobox"
-import { AIPanel } from "@/components/ai/ai-panel"
+import { PromptSplitEditor } from "@/components/prompts/prompt-split-editor"
+import { FileImportButton } from "@/components/prompts/file-import-button"
+import { FileImportDropZone } from "@/components/prompts/file-import-drop-zone"
+import {
+  FileImportChoiceDialog,
+  type FileImportChoice,
+} from "@/components/prompts/file-import-choice-dialog"
+import { parseFile, FileImportError, type ParseResult } from "@/lib/file-import/parsers"
 import { HelpPopover } from "@/components/help/help-popover"
 import { InfoTooltip } from "@/components/help/info-tooltip"
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
@@ -64,19 +71,6 @@ function CharCounter({ control }: { control: Control<PromptForm> }) {
   )
 }
 
-// AIPanelConnected — изолирует live content-подписку внутри отдельного компонента,
-// чтобы родительский PromptEditor не ререндерился каждое нажатие клавиши.
-function AIPanelConnected({
-  control,
-  onApply,
-}: {
-  control: Control<PromptForm>
-  onApply: (text: string, note: string) => void
-}) {
-  const content = useWatch({ control, name: "content" }) ?? ""
-  return <AIPanel content={content} onApply={onApply} />
-}
-
 export default function PromptEditor() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -100,6 +94,13 @@ export default function PromptEditor() {
   const [shareOpen, setShareOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [noteExpanded, setNoteExpanded] = useState(false)
+  // Состояние загрузки файла: null когда idle, File когда парсим. При
+  // непустом content подсовываем choiceDialog чтобы спросить стратегию вставки.
+  const [isImporting, setIsImporting] = useState(false)
+  const [pendingImport, setPendingImport] = useState<
+    | { result: ParseResult }
+    | null
+  >(null)
 
   const {
     register,
@@ -107,6 +108,7 @@ export default function PromptEditor() {
     reset,
     control,
     setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<PromptForm>({
     resolver: zodResolver(promptSchema),
@@ -164,6 +166,74 @@ export default function PromptEditor() {
     return () => window.removeEventListener("keydown", handler)
   }, [handleSubmit])
 
+  // Применяет ParseResult к форме согласно выбранной стратегии вставки.
+  // shouldValidate:true триггерит Zod-валидацию (проверит max=100000).
+  const applyImport = (result: ParseResult, choice: FileImportChoice) => {
+    const current = getValues("content") ?? ""
+    let next: string
+    switch (choice) {
+      case "replace":
+        next = result.content
+        break
+      case "prepend":
+        next = result.content + "\n\n" + current
+        break
+      case "append":
+        next = current + "\n\n" + result.content
+        break
+    }
+    // Жёсткое обрезание если после concat получилось больше лимита.
+    if (next.length > MAX_PROMPT_CONTENT_LENGTH) {
+      next = next.slice(0, MAX_PROMPT_CONTENT_LENGTH)
+      toast.warning(
+        `Общая длина превысила ${MAX_PROMPT_CONTENT_LENGTH.toLocaleString("ru-RU")} символов — текст обрезан.`,
+      )
+    }
+    setValue("content", next, { shouldValidate: true, shouldDirty: true })
+    // Если parser вернул metadata (prompt-JSON) — обновляем title/model тоже.
+    if (result.metadata?.title) {
+      setValue("title", result.metadata.title, { shouldValidate: true, shouldDirty: true })
+    }
+    if (result.metadata?.model) {
+      setValue("model", result.metadata.model, { shouldValidate: true, shouldDirty: true })
+    }
+    const parsedMsg = `Вставлено ${result.content.length.toLocaleString("ru-RU")} символов из ${result.filename}`
+    if (result.truncated) {
+      toast.warning(`${parsedMsg} (файл был обрезан до лимита).`)
+    } else {
+      toast.success(parsedMsg)
+    }
+    // Выводим warnings парсера отдельным toast.
+    for (const w of result.warnings) {
+      toast.warning(w)
+    }
+  }
+
+  // Единая точка обработки выбранного файла (из input или drop).
+  const handleFileImport = async (file: File) => {
+    if (isImporting) return
+    setIsImporting(true)
+    try {
+      const result = await parseFile(file)
+      const currentContent = getValues("content") ?? ""
+      if (currentContent.trim().length === 0) {
+        // Пустой редактор — просто вставляем без вопросов.
+        applyImport(result, "replace")
+      } else {
+        // Непустой — диалог выбора стратегии.
+        setPendingImport({ result })
+      }
+    } catch (err) {
+      if (err instanceof FileImportError) {
+        toast.error(err.message)
+      } else {
+        toast.error(err instanceof Error ? err.message : "Не удалось обработать файл")
+      }
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
   if (isEdit && loadingExisting) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -211,7 +281,7 @@ export default function PromptEditor() {
               они подставятся при использовании.
             </p>
             <p>
-              AI-ассистент ниже умеет улучшать, переписывать и анализировать ваш промпт.
+              Поддерживается Markdown: заголовки, таблицы, code-блоки, списки задач. Превью покажет итоговый вид.
             </p>
           </HelpPopover>
         )}
@@ -241,35 +311,38 @@ export default function PromptEditor() {
 
           {/* Содержимое */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <label htmlFor="content" className="text-[0.8rem] font-medium text-foreground">
                 Промпт
               </label>
-              <CharCounter control={control} />
+              <div className="flex items-center gap-3">
+                <FileImportButton
+                  onFileSelect={handleFileImport}
+                  isImporting={isImporting}
+                  disabled={isSubmitting}
+                />
+                <CharCounter control={control} />
+              </div>
             </div>
-            <textarea
-              id="content"
-              rows={16}
-              maxLength={MAX_PROMPT_CONTENT_LENGTH}
-              placeholder="Введите текст промпта...&#10;&#10;Совет: будьте конкретны и используйте примеры для лучших результатов"
-              aria-invalid={!!errors.content}
-              aria-describedby={errors.content ? "content-error" : undefined}
-              className="flex w-full min-h-[280px] resize-y rounded-lg border border-border bg-background px-3.5 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
-              {...register("content")}
+            <Controller
+              control={control}
+              name="content"
+              render={({ field }) => (
+                <PromptSplitEditor
+                  id="content"
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  maxLength={MAX_PROMPT_CONTENT_LENGTH}
+                  placeholder="Введите текст промпта...&#10;&#10;Совет: будьте конкретны и используйте примеры для лучших результатов.&#10;Поддерживается Markdown: заголовки, таблицы, code-блоки, ссылки."
+                  aria-invalid={!!errors.content}
+                  aria-describedby={errors.content ? "content-error" : undefined}
+                />
+              )}
             />
             {errors.content && (
               <p id="content-error" className="text-[0.75rem] text-red-400">{errors.content.message}</p>
             )}
           </div>
-
-          {/* AI-панель */}
-          <AIPanelConnected
-            control={control}
-            onApply={(text, note) => {
-              setValue("content", text)
-              setChangeNote(note)
-            }}
-          />
 
           {/* Модель + Коллекция */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -279,7 +352,7 @@ export default function PromptEditor() {
                 Модель
                 <span className="text-muted-foreground">(необяз.)</span>
                 <InfoTooltip ariaLabel="Что значит поле «Модель»?">
-                  Под какую AI-модель оптимизирован промпт. Например: <code className="rounded bg-muted px-1">gpt-4o</code>, <code className="rounded bg-muted px-1">claude-sonnet-4</code>. Поле справочное — оно не выбирает модель для AI-ассистента.
+                  Под какую AI-модель оптимизирован промпт. Например: <code className="rounded bg-muted px-1">gpt-4o</code>, <code className="rounded bg-muted px-1">claude-sonnet-4</code>. Поле справочное.
                 </InfoTooltip>
               </label>
               <input
@@ -440,6 +513,26 @@ export default function PromptEditor() {
           )}
         </div>
       </form>
+
+      <FileImportDropZone
+        onFileDrop={handleFileImport}
+        disabled={isImporting || isSubmitting}
+      />
+
+      <FileImportChoiceDialog
+        open={pendingImport !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingImport(null)
+        }}
+        filename={pendingImport?.result.filename ?? ""}
+        charCount={pendingImport?.result.content.length ?? 0}
+        onChoose={(choice) => {
+          if (pendingImport) {
+            applyImport(pendingImport.result, choice)
+            setPendingImport(null)
+          }
+        }}
+      />
 
       <ConfirmDialog
         open={deleteOpen}

@@ -251,7 +251,6 @@ func TestWhoami(t *testing.T) {
 		Name:          "Slava",
 		Username:      "slava",
 		PlanID:        "pro",
-		DefaultModel:  "anthropic/claude-sonnet-4",
 		EmailVerified: true,
 	}, nil)
 

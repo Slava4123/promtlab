@@ -14,11 +14,13 @@ type SubscriptionPlan struct {
 	PeriodDays           int             `gorm:"not null;default:30" json:"period_days"`
 	MaxPrompts           int             `gorm:"not null;default:50" json:"max_prompts"`
 	MaxCollections       int             `gorm:"not null;default:3" json:"max_collections"`
-	MaxAIRequestsDaily   int             `gorm:"not null;default:5" json:"max_ai_requests_daily"`
-	AIRequestsIsTotal    bool            `gorm:"not null;default:false" json:"ai_requests_is_total"`
 	MaxTeams             int             `gorm:"not null;default:1" json:"max_teams"`
 	MaxTeamMembers       int             `gorm:"not null;default:3" json:"max_team_members"`
 	MaxShareLinks        int             `gorm:"not null;default:2" json:"max_share_links"`
+	// MaxDailyShares — лимит на СОЗДАНИЕ публичных шар-ссылок в день.
+	// Phase 14, миграция 000044. Считается через daily_feature_usage
+	// с feature_type='share_create'. Free=10, Pro=100, Max=1000.
+	MaxDailyShares       int             `gorm:"not null;default:10" json:"max_daily_shares"`
 	MaxExtUsesDaily      int             `gorm:"not null;default:5" json:"max_ext_uses_daily"`
 	MaxMCPUsesDaily      int             `gorm:"column:max_mcp_uses_daily;not null;default:5" json:"max_mcp_uses_daily"`
 	Features             json.RawMessage `gorm:"type:jsonb;not null;default:'[]'" json:"features"`
@@ -136,7 +138,8 @@ type Payment struct {
 }
 
 // DailyFeatureUsage — персистентный счётчик дневного использования.
-// feature_type: "ai", "extension", "mcp". Composite PK (user_id, usage_date, feature_type).
+// feature_type: "extension", "mcp". Composite PK (user_id, usage_date, feature_type).
+// Исторически существовал "ai" — строки остались в БД от предыдущих версий, но новые не создаются.
 type DailyFeatureUsage struct {
 	UserID      uint      `gorm:"primaryKey;not null" json:"user_id"`
 	UsageDate   time.Time `gorm:"primaryKey;type:date;not null" json:"usage_date"`

@@ -44,7 +44,6 @@ type UserDetailResponse struct {
 	Role             string    `json:"role"`
 	Status           string    `json:"status"`
 	EmailVerified    bool      `json:"email_verified"`
-	DefaultModel     string    `json:"default_model"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 	PromptCount      int64     `json:"prompt_count"`
@@ -76,7 +75,6 @@ func NewUserDetailResponse(d *repo.UserDetail) UserDetailResponse {
 		Role:             string(u.Role),
 		Status:           string(u.Status),
 		EmailVerified:    u.EmailVerified,
-		DefaultModel:     u.DefaultModel,
 		CreatedAt:        u.CreatedAt,
 		UpdatedAt:        u.UpdatedAt,
 		PromptCount:      d.PromptCount,

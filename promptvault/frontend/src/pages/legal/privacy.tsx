@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 
-import { AIShareBlock } from "@/components/help/ai-share-block"
 
 export default function PrivacyPage() {
   return (
@@ -28,12 +27,6 @@ export default function PrivacyPage() {
               Последнее обновление: 12 апреля 2026 г.
             </p>
           </header>
-
-          <AIShareBlock
-            mdUrl="/legal/privacy.md"
-            topic="разобраться в Политике конфиденциальности ПромтЛаб (что собираем, кому передаём, какие у меня права)"
-            compact
-          />
 
           <Section title="1. Какие данные мы собираем">
             <p>При использовании Сервиса мы собираем:</p>
@@ -76,23 +69,6 @@ export default function PrivacyPage() {
             </p>
           </Section>
 
-          <Section title="3. AI-обработка данных">
-            <p>
-              Функции «Улучшить», «Переписать», «Анализ» и «Вариации» отправляют содержимое промпта
-              на сервер OpenRouter (API-провайдер) для обработки моделью Claude. Данные обрабатываются
-              в соответствии с{" "}
-              <a
-                href="https://openrouter.ai/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand hover:underline"
-              >
-                политикой конфиденциальности OpenRouter
-              </a>
-              . Мы не храним результаты AI-обработки на своих серверах — они передаются напрямую
-              в ваш браузер через SSE-стриминг.
-            </p>
-          </Section>
 
           <Section title="4. Хранение данных">
             <p>

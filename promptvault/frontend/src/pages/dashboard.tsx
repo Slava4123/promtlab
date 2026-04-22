@@ -134,7 +134,7 @@ export default function Dashboard() {
             {teamName ? `Промпты — ${teamName}` : "Промпты"}
           </h1>
           <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-            {teamName ? "Командная библиотека промптов" : "Ваша библиотека AI-промптов"}
+            {teamName ? "Командная библиотека промптов" : "Ваша библиотека промптов"}
           </p>
         </div>
         <button

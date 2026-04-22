@@ -15,6 +15,7 @@ import (
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/models"
 	"promptvault/internal/template"
+	analyticsuc "promptvault/internal/usecases/analytics"
 	apikeyuc "promptvault/internal/usecases/apikey"
 	colluc "promptvault/internal/usecases/collection"
 	promptuc "promptvault/internal/usecases/prompt"
@@ -33,6 +34,8 @@ type toolHandlers struct {
 	teams       TeamService
 	trash       TrashService
 	users       UserService
+	activity    ActivityService    // Phase 14 B.3: nil до передачи в NewMCPServer
+	analytics   AnalyticsService   // Phase 14 B.3
 	quotas      *quotauc.Service
 	cache       *listCache // P-11: TTL cache для list_collections/list_tags
 	notifier    *notifier  // C-1: рассылка resources/updated подписчикам
@@ -226,6 +229,24 @@ type RestorePromptInput struct {
 
 type PurgePromptInput struct {
 	ID uint `json:"id" jsonschema:"required,Prompt ID in trash"`
+}
+
+// Phase 14 B.3: inputs for activity/analytics tools.
+
+type TeamActivityFeedInput struct {
+	TeamID     uint   `json:"team_id" jsonschema:"required,Team ID (use list_teams to discover)"`
+	EventType  string `json:"event_type,omitempty" jsonschema:"Filter by event type (prompt.created, prompt.updated, prompt.deleted, share.created, member.added, etc.)"`
+	Cursor     string `json:"cursor,omitempty" jsonschema:"Opaque cursor from previous response's next_cursor. Omit for first page."`
+	Limit      int    `json:"limit,omitempty" jsonschema:"Max items per page (default 50, max 200)"`
+}
+
+type AnalyticsSummaryInput struct {
+	Range string `json:"range,omitempty" jsonschema:"Time range: 7d (default), 30d, 90d, 365d. Clamped by plan tier (Free=7d, Pro=90d, Max=365d)."`
+}
+
+type AnalyticsTeamSummaryInput struct {
+	TeamID uint   `json:"team_id" jsonschema:"required,Team ID"`
+	Range  string `json:"range,omitempty" jsonschema:"Time range: 7d (default), 30d, 90d, 365d. Clamped by plan tier."`
 }
 
 var (
@@ -471,6 +492,31 @@ func (t *toolHandlers) register(server *sdkmcp.Server) {
 		Description: "Delete a tag. Prompts using this tag are not affected.",
 		Annotations: deleteIdempotentAnnotations,
 	}, t.tagDelete)
+
+	// --- Phase 14 B.3: activity + analytics read tools ---
+	if t.activity != nil {
+		sdkmcp.AddTool(server, &sdkmcp.Tool{
+			Name:        "team_activity_feed",
+			Title:       "Team activity feed",
+			Description: "List recent activity events in a team (prompt/collection/share/member changes). Use list_teams first to find the team_id. Supports cursor pagination.",
+			Annotations: readOnlyAnnotations,
+		}, t.teamActivityFeed)
+	}
+	if t.analytics != nil {
+		sdkmcp.AddTool(server, &sdkmcp.Tool{
+			Name:        "analytics_summary",
+			Title:       "Personal analytics summary",
+			Description: "Compact analytics summary for current user: top prompts by usage, total uses, total share views for a time range. Use for AI-assistant insights like 'how active is my library'.",
+			Annotations: readOnlyAnnotations,
+		}, t.analyticsSummary)
+
+		sdkmcp.AddTool(server, &sdkmcp.Tool{
+			Name:        "analytics_team_summary",
+			Title:       "Team analytics summary",
+			Description: "Compact analytics for a team: top prompts, contributors leaderboard, total uses. Membership required.",
+			Annotations: readOnlyAnnotations,
+		}, t.analyticsTeamSummary)
+	}
 }
 
 // --- logging wrapper ---
@@ -826,7 +872,6 @@ func (t *toolHandlers) whoami(ctx context.Context, _ *sdkmcp.CallToolRequest, _ 
 		Username:      u.Username,
 		AvatarURL:     u.AvatarURL,
 		PlanID:        u.PlanID,
-		DefaultModel:  u.DefaultModel,
 		EmailVerified: u.EmailVerified,
 	}
 	res, err := jsonResult(resp)
@@ -932,15 +977,279 @@ func (t *toolHandlers) getPromptVersions(ctx context.Context, _ *sdkmcp.CallTool
 		return nil, nil, mapDomainError(err)
 	}
 
-	result := make([]VersionResponse, len(versions))
-	for i, v := range versions {
-		result[i] = VersionResponse{
-			ID: v.ID, VersionNumber: v.VersionNumber, Title: v.Title,
-			Content: v.Content, Model: v.Model, ChangeNote: v.ChangeNote, CreatedAt: v.CreatedAt,
+	// Phase 14: lookup actor info (email/name) для каждой unique ChangedBy.
+	// N ≤ pageSize (≤100) — простой цикл без bulk-метода приемлем.
+	// M6: partial lookup fail — логируем и отдаём actors_partial=true,
+	// чтобы клиент мог отличить «нет автора» от «DB hiccup».
+	actorIDs := make(map[uint]struct{})
+	for _, v := range versions {
+		if v.ChangedBy != nil {
+			actorIDs[*v.ChangedBy] = struct{}{}
 		}
 	}
-	res, err := jsonResult(map[string]any{"versions": result, "total": total})
+	actorByID := make(map[uint]*models.User, len(actorIDs))
+	var actorsPartial bool
+	var actorFailCount int
+	for uid := range actorIDs {
+		u, lookupErr := t.users.GetByID(ctx, uid)
+		if lookupErr != nil {
+			if !actorsPartial {
+				slog.WarnContext(ctx, "mcp.get_prompt_versions.actor_lookup_failed",
+					"err", lookupErr, "actor_id", uid)
+			}
+			actorsPartial = true
+			actorFailCount++
+			continue
+		}
+		actorByID[uid] = u
+	}
+	if actorsPartial {
+		slog.WarnContext(ctx, "mcp.get_prompt_versions.actors_partial",
+			"fail_count", actorFailCount, "total", len(actorIDs))
+	}
+
+	result := make([]VersionResponse, len(versions))
+	for i, v := range versions {
+		resp := VersionResponse{
+			ID: v.ID, VersionNumber: v.VersionNumber, Title: v.Title,
+			Content: v.Content, Model: v.Model, ChangeNote: v.ChangeNote, CreatedAt: v.CreatedAt,
+			ChangedByID: v.ChangedBy,
+		}
+		if v.ChangedBy != nil {
+			if u, ok := actorByID[*v.ChangedBy]; ok {
+				resp.ChangedByEmail = u.Email
+				resp.ChangedByName = u.Name
+			}
+		}
+		result[i] = resp
+	}
+	res, err := jsonResult(map[string]any{
+		"versions":        result,
+		"total":           total,
+		"actors_partial":  actorsPartial,
+	})
 	return res, nil, err
+}
+
+// --- Phase 14 B.3: activity + analytics handlers ---
+
+// teamActivityFeed — read-only, cursor-pagination.
+// Scope: enforceScope + membership check через teams.List.
+func (t *toolHandlers) teamActivityFeed(ctx context.Context, _ *sdkmcp.CallToolRequest, input TeamActivityFeedInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "team_activity_feed", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, &input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	// Membership check — получаем список команд и проверяем что team_id в нём.
+	// Также вытаскиваем роль запрашивающего для GDPR-маски actor_email (Q1).
+	myTeams, err := t.teams.List(ctx, userID)
+	if err != nil {
+		logTool(ctx, "team_activity_feed", start, err)
+		return nil, nil, mapDomainError(err)
+	}
+	isMember := false
+	var requesterRole models.TeamRole
+	for _, team := range myTeams {
+		if team.Team.ID == input.TeamID {
+			isMember = true
+			requesterRole = team.Role
+			break
+		}
+	}
+	if !isMember {
+		err = errors.New("forbidden: not a member of this team")
+		logTool(ctx, "team_activity_feed", start, err)
+		return nil, nil, err
+	}
+	showActorEmail := requesterRole == models.RoleOwner || requesterRole == models.RoleEditor
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	filter := repo.TeamActivityFilter{
+		TeamID:    input.TeamID,
+		EventType: input.EventType,
+		Limit:     limit,
+	}
+	// Cursor декодируется через timestamp — переиспользуем cursor.go.
+	// Для простоты: cursor = base64(time.Time.UTC().Format(RFC3339Nano))
+	if input.Cursor != "" {
+		cursorTime, cerr := decodeActivityCursor(input.Cursor)
+		if cerr != nil {
+			logTool(ctx, "team_activity_feed", start, cerr)
+			return nil, nil, fmt.Errorf("invalid cursor: %w", cerr)
+		}
+		filter.CursorBefore = &cursorTime
+	}
+
+	events, nextCursor, err := t.activity.ListByTeam(ctx, filter)
+	logTool(ctx, "team_activity_feed", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+
+	items := make([]ActivityItemResponse, len(events))
+	for i, e := range events {
+		var meta map[string]any
+		if len(e.Metadata) > 0 {
+			_ = json.Unmarshal(e.Metadata, &meta)
+		}
+		items[i] = ActivityItemResponse{
+			ID: e.ID, TeamID: e.TeamID, ActorID: e.ActorID,
+			ActorName: e.ActorName,
+			EventType: e.EventType, TargetType: e.TargetType,
+			TargetID: e.TargetID, TargetLabel: e.TargetLabel,
+			Metadata: meta, CreatedAt: e.CreatedAt,
+		}
+		if showActorEmail {
+			items[i].ActorEmail = e.ActorEmail
+		}
+	}
+	payload := map[string]any{"items": items}
+	if nextCursor != nil {
+		payload["next_cursor"] = encodeActivityCursor(*nextCursor)
+	}
+	res, err := jsonResult(payload)
+	return res, nil, err
+}
+
+// analyticsSummary — personal scope для AI-ассистента.
+func (t *toolHandlers) analyticsSummary(ctx context.Context, _ *sdkmcp.CallToolRequest, input AnalyticsSummaryInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "analytics_summary", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	rng := parseRange(input.Range)
+	dash, err := t.analytics.GetPersonalDashboard(ctx, userID, rng)
+	logTool(ctx, "analytics_summary", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+
+	summary := buildAnalyticsSummary(string(dash.Range), dash.UsagePerDay, dash.ShareViews, dash.TopPrompts, nil)
+	res, err := jsonResult(summary)
+	return res, nil, err
+}
+
+// analyticsTeamSummary — team scope с contributors.
+func (t *toolHandlers) analyticsTeamSummary(ctx context.Context, _ *sdkmcp.CallToolRequest, input AnalyticsTeamSummaryInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := enforceScope(ctx, "analytics_team_summary", false); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	if err := enforceTeamID(ctx, &input.TeamID); err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+	start := time.Now()
+	userID := authmw.GetUserID(ctx)
+
+	rng := parseRange(input.Range)
+	dash, err := t.analytics.GetTeamDashboard(ctx, userID, input.TeamID, rng)
+	logTool(ctx, "analytics_team_summary", start, err)
+	if err != nil {
+		return nil, nil, mapDomainError(err)
+	}
+
+	// Нет ShareViews в TeamDashboard — share-ссылки принадлежат юзеру, не команде.
+	summary := buildAnalyticsSummary(string(dash.Range), dash.UsagePerDay, nil, dash.TopPrompts, dash.Contributors)
+	res, err := jsonResult(summary)
+	return res, nil, err
+}
+
+// parseRange — string → analyticsuc.RangeID с дефолтом 7d.
+func parseRange(s string) analyticsuc.RangeID {
+	switch s {
+	case "30d":
+		return analyticsuc.Range30d
+	case "90d":
+		return analyticsuc.Range90d
+	case "365d":
+		return analyticsuc.Range365d
+	default:
+		return analyticsuc.Range7d
+	}
+}
+
+// buildAnalyticsSummary — конвертация dashboard → компактный AnalyticsSummaryResponse.
+func buildAnalyticsSummary(
+	rangeStr string,
+	usage []repo.UsagePoint,
+	views []repo.UsagePoint,
+	top []repo.PromptUsageRow,
+	contribs []repo.ContributorRow,
+) AnalyticsSummaryResponse {
+	var totalUses, totalViews int64
+	for _, p := range usage {
+		totalUses += p.Count
+	}
+	for _, p := range views {
+		totalViews += p.Count
+	}
+	// Top-3 промптов.
+	topCap := 3
+	if len(top) < topCap {
+		topCap = len(top)
+	}
+	topResp := make([]PromptUsageSummary, topCap)
+	for i := 0; i < topCap; i++ {
+		topResp[i] = PromptUsageSummary{
+			PromptID: top[i].PromptID,
+			Title:    top[i].Title,
+			Uses:     top[i].Uses,
+		}
+	}
+	// Top-3 contributors (team only).
+	var contribResp []ContributorSummary
+	if len(contribs) > 0 {
+		cCap := 3
+		if len(contribs) < cCap {
+			cCap = len(contribs)
+		}
+		contribResp = make([]ContributorSummary, cCap)
+		for i := 0; i < cCap; i++ {
+			name := contribs[i].Name
+			if name == "" {
+				name = contribs[i].Email
+			}
+			contribResp[i] = ContributorSummary{
+				UserID:         contribs[i].UserID,
+				Name:           name,
+				PromptsCreated: contribs[i].PromptsCreated,
+				PromptsEdited:  contribs[i].PromptsEdited,
+				Uses:           contribs[i].Uses,
+			}
+		}
+	}
+	return AnalyticsSummaryResponse{
+		Range:        rangeStr,
+		TotalUses:    totalUses,
+		TotalViews:   totalViews,
+		TopPrompts:   topResp,
+		Contributors: contribResp,
+	}
+}
+
+// encodeActivityCursor — opaque cursor = base64url(RFC3339Nano timestamp).
+// Простой паттерн без SHA-hash filter validation: activity feed filters
+// можно менять между страницами с минимальным риском (feed append-only).
+func encodeActivityCursor(t time.Time) string {
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
+// decodeActivityCursor — обратная операция с валидацией формата.
+func decodeActivityCursor(s string) (time.Time, error) {
+	return time.Parse(time.RFC3339Nano, s)
 }
 
 // --- write tool handlers ---

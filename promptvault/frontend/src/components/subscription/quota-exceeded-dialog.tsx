@@ -18,8 +18,6 @@ import { PlanBadge } from "./plan-badge"
 const quotaLabels: Record<string, string> = {
   prompts: "промптов",
   collections: "коллекций",
-  ai_daily: "AI-запросов на сегодня",
-  ai_total: "AI-запросов",
   teams: "команд",
   team_members: "участников команды",
   share_links: "публичных ссылок",
@@ -27,8 +25,7 @@ const quotaLabels: Record<string, string> = {
   mcp_daily: "MCP-вызовов на сегодня",
 }
 
-// Per-quota value-prop: что юзер получит на Pro. Рекомендуем Pro (19₽/день),
-// для Free→AI total показываем daily квоту как главный benefit.
+// Per-quota value-prop: что юзер получит на Pro. Рекомендуем Pro (19₽/день).
 type QuotaBenefit = { headline: string; detail: string; targetPlan: "pro" | "max" }
 
 const quotaBenefits: Record<string, QuotaBenefit> = {
@@ -41,16 +38,6 @@ const quotaBenefits: Record<string, QuotaBenefit> = {
     headline: "Безлимитные коллекции на Pro",
     detail: "Группируйте промпты как удобно — команды, клиенты, проекты.",
     targetPlan: "pro",
-  },
-  ai_total: {
-    headline: "10 AI-улучшений каждый день на Pro",
-    detail: "300 запросов в месяц, Claude Sonnet 4 — 19₽ в день.",
-    targetPlan: "pro",
-  },
-  ai_daily: {
-    headline: "30 AI-запросов в день на Max",
-    detail: "Для активного редактирования — 42₽ в день, в 3× дешевле ChatGPT Plus.",
-    targetPlan: "max",
   },
   teams: {
     headline: "5 команд на Pro, безлимит на Max",

@@ -45,4 +45,9 @@ type UserRepository interface {
 	// он был NULL. Возвращает true если действительно обновил (idempotency).
 	// Защищает от повторной выдачи награды при повторных платежах того же рефери.
 	MarkReferralRewarded(ctx context.Context, userID uint) (bool, error)
+
+	// ListMaxUsers возвращает ID активных юзеров на тарифе Max (включая max_yearly).
+	// Используется analytics.InsightsComputeLoop для ежесуточного пересчёта
+	// детерминированных Smart Insights. Ограничение — active (не frozen/deleted).
+	ListMaxUsers(ctx context.Context) ([]uint, error)
 }

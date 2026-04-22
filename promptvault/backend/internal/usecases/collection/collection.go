@@ -7,6 +7,7 @@ import (
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	activityuc "promptvault/internal/usecases/activity"
 	badgeuc "promptvault/internal/usecases/badge"
 	quotauc "promptvault/internal/usecases/quota"
 	"promptvault/internal/usecases/teamcheck"
@@ -19,10 +20,17 @@ type Service struct {
 	teams       repo.TeamRepository
 	badges      *badgeuc.Service
 	quotas      *quotauc.Service
+	// activity — опциональный team activity feed (Phase 14).
+	activity *activityuc.Service
 }
 
 func NewService(collections repo.CollectionRepository, teams repo.TeamRepository, badges *badgeuc.Service, quotas *quotauc.Service) *Service {
 	return &Service{collections: collections, teams: teams, badges: badges, quotas: quotas}
+}
+
+// SetActivity подключает team_activity_log хуки (Phase 14).
+func (s *Service) SetActivity(activity *activityuc.Service) {
+	s.activity = activity
 }
 
 func (s *Service) Create(ctx context.Context, userID uint, name, description, color, icon string, teamID *uint) (*models.Collection, []badgeuc.Badge, error) {
@@ -66,6 +74,19 @@ func (s *Service) Create(ctx context.Context, userID uint, name, description, co
 			TeamID: teamID,
 		})
 	}
+
+	// Activity feed hook (Phase 14) — только для team-коллекций.
+	if teamID != nil {
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      *teamID,
+			ActorID:     userID,
+			EventType:   models.ActivityCollectionCreated,
+			TargetType:  models.TargetCollection,
+			TargetID:    &c.ID,
+			TargetLabel: c.Name,
+		})
+	}
+
 	return c, newBadges, nil
 }
 
@@ -138,6 +159,19 @@ func (s *Service) Update(ctx context.Context, id, userID uint, name, description
 	if err := s.collections.Update(ctx, c); err != nil {
 		return nil, err
 	}
+
+	// Activity feed hook (Phase 14).
+	if c.TeamID != nil {
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      *c.TeamID,
+			ActorID:     userID,
+			EventType:   models.ActivityCollectionUpdated,
+			TargetType:  models.TargetCollection,
+			TargetID:    &c.ID,
+			TargetLabel: c.Name,
+		})
+	}
+
 	return c, nil
 }
 
@@ -153,7 +187,22 @@ func (s *Service) Delete(ctx context.Context, id, userID uint) error {
 	if err := s.checkTeamEditAccess(ctx, c, userID); err != nil {
 		return err
 	}
-	return s.collections.Delete(ctx, id)
+	if err := s.collections.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	// Activity feed hook — target_label снапшотит name на момент удаления.
+	if c.TeamID != nil {
+		s.activity.LogSafe(ctx, activityuc.Event{
+			TeamID:      *c.TeamID,
+			ActorID:     userID,
+			EventType:   models.ActivityCollectionDeleted,
+			TargetType:  models.TargetCollection,
+			TargetID:    &c.ID,
+			TargetLabel: c.Name,
+		})
+	}
+	return nil
 }
 
 // checkTeamEditAccess проверяет, что пользователь имеет роль editor+ для командной коллекции
