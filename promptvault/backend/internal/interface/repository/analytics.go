@@ -169,6 +169,16 @@ type AnalyticsRepository interface {
 
 	// EmptyCollections — коллекции без промптов.
 	EmptyCollections(ctx context.Context, userID uint, teamID *uint, limit int) ([]CollectionRow, error)
+
+	// --- DRILL-DOWN #9 — filter-aware варианты. ---
+	// Принимают AnalyticsFilter с опциональными TagID/CollectionID. Когда
+	// оба nil — эквивалентны базовым методам, иначе добавляют JOIN
+	// prompt_tags / prompt_collections для отсечения нерелевантных промптов.
+	UsagePerDayFiltered(ctx context.Context, filter AnalyticsFilter) ([]UsagePoint, error)
+	TopPromptsFiltered(ctx context.Context, filter AnalyticsFilter, limit int) ([]PromptUsageRow, error)
+	PromptsCreatedPerDayFiltered(ctx context.Context, filter AnalyticsFilter) ([]UsagePoint, error)
+	PromptsUpdatedPerDayFiltered(ctx context.Context, filter AnalyticsFilter) ([]UsagePoint, error)
+	UsageByModelFiltered(ctx context.Context, filter AnalyticsFilter) ([]ModelUsageRow, error)
 }
 
 // DuplicatePair — пара потенциально дублирующих промптов с similarity-скором.

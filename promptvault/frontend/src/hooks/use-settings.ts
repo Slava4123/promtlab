@@ -63,3 +63,24 @@ export function useUnlinkProvider() {
     },
   })
 }
+
+// Phase 14 M-10: opt-in toggle для email-digest по Smart Insights.
+// PATCH /api/auth/notifications/insights — { enabled: boolean }.
+// Отвечает { insight_emails_enabled: boolean }. Инвалидация "me" чтобы
+// обновить user.insight_emails_enabled в auth-store.
+export function useSetInsightEmails() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      api<{ insight_emails_enabled: boolean }>(
+        "/auth/notifications/insights",
+        { method: "PATCH", body: JSON.stringify({ enabled }) },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["me"] })
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Не удалось обновить настройки уведомлений")
+    },
+  })
+}

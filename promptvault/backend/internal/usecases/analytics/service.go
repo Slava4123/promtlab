@@ -111,6 +111,87 @@ func (s *Service) ExportGate(ctx context.Context, userID uint) error {
 	return nil
 }
 
+// GetPersonalDashboardFiltered — personal dashboard с drill-down по тегу
+// и/или коллекции. Если tagID == nil && collectionID == nil — эквивалентно
+// GetPersonalDashboard. Иначе usage/top/created/updated/model метрики
+// считаются через filter-aware методы AnalyticsRepository.
+// ShareViews/TopShared/Quotas не подпадают под drill-down (share-ссылка
+// принадлежит юзеру, не tag/collection).
+func (s *Service) GetPersonalDashboardFiltered(ctx context.Context, userID uint, requestedRange RangeID, tagID, collectionID *uint) (*PersonalDashboard, error) {
+	// Если нет drill-down фильтров — использовать быстрый путь (существующий
+	// метод, который callers'ы (MCP, Export) и так используют).
+	if tagID == nil && collectionID == nil {
+		return s.GetPersonalDashboard(ctx, userID, requestedRange)
+	}
+
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	rng := ClampRange(requestedRange, user.PlanID)
+	dr := BuildDateRange(rng, s.nowFn())
+	filter := repo.AnalyticsFilter{
+		UserID:       userID,
+		Range:        dr,
+		TagID:        tagID,
+		CollectionID: collectionID,
+	}
+
+	dashboard := &PersonalDashboard{Range: rng}
+	if dashboard.UsagePerDay, err = s.analytics.UsagePerDayFiltered(ctx, filter); err != nil {
+		return nil, err
+	}
+	if dashboard.TopPrompts, err = s.analytics.TopPromptsFiltered(ctx, filter, 10); err != nil {
+		return nil, err
+	}
+	if dashboard.PromptsCreated, err = s.analytics.PromptsCreatedPerDayFiltered(ctx, filter); err != nil {
+		return nil, err
+	}
+	if dashboard.PromptsUpdated, err = s.analytics.PromptsUpdatedPerDayFiltered(ctx, filter); err != nil {
+		return nil, err
+	}
+	// ShareViews не фильтруются drill-down'ом — сам факт share не привязан
+	// к tag/collection напрямую. Оставляем полное значение юзера.
+	if dashboard.ShareViews, err = s.analytics.ShareViewsPerDay(ctx, userID, dr); err != nil {
+		return nil, err
+	}
+	if dashboard.TopShared, err = s.analytics.TopSharedPrompts(ctx, userID, dr, 10); err != nil {
+		return nil, err
+	}
+	// Quotas остаются глобальными — drill-down их не меняет.
+	if s.quotas != nil {
+		if summary, qerr := s.quotas.GetUsageSummary(ctx, userID); qerr == nil {
+			dashboard.Quotas = summary
+		}
+	}
+
+	dashboard.TotalsCurrent = Totals{
+		Uses:       sumPoints(dashboard.UsagePerDay),
+		Created:    sumPoints(dashboard.PromptsCreated),
+		Updated:    sumPoints(dashboard.PromptsUpdated),
+		ShareViews: sumPoints(dashboard.ShareViews),
+	}
+	prevFilter := filter
+	prevFilter.Range = BuildPreviousRange(rng, s.nowFn())
+	if prev, perr := s.analytics.UsagePerDayFiltered(ctx, prevFilter); perr == nil {
+		dashboard.TotalsPrevious.Uses = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.PromptsCreatedPerDayFiltered(ctx, prevFilter); perr == nil {
+		dashboard.TotalsPrevious.Created = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.PromptsUpdatedPerDayFiltered(ctx, prevFilter); perr == nil {
+		dashboard.TotalsPrevious.Updated = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.ShareViewsPerDay(ctx, userID, prevFilter.Range); perr == nil {
+		dashboard.TotalsPrevious.ShareViews = sumPoints(prev)
+	}
+	if rows, merr := s.analytics.UsageByModelFiltered(ctx, filter); merr == nil {
+		dashboard.UsageByModel = rows
+	}
+	ensurePersonalNonNil(dashboard)
+	return dashboard, nil
+}
+
 // GetPersonalDashboard — personal scope (team_id IS NULL).
 func (s *Service) GetPersonalDashboard(ctx context.Context, userID uint, requestedRange RangeID) (*PersonalDashboard, error) {
 	user, err := s.users.GetByID(ctx, userID)

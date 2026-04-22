@@ -14,6 +14,8 @@ export interface User {
   status?: UserStatus
   onboarding_completed_at?: string | null
   has_unread_changelog?: boolean
+  // Phase 14 M-10: opt-in email digest по Smart Insights.
+  insight_emails_enabled?: boolean
 }
 
 export interface Tag {

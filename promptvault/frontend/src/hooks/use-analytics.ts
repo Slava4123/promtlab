@@ -7,12 +7,15 @@ import {
   refreshInsights,
   type AnalyticsRange,
   type InsightsResponse,
+  type PersonalAnalyticsFilter,
 } from "@/api/analytics"
 
-export function usePersonalAnalytics(range: AnalyticsRange) {
+export function usePersonalAnalytics(range: AnalyticsRange, filter?: PersonalAnalyticsFilter) {
+  // queryKey включает фильтры, чтобы drill-down инвалидировал кеш
+  // при смене tag/collection.
   return useQuery({
-    queryKey: ["analytics", "personal", range],
-    queryFn: () => fetchPersonalAnalytics(range),
+    queryKey: ["analytics", "personal", range, filter?.tagId ?? null, filter?.collectionId ?? null],
+    queryFn: () => fetchPersonalAnalytics(range, filter),
   })
 }
 

@@ -6,6 +6,7 @@ import {
   Gift,
   Plug,
   Palette,
+  Bell,
   type LucideIcon,
 } from "lucide-react"
 
@@ -20,6 +21,7 @@ export const NAV_ITEMS: SettingsNavItem[] = [
   { id: "profile", title: "Профиль", icon: User, to: "/settings/profile" },
   { id: "security", title: "Безопасность", icon: Lock, to: "/settings/security" },
   { id: "accounts", title: "Аккаунты", icon: Link2, to: "/settings/accounts" },
+  { id: "notifications", title: "Уведомления", icon: Bell, to: "/settings/notifications" },
   { id: "subscription", title: "Подписка", icon: CreditCard, to: "/settings/subscription" },
   { id: "referral", title: "Рефералы", icon: Gift, to: "/settings/referral" },
   { id: "integrations", title: "Интеграции", icon: Plug, to: "/settings/integrations" },

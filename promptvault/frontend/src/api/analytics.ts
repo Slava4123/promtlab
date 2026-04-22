@@ -131,8 +131,20 @@ export interface InsightsResponse {
 
 // --- API functions ---
 
-export function fetchPersonalAnalytics(range: AnalyticsRange = "7d"): Promise<PersonalDashboard> {
-  return api<PersonalDashboard>(`/analytics/personal?range=${range}`)
+// PersonalAnalyticsFilter — drill-down по тегу/коллекции (задача #9 бэклога).
+export interface PersonalAnalyticsFilter {
+  tagId?: number | null
+  collectionId?: number | null
+}
+
+export function fetchPersonalAnalytics(
+  range: AnalyticsRange = "7d",
+  filter?: PersonalAnalyticsFilter,
+): Promise<PersonalDashboard> {
+  const params = new URLSearchParams({ range })
+  if (filter?.tagId != null) params.set("tag_id", String(filter.tagId))
+  if (filter?.collectionId != null) params.set("collection_id", String(filter.collectionId))
+  return api<PersonalDashboard>(`/analytics/personal?${params.toString()}`)
 }
 
 export function fetchTeamAnalytics(teamId: number, range: AnalyticsRange = "7d"): Promise<TeamDashboard> {

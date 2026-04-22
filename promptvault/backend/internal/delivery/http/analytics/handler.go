@@ -48,16 +48,33 @@ func NewHandler(svc *analyticsuc.Service) *Handler {
 }
 
 // Personal — личный dashboard. Service сам clamp'ает range по тарифу.
+// Поддерживает drill-down через ?tag_id=:id и ?collection_id=:id (задача #9).
 func (h *Handler) Personal(w http.ResponseWriter, r *http.Request) {
 	userID := authmw.GetUserID(r.Context())
 	rng := parseRange(r.URL.Query().Get("range"))
+	tagID := parseOptionalUint(r.URL.Query().Get("tag_id"))
+	collectionID := parseOptionalUint(r.URL.Query().Get("collection_id"))
 
-	dash, err := h.svc.GetPersonalDashboard(r.Context(), userID, rng)
+	dash, err := h.svc.GetPersonalDashboardFiltered(r.Context(), userID, rng, tagID, collectionID)
 	if err != nil {
 		respondError(w, r, err)
 		return
 	}
 	utils.WriteOK(w, dash)
+}
+
+// parseOptionalUint — возвращает nil если параметр пуст или неконвертируется.
+// Используется для опциональных query-фильтров (tag_id, collection_id).
+func parseOptionalUint(raw string) *uint {
+	if raw == "" {
+		return nil
+	}
+	v, err := strconv.ParseUint(raw, 10, 32)
+	if err != nil {
+		return nil
+	}
+	u := uint(v)
+	return &u
 }
 
 // Team — team dashboard. Membership проверяется внутри svc.GetTeamDashboard.

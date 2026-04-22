@@ -462,6 +462,104 @@ func (r *analyticsRepo) OrphanTags(ctx context.Context, userID uint, teamID *uin
 	return rows, err
 }
 
+// applyPromptFilter добавляет JOIN prompt_tags/prompt_collections к query,
+// если AnalyticsFilter содержит TagID/CollectionID. promptIDColumn — колонка
+// которая держит prompt_id в основном запросе (напр. "prompt_usage_log.prompt_id").
+// Используется filter-aware методами ниже.
+func applyPromptFilter(q *gorm.DB, promptIDColumn string, filter repo.AnalyticsFilter) *gorm.DB {
+	if filter.HasTag() {
+		q = q.Joins(
+			"INNER JOIN prompt_tags pt_f ON pt_f.prompt_id = "+promptIDColumn+" AND pt_f.tag_id = ?",
+			*filter.TagID,
+		)
+	}
+	if filter.HasCollection() {
+		q = q.Joins(
+			"INNER JOIN prompt_collections pc_f ON pc_f.prompt_id = "+promptIDColumn+" AND pc_f.collection_id = ?",
+			*filter.CollectionID,
+		)
+	}
+	return q
+}
+
+// UsagePerDayFiltered — таймсерия с drill-down. Без filter эквивалентна UsagePerDay.
+func (r *analyticsRepo) UsagePerDayFiltered(ctx context.Context, filter repo.AnalyticsFilter) ([]repo.UsagePoint, error) {
+	q := r.db.WithContext(ctx).
+		Table("prompt_usage_log AS pul").
+		Select("date_trunc('day', pul.used_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count").
+		Where("pul.user_id = ? AND pul.used_at >= ? AND pul.used_at < ?", filter.UserID, filter.Range.From, filter.Range.To)
+	q = scopeTeam(q, "pul.team_id", filter.TeamID)
+	q = applyPromptFilter(q, "pul.prompt_id", filter)
+
+	var points []repo.UsagePoint
+	err := q.Group("day").Order("day").Scan(&points).Error
+	return points, err
+}
+
+// TopPromptsFiltered — топ промптов с drill-down.
+func (r *analyticsRepo) TopPromptsFiltered(ctx context.Context, filter repo.AnalyticsFilter, limit int) ([]repo.PromptUsageRow, error) {
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+	q := r.db.WithContext(ctx).
+		Table("prompt_usage_log AS pul").
+		Select("pul.prompt_id AS prompt_id, p.title AS title, COUNT(*) AS uses").
+		Joins("JOIN prompts p ON p.id = pul.prompt_id").
+		Where("pul.user_id = ? AND pul.used_at >= ? AND pul.used_at < ?", filter.UserID, filter.Range.From, filter.Range.To).
+		Where("p.deleted_at IS NULL")
+	q = scopeTeam(q, "pul.team_id", filter.TeamID)
+	q = applyPromptFilter(q, "pul.prompt_id", filter)
+
+	var rows []repo.PromptUsageRow
+	err := q.Group("pul.prompt_id, p.title").Order("uses DESC").Limit(limit).Scan(&rows).Error
+	return rows, err
+}
+
+// PromptsCreatedPerDayFiltered — с фильтром по тегу/коллекции создаваемого промпта.
+func (r *analyticsRepo) PromptsCreatedPerDayFiltered(ctx context.Context, filter repo.AnalyticsFilter) ([]repo.UsagePoint, error) {
+	q := r.db.WithContext(ctx).
+		Table("prompts AS p").
+		Select("date_trunc('day', p.created_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count").
+		Where("p.user_id = ? AND p.created_at >= ? AND p.created_at < ?", filter.UserID, filter.Range.From, filter.Range.To).
+		Where("p.deleted_at IS NULL")
+	q = scopeTeam(q, "p.team_id", filter.TeamID)
+	q = applyPromptFilter(q, "p.id", filter)
+
+	var points []repo.UsagePoint
+	err := q.Group("day").Order("day").Scan(&points).Error
+	return points, err
+}
+
+// PromptsUpdatedPerDayFiltered — версии с фильтром по tag/collection базового промпта.
+func (r *analyticsRepo) PromptsUpdatedPerDayFiltered(ctx context.Context, filter repo.AnalyticsFilter) ([]repo.UsagePoint, error) {
+	q := r.db.WithContext(ctx).
+		Table("prompt_versions AS pv").
+		Select("date_trunc('day', pv.created_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count").
+		Joins("JOIN prompts p ON p.id = pv.prompt_id").
+		Where("p.user_id = ? AND pv.created_at >= ? AND pv.created_at < ?", filter.UserID, filter.Range.From, filter.Range.To).
+		Where("p.deleted_at IS NULL")
+	q = scopeTeam(q, "p.team_id", filter.TeamID)
+	q = applyPromptFilter(q, "pv.prompt_id", filter)
+
+	var points []repo.UsagePoint
+	err := q.Group("day").Order("day").Scan(&points).Error
+	return points, err
+}
+
+// UsageByModelFiltered — сегментация моделей с drill-down.
+func (r *analyticsRepo) UsageByModelFiltered(ctx context.Context, filter repo.AnalyticsFilter) ([]repo.ModelUsageRow, error) {
+	q := r.db.WithContext(ctx).
+		Table("prompt_usage_log AS pul").
+		Select("COALESCE(pul.model_used, '') AS model, COUNT(*) AS uses").
+		Where("pul.user_id = ? AND pul.used_at >= ? AND pul.used_at < ?", filter.UserID, filter.Range.From, filter.Range.To)
+	q = scopeTeam(q, "pul.team_id", filter.TeamID)
+	q = applyPromptFilter(q, "pul.prompt_id", filter)
+
+	var rows []repo.ModelUsageRow
+	err := q.Group("model").Order("uses DESC").Scan(&rows).Error
+	return rows, err
+}
+
 // EmptyCollections — коллекции без промптов. Аналогично OrphanTags через
 // LEFT JOIN prompt_collections.
 func (r *analyticsRepo) EmptyCollections(ctx context.Context, userID uint, teamID *uint, limit int) ([]repo.CollectionRow, error) {

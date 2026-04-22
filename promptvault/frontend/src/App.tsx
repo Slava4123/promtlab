@@ -39,6 +39,7 @@ const SettingsLayout = lazy(() => import("@/pages/settings/layout"))
 import SettingsProfile from "@/pages/settings/profile"
 import SettingsSecurity from "@/pages/settings/security"
 import SettingsAccounts from "@/pages/settings/accounts"
+import SettingsNotifications from "@/pages/settings/notifications"
 import SettingsSubscription from "@/pages/settings/subscription"
 import SettingsReferral from "@/pages/settings/referral"
 import SettingsIntegrations from "@/pages/settings/integrations"
@@ -154,6 +155,7 @@ function AppRoutes() {
             <Route path="profile" element={<SettingsProfile />} />
             <Route path="security" element={<SettingsSecurity />} />
             <Route path="accounts" element={<SettingsAccounts />} />
+            <Route path="notifications" element={<SettingsNotifications />} />
             <Route path="subscription" element={<SettingsSubscription />} />
             <Route path="referral" element={<SettingsReferral />} />
             <Route path="integrations" element={<SettingsIntegrations />} />

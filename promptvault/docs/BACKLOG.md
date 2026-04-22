@@ -32,8 +32,25 @@
 ## ✅ Закрыто в Phase 14.3 wave 2
 
 - #17 **SMTP insights notifier** — `EmailInsightsNotifier` в `infrastructure/email/insights_notifier.go`, rate-limit 1/неделя через `insight_notifications` repo, `InsightNotificationRepository` + GORM impl, `email.Service.SendInsightsDigest` plain-text. Opt-in через `users.insight_emails_enabled` + `PATCH /api/auth/notifications/insights`. NoopNotifier заменён на реальный в app.go.
-- #14 **app.go частичный split** — 4 адаптера (apiKeyValidatorAdapter, mcpPromptAdapter, mcpCollectionAdapter, adminHealthAdapter) вынесены в `app/adapters.go`. app.go снижен с 845 до 780 строк.
-- #9 пилот **AnalyticsFilter** helpers — `HasTag()`/`HasCollection()` методы.
+- #14 **app.go split** — 4 адаптера вынесены в `app/adapters.go`. MountRoutes (335 строк) — в `app/routes.go`. app.go снижен с 845 до 439 строк.
+- #9 пилот **AnalyticsFilter** helpers — `HasTag()`/`HasCollection()`.
+
+---
+
+## ✅ Закрыто в Phase 14.3 wave 3
+
+- #9b **Drill-down по тегу/коллекции** — 5 новых filter-aware методов в `AnalyticsRepository`
+  (UsagePerDayFiltered, TopPromptsFiltered, PromptsCreatedPerDayFiltered,
+  PromptsUpdatedPerDayFiltered, UsageByModelFiltered) с приватным `applyPromptFilter`
+  helper'ом (JOIN prompt_tags / prompt_collections). Service.GetPersonalDashboardFiltered,
+  handler Personal парсит `?tag_id=:id&collection_id=:id`. Frontend:
+  `PersonalAnalyticsFilter` + `fetchPersonalAnalytics(range, filter)` +
+  `usePersonalAnalytics(range, filter)`. QueryKey содержит filter'ы для
+  корректной инвалидации кэша.
+- #17b **UI settings страница** — `pages/settings/notifications.tsx` с toggle
+  «Smart Insights digest», добавлена в `_nav-config.ts` и роутер `App.tsx`.
+  Хук `useSetInsightEmails` в `use-settings.ts`, User.insight_emails_enabled
+  в типах, инвалидация `["me"]` при переключении.
 
 ---
 
@@ -55,16 +72,15 @@
 
 ## 🔧 Остаётся (не блокировано, но отложено)
 
-### 9b. Drill-down migration — остальные методы AnalyticsRepository
-`AnalyticsFilter` struct + `HasTag/HasCollection` helpers готовы. 16 методов
-ещё принимают отдельные `teamID *uint, rng DateRange`. Поэтапная миграция —
-отдельный PR без API-breakage. Риск: меняются сигнатуры в ~16 местах +
-service + handler + все моки (5 mock_test'ов) + frontend (использование хука).
+### 9c. Drill-down для TeamDashboard
+Сейчас filter-aware методы подключены только к PersonalDashboard. TeamDashboard
+(`/api/analytics/teams/{id}`) и export остаются без drill-down. Требует
+аналогичного `GetTeamDashboardFiltered` в service.go + параметров в handler
+Team/Export. Оценка: 1 час, риск низкий (паттерн уже есть).
 
-### 14b. Рефакторинг `app.go` — MountRoutes split
-Адаптеры вынесены. Осталось вынести MountRoutes (~335 строк) в `app/routes.go`
-и StartBackground/Shutdown в `app/lifecycle.go`. Риск средний (много wiring-точек),
-поэтому отложено до «тихого» окна без активной feature-разработки в app.go.
+### 14c. Лёгкая lifecycle.go экстракция
+`StartBackground`/`Shutdown` остаются в app.go. Можно вынести в `app/lifecycle.go`
+рядом с adapters/routes когда app.go в следующий раз станет shy > 500 строк.
 
 ### 15. MCP `checkMCPQuota()` как middleware
 AST-lint-test (квmerged-тест) решает забываемость — декоратор дешевле не становится. Оставлено ручным.
