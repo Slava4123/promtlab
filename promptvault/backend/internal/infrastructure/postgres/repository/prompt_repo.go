@@ -209,8 +209,15 @@ func (r *promptRepo) ListRecent(ctx context.Context, userID uint, teamID *uint, 
 }
 
 func (r *promptRepo) LogUsage(ctx context.Context, userID, promptID uint) error {
-	log := &models.PromptUsageLog{UserID: userID, PromptID: promptID}
-	return r.db.WithContext(ctx).Create(log).Error
+	// Phase 14.2: model_used копируется из prompts.model одним SQL insert-select —
+	// атомарно берёт актуальную модель из БД без отдельного round-trip.
+	// Сегментация по моделям в analytics.
+	const query = `
+INSERT INTO prompt_usage_log (user_id, prompt_id, model_used, used_at)
+SELECT ?, ?, NULLIF(p.model, ''), NOW()
+FROM prompts p
+WHERE p.id = ?`
+	return r.db.WithContext(ctx).Exec(query, userID, promptID, promptID).Error
 }
 
 func (r *promptRepo) ListUsageHistory(ctx context.Context, userID uint, teamID *uint, page, pageSize int) ([]models.PromptUsageLog, int64, error) {

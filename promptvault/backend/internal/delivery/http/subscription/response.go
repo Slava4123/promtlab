@@ -10,37 +10,41 @@ import (
 
 // PlanResponse — DTO тарифного плана для API.
 type PlanResponse struct {
-	ID                 string          `json:"id"`
-	Name               string          `json:"name"`
-	PriceKop           int             `json:"price_kop"`
-	PeriodDays         int             `json:"period_days"`
-	MaxPrompts         int             `json:"max_prompts"`
-	MaxCollections     int             `json:"max_collections"`
-	MaxTeams           int             `json:"max_teams"`
-	MaxTeamMembers     int             `json:"max_team_members"`
-	MaxShareLinks      int             `json:"max_share_links"`
-	MaxExtUsesDaily    int             `json:"max_ext_uses_daily"`
-	MaxMCPUsesDaily    int             `json:"max_mcp_uses_daily"`
-	Features           json.RawMessage `json:"features"`
-	SortOrder          int             `json:"sort_order"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	PriceKop        int             `json:"price_kop"`
+	PeriodDays      int             `json:"period_days"`
+	MaxPrompts      int             `json:"max_prompts"`
+	MaxCollections  int             `json:"max_collections"`
+	MaxTeams        int             `json:"max_teams"`
+	MaxTeamMembers  int             `json:"max_team_members"`
+	MaxShareLinks   int             `json:"max_share_links"`
+	MaxDailyShares  int             `json:"max_daily_shares"`
+	MaxExtUsesDaily int             `json:"max_ext_uses_daily"`
+	MaxMCPUsesDaily int             `json:"max_mcp_uses_daily"`
+	Features        json.RawMessage `json:"features"`
+	SortOrder       int             `json:"sort_order"`
+	IsActive        bool            `json:"is_active"`
 }
 
 // NewPlanResponse конвертирует модель плана в DTO.
 func NewPlanResponse(p models.SubscriptionPlan) PlanResponse {
 	return PlanResponse{
-		ID:                 p.ID,
-		Name:               p.Name,
-		PriceKop:           p.PriceKop,
-		PeriodDays:         p.PeriodDays,
-		MaxPrompts:         p.MaxPrompts,
-		MaxCollections:     p.MaxCollections,
-		MaxTeams:           p.MaxTeams,
-		MaxTeamMembers:     p.MaxTeamMembers,
-		MaxShareLinks:      p.MaxShareLinks,
-		MaxExtUsesDaily:    p.MaxExtUsesDaily,
-		MaxMCPUsesDaily:    p.MaxMCPUsesDaily,
-		Features:           p.Features,
-		SortOrder:          p.SortOrder,
+		ID:              p.ID,
+		Name:            p.Name,
+		PriceKop:        p.PriceKop,
+		PeriodDays:      p.PeriodDays,
+		MaxPrompts:      p.MaxPrompts,
+		MaxCollections:  p.MaxCollections,
+		MaxTeams:        p.MaxTeams,
+		MaxTeamMembers:  p.MaxTeamMembers,
+		MaxShareLinks:   p.MaxShareLinks,
+		MaxDailyShares:  p.MaxDailyShares,
+		MaxExtUsesDaily: p.MaxExtUsesDaily,
+		MaxMCPUsesDaily: p.MaxMCPUsesDaily,
+		Features:        p.Features,
+		SortOrder:       p.SortOrder,
+		IsActive:        p.IsActive,
 	}
 }
 

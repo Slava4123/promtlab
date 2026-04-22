@@ -25,12 +25,16 @@ function isAllowed(planId: string | undefined, minPlan: "free" | "pro" | "max"):
 }
 
 export function RangePicker({ value, onChange, planId }: RangePickerProps) {
+  // base-ui SelectValue без children показывает сырой value ("7d").
+  // Резолвим через render-function в label из ALL_OPTIONS.
   return (
     <Select value={value} onValueChange={(v) => onChange(v as AnalyticsRange)}>
       <SelectTrigger className="w-[160px]">
-        <SelectValue />
+        <SelectValue>
+          {(v: string) => ALL_OPTIONS.find((o) => o.value === v)?.label ?? v}
+        </SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent alignItemWithTrigger={false}>
         {ALL_OPTIONS.map((opt) => {
           const allowed = isAllowed(planId, opt.minPlan)
           return (

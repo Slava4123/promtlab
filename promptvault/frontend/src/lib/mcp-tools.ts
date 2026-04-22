@@ -36,13 +36,13 @@ export const MCP_TOOLS: McpTool[] = [
   { name: "prompt_favorite", group: "write", label: "Избранное" },
   { name: "prompt_pin", group: "write", label: "Закрепить" },
   { name: "prompt_increment_usage", group: "write", label: "Отметить использование" },
-  { name: "share_create", group: "write", label: "Создать share-ссылку" },
+  { name: "share_create", group: "write", label: "Создать публичную ссылку" },
   { name: "prompt_revert", group: "write", label: "Откатить к версии" },
   { name: "restore_prompt", group: "write", label: "Восстановить из корзины" },
   // Destructive
   { name: "delete_prompt", group: "destructive", label: "Удалить промпт (в корзину)" },
   { name: "delete_collection", group: "destructive", label: "Удалить коллекцию" },
-  { name: "share_deactivate", group: "destructive", label: "Отключить share-ссылку" },
+  { name: "share_deactivate", group: "destructive", label: "Отключить публичную ссылку" },
   { name: "tag_delete", group: "destructive", label: "Удалить тег" },
   { name: "purge_prompt", group: "destructive", label: "Удалить навсегда (из корзины)" },
 ]

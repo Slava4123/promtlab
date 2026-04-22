@@ -71,6 +71,8 @@ export default function TeamActivityPage() {
               hasMore={!!hasNextPage}
               isFetching={isFetching}
               onLoadMore={() => fetchNextPage()}
+              hasFilter={!!eventType}
+              onClearFilter={() => setEventType("")}
             />
           )}
         </CardContent>

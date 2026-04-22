@@ -62,4 +62,10 @@ func (l *CleanupLoop) cleanup() {
 	} else if n > 0 {
 		slog.Info("analytics.cleanup.share_views", "deleted", n)
 	}
+
+	if n, err := l.analytics.CleanupPromptUsageByRetention(ctx); err != nil {
+		slog.Error("analytics.cleanup.prompt_usage.failed", "error", err)
+	} else if n > 0 {
+		slog.Info("analytics.cleanup.prompt_usage", "deleted", n)
+	}
 }

@@ -5,12 +5,12 @@ interface MetricCardProps {
   title: string
   value: string | number
   subtitle?: string
-  trend?: "up" | "down" | "neutral"
-  trendValue?: string
+  // delta в процентах: >0 → ↑зелёный, <0 → ↓красный, 0 → ≡серый, null → «—» (нет базы).
+  delta?: number | null
   className?: string
 }
 
-export function MetricCard({ title, value, subtitle, trend, trendValue, className }: MetricCardProps) {
+export function MetricCard({ title, value, subtitle, delta, className }: MetricCardProps) {
   return (
     <Card className={className}>
       <CardHeader className="pb-2">
@@ -18,23 +18,34 @@ export function MetricCard({ title, value, subtitle, trend, trendValue, classNam
       </CardHeader>
       <CardContent>
         <div className="text-3xl font-semibold tabular-nums">{value}</div>
-        {(subtitle || trend) && (
-          <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-            {trend && (
-              <span
-                className={cn(
-                  "inline-flex items-center font-medium",
-                  trend === "up" && "text-emerald-600 dark:text-emerald-400",
-                  trend === "down" && "text-rose-600 dark:text-rose-400",
-                )}
-              >
-                {trend === "up" ? "↑" : trend === "down" ? "↓" : "—"} {trendValue}
-              </span>
-            )}
+        {(subtitle || delta !== undefined) && (
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+            {delta !== undefined && <DeltaBadge delta={delta} />}
             {subtitle && <span>{subtitle}</span>}
           </div>
         )}
       </CardContent>
     </Card>
+  )
+}
+
+function DeltaBadge({ delta }: { delta: number | null }) {
+  if (delta === null) {
+    return <span className="inline-flex items-center font-medium text-muted-foreground">—</span>
+  }
+  if (delta === 0) {
+    return <span className="inline-flex items-center font-medium text-muted-foreground">≡ 0%</span>
+  }
+  const up = delta > 0
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center font-medium",
+        up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+      )}
+      aria-label={`изменение ${up ? "рост" : "падение"} ${Math.abs(delta)} процентов`}
+    >
+      {up ? "↑" : "↓"} {up ? "+" : ""}{delta}%
+    </span>
   )
 }

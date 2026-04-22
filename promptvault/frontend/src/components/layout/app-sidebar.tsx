@@ -16,6 +16,7 @@ import {
   Sparkles,
   Trophy,
   Shield,
+  BarChart3,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
@@ -47,6 +48,7 @@ const mainNav: NavItem[] = [
   { title: "Коллекции", icon: FolderOpen, path: "/collections" },
   { title: "Команды", icon: Users, path: "/teams" },
   { title: "История", icon: Clock, path: "/history" },
+  { title: "Аналитика", icon: BarChart3, path: "/analytics" },
   { title: "Достижения", icon: Trophy, path: "/badges" },
 ]
 

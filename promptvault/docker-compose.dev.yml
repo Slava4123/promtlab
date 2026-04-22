@@ -5,7 +5,11 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PG18 хранит данные в major-version-specific подпапке
+      # (/var/lib/postgresql/18/docker). Монтируем volume на родительскую
+      # директорию — per recommendation в логе postgres:18 и
+      # https://github.com/docker-library/postgres/pull/1259.
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s

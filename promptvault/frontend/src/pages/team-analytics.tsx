@@ -6,11 +6,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthStore } from "@/stores/auth-store"
 import { useTeam } from "@/hooks/use-teams"
 import { useTeamAnalytics } from "@/hooks/use-analytics"
-import { downloadAnalyticsCSV, type AnalyticsRange } from "@/api/analytics"
+import { computeDelta, downloadAnalyticsCSV, formatRange, type AnalyticsRange } from "@/api/analytics"
 import { MetricCard } from "@/components/analytics/metric-card"
 import { UsageChart } from "@/components/analytics/usage-chart"
 import { TopPromptsTable } from "@/components/analytics/top-prompts-table"
 import { ContributorsLeaderboard } from "@/components/analytics/contributors-leaderboard"
+import { ModelSegmentationChart } from "@/components/analytics/model-segmentation-chart"
 import { RangePicker } from "@/components/analytics/range-picker"
 import { UpgradeGate } from "@/components/analytics/upgrade-gate"
 import { toast } from "sonner"
@@ -61,7 +62,7 @@ export default function TeamAnalyticsPage() {
       <div className="container mx-auto px-4 py-8">
         <h1 className="mb-4 text-2xl font-bold">Аналитика команды</h1>
         <UpgradeGate
-          title="Team analytics — на тарифе Pro"
+          title="Аналитика команды — на тарифе Pro"
           description="Подробная статистика использования команды, топ промптов и контрибьюторов."
           targetPlan="Pro"
         />
@@ -108,17 +109,20 @@ export default function TeamAnalyticsPage() {
             <MetricCard
               title="Использований"
               value={totalUses.toLocaleString("ru")}
-              subtitle={`за ${data.range}`}
+              subtitle={`за ${formatRange(data.range)}`}
+              delta={computeDelta(data.totals_current.uses, data.totals_previous.uses)}
             />
             <MetricCard
               title="Новых промптов"
               value={totalCreated.toLocaleString("ru")}
-              subtitle={`создано за ${data.range}`}
+              subtitle={`создано за ${formatRange(data.range)}`}
+              delta={computeDelta(data.totals_current.created, data.totals_previous.created)}
             />
             <MetricCard
               title="Обновлений"
               value={totalEdited.toLocaleString("ru")}
-              subtitle={`версий за ${data.range}`}
+              subtitle={`версий за ${formatRange(data.range)}`}
+              delta={computeDelta(data.totals_current.updated, data.totals_previous.updated)}
             />
           </div>
 
@@ -131,6 +135,8 @@ export default function TeamAnalyticsPage() {
             <TopPromptsTable title="Топ промптов команды" prompts={data.top_prompts} />
             <ContributorsLeaderboard contributors={data.contributors} />
           </div>
+
+          <ModelSegmentationChart data={data.usage_by_model} />
         </>
       ) : null}
     </div>

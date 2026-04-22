@@ -67,3 +67,23 @@ func BuildDateRange(id RangeID, now time.Time) repo.DateRange {
 		To:   now,
 	}
 }
+
+// BuildPreviousRange — предыдущий период той же длины для сравнения.
+// Например 7d сейчас → 7d до него: [now-14d, now-7d).
+func BuildPreviousRange(id RangeID, now time.Time) repo.DateRange {
+	days := rangeToDays(id)
+	return repo.DateRange{
+		From: now.AddDate(0, 0, -2*days),
+		To:   now.AddDate(0, 0, -days),
+	}
+}
+
+// sumPoints — суммирует counts по массиву точек.
+// Используется для расчёта Totals из per-day arrays.
+func sumPoints(points []repo.UsagePoint) int64 {
+	var total int64
+	for _, p := range points {
+		total += p.Count
+	}
+	return total
+}

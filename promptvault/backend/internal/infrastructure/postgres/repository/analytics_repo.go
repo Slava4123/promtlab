@@ -250,3 +250,136 @@ WHERE svl.share_link_id = sl.id
 	res := r.db.WithContext(ctx).Exec(query)
 	return res.RowsAffected, res.Error
 }
+
+// GetTrendingPrompts — растущие/падающие промпты одним SQL-запросом с двумя CTE.
+// Раньше считалось через 2× TopPrompts + сравнение в Go map'е — O(prompts) по памяти
+// и 2 отдельных round-trip. Теперь — один запрос, БД делает merge естественно.
+//
+// growing=true: берём промпты где last_7d >= prev_7d * factor (factor=2.0 для TRENDING).
+//               Новые промпты (prev=0) тоже считаем trending (тренд-с-нуля).
+// growing=false: берём промпты где prev > 0 AND last_7d <= prev_7d * factor
+//                (factor=0.5 для DECLINING — падение минимум вдвое).
+func (r *analyticsRepo) GetTrendingPrompts(
+	ctx context.Context,
+	userID uint,
+	teamID *uint,
+	factor float64,
+	growing bool,
+	limit int,
+) ([]repo.TrendRow, error) {
+	if limit < 1 || limit > 50 {
+		limit = 5
+	}
+	teamFilter := "pul.team_id IS NULL"
+	args := []any{userID}
+	if teamID != nil {
+		teamFilter = "pul.team_id = ?"
+		args = append(args, *teamID)
+		// user_id + team_id для second CTE (prev_7d) — тот же набор аргументов.
+	}
+	// Подготовим where-clauses для both CTE.
+	// Первый CTE: last 7 days; второй: [-14d, -7d).
+	var whereClause string
+	if growing {
+		whereClause = "l.uses >= COALESCE(p.uses, 0) * ? OR p.uses IS NULL"
+	} else {
+		whereClause = "p.uses > 0 AND l.uses <= p.uses * ?"
+	}
+
+	query := `
+WITH last_7 AS (
+  SELECT pul.prompt_id AS prompt_id, COUNT(*)::bigint AS uses
+  FROM prompt_usage_log pul
+  WHERE pul.user_id = ? AND ` + teamFilter + `
+    AND pul.used_at >= NOW() - INTERVAL '7 days'
+  GROUP BY pul.prompt_id
+),
+prev_7 AS (
+  SELECT pul.prompt_id AS prompt_id, COUNT(*)::bigint AS uses
+  FROM prompt_usage_log pul
+  WHERE pul.user_id = ? AND ` + teamFilter + `
+    AND pul.used_at >= NOW() - INTERVAL '14 days'
+    AND pul.used_at < NOW() - INTERVAL '7 days'
+  GROUP BY pul.prompt_id
+)
+SELECT l.prompt_id, pr.title, l.uses AS uses_last, COALESCE(p.uses, 0) AS uses_previous
+FROM last_7 l
+JOIN prompts pr ON pr.id = l.prompt_id AND pr.deleted_at IS NULL
+LEFT JOIN prev_7 p ON p.prompt_id = l.prompt_id
+WHERE ` + whereClause + `
+ORDER BY l.uses DESC
+LIMIT ?`
+
+	// Аргументы: userID (first CTE) + [teamID] + userID (second CTE) + [teamID] + factor + limit
+	bindArgs := []any{userID}
+	if teamID != nil {
+		bindArgs = append(bindArgs, *teamID)
+	}
+	bindArgs = append(bindArgs, userID)
+	if teamID != nil {
+		bindArgs = append(bindArgs, *teamID)
+	}
+	bindArgs = append(bindArgs, factor, limit)
+	_ = args // consumed above; left for clarity
+
+	var rows []repo.TrendRow
+	err := r.db.WithContext(ctx).Raw(query, bindArgs...).Scan(&rows).Error
+	return rows, err
+}
+
+// UsageByModel — сегментация use'ов по model_used. Группируем NULL в пустую
+// строку на Go-стороне — на выходе UI покажет его как "Без модели".
+func (r *analyticsRepo) UsageByModel(ctx context.Context, userID uint, teamID *uint, rng repo.DateRange) ([]repo.ModelUsageRow, error) {
+	q := r.db.WithContext(ctx).
+		Table("prompt_usage_log").
+		Select("COALESCE(model_used, '') AS model, COUNT(*) AS uses").
+		Where("user_id = ? AND used_at >= ? AND used_at < ?", userID, rng.From, rng.To)
+	q = scopeTeam(q, "team_id", teamID)
+
+	var rows []repo.ModelUsageRow
+	err := q.Group("model").Order("uses DESC").Scan(&rows).Error
+	return rows, err
+}
+
+// PromptUsageTimeline — per-prompt использование по дням. WHERE prompt_id = ?
+// (общий UsagePerDay считает все промпты юзера).
+func (r *analyticsRepo) PromptUsageTimeline(ctx context.Context, promptID uint, rng repo.DateRange) ([]repo.UsagePoint, error) {
+	var points []repo.UsagePoint
+	err := r.db.WithContext(ctx).
+		Table("prompt_usage_log").
+		Select("date_trunc('day', used_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count").
+		Where("prompt_id = ? AND used_at >= ? AND used_at < ?", promptID, rng.From, rng.To).
+		Group("day").Order("day").
+		Scan(&points).Error
+	return points, err
+}
+
+// PromptShareViewsTimeline — per-prompt просмотры share-ссылок по дням.
+// JOIN с share_links для фильтра по prompt_id.
+func (r *analyticsRepo) PromptShareViewsTimeline(ctx context.Context, promptID uint, rng repo.DateRange) ([]repo.UsagePoint, error) {
+	var points []repo.UsagePoint
+	err := r.db.WithContext(ctx).
+		Table("share_view_log AS svl").
+		Select("date_trunc('day', svl.viewed_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count").
+		Joins("JOIN share_links sl ON sl.id = svl.share_link_id").
+		Where("sl.prompt_id = ? AND svl.viewed_at >= ? AND svl.viewed_at < ?", promptID, rng.From, rng.To).
+		Group("day").Order("day").
+		Scan(&points).Error
+	return points, err
+}
+
+// CleanupPromptUsageByRetention — retention prompt_usage_log по plan_id юзера.
+// Free=30д, Pro=90д, Max=365д. Зеркало CleanupShareViewsByRetention.
+func (r *analyticsRepo) CleanupPromptUsageByRetention(ctx context.Context) (int64, error) {
+	const query = `
+DELETE FROM prompt_usage_log pul
+USING users u
+WHERE pul.user_id = u.id
+  AND (
+    (u.plan_id = 'free' AND pul.used_at < NOW() - INTERVAL '30 days')
+    OR (u.plan_id IN ('pro', 'pro_yearly') AND pul.used_at < NOW() - INTERVAL '90 days')
+    OR (u.plan_id IN ('max', 'max_yearly') AND pul.used_at < NOW() - INTERVAL '365 days')
+  )`
+	res := r.db.WithContext(ctx).Exec(query)
+	return res.RowsAffected, res.Error
+}

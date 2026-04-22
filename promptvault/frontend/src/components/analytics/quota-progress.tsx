@@ -10,13 +10,12 @@ interface QuotaProgressProps {
 }
 
 function defaultFormat(used: number, limit: number): string {
-  if (limit === -1) return `${used.toLocaleString("ru")} / без лимита`
   return `${used.toLocaleString("ru")} / ${limit.toLocaleString("ru")}`
 }
 
 export function QuotaProgress({ title, quota, format = defaultFormat }: QuotaProgressProps) {
-  const pct = quota.limit === -1 ? 0 : Math.min(100, (quota.used / Math.max(1, quota.limit)) * 100)
-  const nearLimit = pct >= 80 && quota.limit !== -1
+  const pct = Math.min(100, (quota.used / Math.max(1, quota.limit)) * 100)
+  const nearLimit = pct >= 80
 
   return (
     <Card>

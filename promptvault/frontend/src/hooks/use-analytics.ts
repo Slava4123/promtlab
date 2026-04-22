@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   fetchPersonalAnalytics,
   fetchTeamAnalytics,
   fetchPromptAnalytics,
   fetchInsights,
+  refreshInsights,
   type AnalyticsRange,
+  type InsightsResponse,
 } from "@/api/analytics"
 
 export function usePersonalAnalytics(range: AnalyticsRange) {
@@ -35,5 +37,18 @@ export function useInsights(enabled = true) {
     queryKey: ["analytics", "insights"],
     queryFn: () => fetchInsights(),
     enabled,
+  })
+}
+
+// useRefreshInsights — mutation-хук для кнопки «Обновить сейчас» в InsightsPanel.
+// После успеха кэширует свежий ответ как результат useInsights — UI перерисуется
+// без дополнительного fetch.
+export function useRefreshInsights() {
+  const qc = useQueryClient()
+  return useMutation<InsightsResponse, Error, void>({
+    mutationFn: () => refreshInsights(),
+    onSuccess: (data) => {
+      qc.setQueryData(["analytics", "insights"], data)
+    },
   })
 }

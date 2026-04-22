@@ -43,8 +43,8 @@ export function BrandingForm({ slug, planId }: BrandingFormProps) {
   if (!isMax) {
     return (
       <UpgradeGate
-        title="Branded share pages — фича Max"
-        description="Публичные страницы /s/:token будут показывать ваш логотип, tagline и цветовую схему для зрителей."
+        title="Брендинг публичных ссылок — фича Max"
+        description="На публичных страницах /s/:token будут видны ваш логотип, подпись и фирменный цвет."
         targetPlan="Max"
       />
     )
@@ -135,7 +135,7 @@ export function BrandingForm({ slug, planId }: BrandingFormProps) {
                   <div
                     className="size-8 rounded-md border"
                     style={{ backgroundColor: primaryColor }}
-                    aria-label="Preview"
+                    aria-label="Превью цвета"
                   />
                 )}
               </div>

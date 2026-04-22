@@ -42,43 +42,22 @@ const planDescriptions: Record<string, string> = {
 
 type Billing = "monthly" | "yearly"
 
-function formatLimit(value: number, suffix: string = ""): string {
-  return value === -1 ? "Безлимит" : `${value}${suffix}`
+// Форматируем число с разделителем разрядов (10 000, 1 000) — для больших лимитов.
+function formatNumber(value: number): string {
+  return value.toLocaleString("ru-RU")
 }
 
 function planFeatures(plan: Plan): string[] {
   const features: string[] = []
+  features.push(`До ${formatNumber(plan.max_prompts)} промптов`)
+  features.push(`До ${formatNumber(plan.max_collections)} коллекций`)
   features.push(
-    plan.max_prompts === -1
-      ? "Безлимитные промпты"
-      : `До ${plan.max_prompts} промптов`,
-  )
-  features.push(
-    plan.max_collections === -1
-      ? "Безлимитные коллекции"
-      : `${plan.max_collections} коллекции`,
-  )
-  features.push(
-    plan.max_teams === -1
-      ? "Безлимитные команды"
-      : `${plan.max_teams} ${plan.max_teams === 1 ? "команда" : "команд"} (до ${formatLimit(plan.max_team_members)} участников)`,
+    `${plan.max_teams} ${plan.max_teams === 1 ? "команда" : "команд"} (до ${plan.max_team_members} участников)`,
   )
   // Phase 14: daily create лимит (основной показатель использования share).
-  features.push(
-    plan.max_daily_shares === -1
-      ? "Безлимитное создание share-ссылок"
-      : `${plan.max_daily_shares} share-ссылок/день`,
-  )
-  features.push(
-    plan.max_ext_uses_daily === -1
-      ? "Безлимитные вставки (расширение)"
-      : `${plan.max_ext_uses_daily} вставок/день (расширение)`,
-  )
-  features.push(
-    plan.max_mcp_uses_daily === -1
-      ? "Безлимитные MCP-вызовы"
-      : `${plan.max_mcp_uses_daily} MCP-вызовов/день`,
-  )
+  features.push(`${formatNumber(plan.max_daily_shares)} публичных ссылок/день`)
+  features.push(`${formatNumber(plan.max_ext_uses_daily)} вставок/день (расширение)`)
+  features.push(`${formatNumber(plan.max_mcp_uses_daily)} MCP-вызовов/день`)
   // Phase 14: retention аналитики и флагманские фичи.
   const base = basePlanId(plan.id)
   if (base === "free") {
@@ -88,8 +67,8 @@ function planFeatures(plan: Plan): string[] {
     features.push("Активность команды и история промптов")
   } else if (base === "max") {
     features.push("Аналитика: 365 дней истории + CSV export + API")
-    features.push("Smart Insights: забытые, популярные, дубликаты")
-    features.push("Branded share-страницы (логотип команды)")
+    features.push("Умные инсайты: забытые, популярные, дубликаты")
+    features.push("Брендинг публичных ссылок (логотип команды)")
   }
   if (plan.features.includes("priority_support")) {
     features.push("Приоритетная поддержка")
@@ -378,7 +357,7 @@ export default function Pricing() {
                 </p>
               </div>
               <div className="rounded-lg border border-border/60 p-3">
-                <p className="mb-1 text-[0.7rem] uppercase tracking-wide text-muted-foreground">Безлимит хранения</p>
+                <p className="mb-1 text-[0.7rem] uppercase tracking-wide text-muted-foreground">Большие лимиты хранения</p>
                 <p className="text-lg font-semibold text-foreground">Промпты, коллекции, теги</p>
                 <p className="mt-1 text-[0.72rem] text-muted-foreground">
                   История версий каждого промпта, публичные ссылки, расширение для браузера.

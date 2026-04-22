@@ -67,6 +67,23 @@ func (s *Service) GetInsightsGated(ctx context.Context, userID uint, teamID *uin
 	return s.analytics.GetInsights(ctx, userID, teamID)
 }
 
+// RefreshInsightsGated — Max-only force-пересчёт. Обычно инсайты считаются
+// раз в сутки в InsightsComputeLoop; этот endpoint позволяет юзеру
+// триггернуть пересчёт руками (rate-limit на уровне middleware).
+func (s *Service) RefreshInsightsGated(ctx context.Context, userID uint, teamID *uint) ([]models.SmartInsight, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !subscription.IsMax(user.PlanID) {
+		return nil, ErrMaxRequired
+	}
+	if err := s.ComputeInsights(ctx, userID, teamID); err != nil {
+		return nil, err
+	}
+	return s.analytics.GetInsights(ctx, userID, teamID)
+}
+
 // ExportGate возвращает nil если юзеру доступен export (Pro+), иначе
 // ErrProRequired. Handler вызывает перед streaming'ом CSV (H5).
 func (s *Service) ExportGate(ctx context.Context, userID uint) error {
@@ -114,7 +131,96 @@ func (s *Service) GetPersonalDashboard(ctx context.Context, userID uint, request
 			dashboard.Quotas = summary
 		}
 	}
+
+	// Totals current — sum уже полученных per-day arrays.
+	dashboard.TotalsCurrent = Totals{
+		Uses:       sumPoints(dashboard.UsagePerDay),
+		Created:    sumPoints(dashboard.PromptsCreated),
+		Updated:    sumPoints(dashboard.PromptsUpdated),
+		ShareViews: sumPoints(dashboard.ShareViews),
+	}
+
+	// Totals previous — вторая серия запросов за равный период до текущего.
+	// Если какой-то запрос упадёт — пишем 0 в соответствующее поле (не блокируем).
+	prevDR := BuildPreviousRange(rng, s.nowFn())
+	if prev, perr := s.analytics.UsagePerDay(ctx, userID, nil, prevDR); perr == nil {
+		dashboard.TotalsPrevious.Uses = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.PromptsCreatedPerDay(ctx, userID, nil, prevDR); perr == nil {
+		dashboard.TotalsPrevious.Created = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.PromptsUpdatedPerDay(ctx, userID, nil, prevDR); perr == nil {
+		dashboard.TotalsPrevious.Updated = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.ShareViewsPerDay(ctx, userID, prevDR); perr == nil {
+		dashboard.TotalsPrevious.ShareViews = sumPoints(prev)
+	}
+
+	// Segmentation по модели (Phase 14.2 B.7).
+	if rows, merr := s.analytics.UsageByModel(ctx, userID, nil, dr); merr == nil {
+		dashboard.UsageByModel = rows
+	}
+
+	ensurePersonalNonNil(dashboard)
 	return dashboard, nil
+}
+
+// ensurePersonalNonNil гарантирует что все slice-поля dashboard — пустые [],
+// а не nil. GORM Scan возвращает nil для 0 строк, JSON маршалинг тогда даёт
+// null — фронт не ожидает null и падает на `.reduce`/`.map`. Нормализуем
+// контракт API: массивы всегда есть, пусть даже пустые.
+func ensurePersonalNonNil(d *PersonalDashboard) {
+	if d.UsagePerDay == nil {
+		d.UsagePerDay = []repo.UsagePoint{}
+	}
+	if d.TopPrompts == nil {
+		d.TopPrompts = []repo.PromptUsageRow{}
+	}
+	if d.PromptsCreated == nil {
+		d.PromptsCreated = []repo.UsagePoint{}
+	}
+	if d.PromptsUpdated == nil {
+		d.PromptsUpdated = []repo.UsagePoint{}
+	}
+	if d.ShareViews == nil {
+		d.ShareViews = []repo.UsagePoint{}
+	}
+	if d.TopShared == nil {
+		d.TopShared = []repo.PromptUsageRow{}
+	}
+	if d.UsageByModel == nil {
+		d.UsageByModel = []repo.ModelUsageRow{}
+	}
+}
+
+func ensureTeamNonNil(d *TeamDashboard) {
+	if d.UsagePerDay == nil {
+		d.UsagePerDay = []repo.UsagePoint{}
+	}
+	if d.TopPrompts == nil {
+		d.TopPrompts = []repo.PromptUsageRow{}
+	}
+	if d.PromptsCreated == nil {
+		d.PromptsCreated = []repo.UsagePoint{}
+	}
+	if d.PromptsUpdated == nil {
+		d.PromptsUpdated = []repo.UsagePoint{}
+	}
+	if d.Contributors == nil {
+		d.Contributors = []repo.ContributorRow{}
+	}
+	if d.UsageByModel == nil {
+		d.UsageByModel = []repo.ModelUsageRow{}
+	}
+}
+
+func ensurePromptNonNil(p *PromptAnalytics) {
+	if p.UsagePerDay == nil {
+		p.UsagePerDay = []repo.UsagePoint{}
+	}
+	if p.ShareViewsPerDay == nil {
+		p.ShareViewsPerDay = []repo.UsagePoint{}
+	}
 }
 
 // GetTeamDashboard — team scope. Проверяет membership (viewer+ достаточно для чтения).
@@ -151,6 +257,29 @@ func (s *Service) GetTeamDashboard(ctx context.Context, userID, teamID uint, req
 	if dashboard.Contributors, err = s.analytics.Contributors(ctx, tid, dr, 10); err != nil {
 		return nil, err
 	}
+
+	dashboard.TotalsCurrent = Totals{
+		Uses:    sumPoints(dashboard.UsagePerDay),
+		Created: sumPoints(dashboard.PromptsCreated),
+		Updated: sumPoints(dashboard.PromptsUpdated),
+	}
+
+	prevDR := BuildPreviousRange(rng, s.nowFn())
+	if prev, perr := s.analytics.UsagePerDay(ctx, userID, &tid, prevDR); perr == nil {
+		dashboard.TotalsPrevious.Uses = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.PromptsCreatedPerDay(ctx, userID, &tid, prevDR); perr == nil {
+		dashboard.TotalsPrevious.Created = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.PromptsUpdatedPerDay(ctx, userID, &tid, prevDR); perr == nil {
+		dashboard.TotalsPrevious.Updated = sumPoints(prev)
+	}
+
+	if rows, merr := s.analytics.UsageByModel(ctx, userID, &tid, dr); merr == nil {
+		dashboard.UsageByModel = rows
+	}
+
+	ensureTeamNonNil(dashboard)
 	return dashboard, nil
 }
 
@@ -184,22 +313,16 @@ func (s *Service) GetPromptAnalytics(ctx context.Context, promptID, userID uint)
 
 	result := &PromptAnalytics{PromptID: promptID}
 
-	// Per-prompt usage: reuse TopPrompts семантики через фильтр? Репа даёт
-	// только top-N, но не per-prompt timeline. Используем UsagePerDay с
-	// teamID из промпта и фильтруем при чтении (для MVP — можно через
-	// Raw SQL в репе, сейчас пропускаем и даём общий UsagePerDay).
-	var scope *uint
-	if prompt.TeamID != nil {
-		scope = prompt.TeamID
-	}
-	if result.UsagePerDay, err = s.analytics.UsagePerDay(ctx, prompt.UserID, scope, dr); err != nil {
+	// Per-prompt usage — отдельный SQL с WHERE prompt_id = ?. Ранее использовали
+	// общий UsagePerDay который считал все промпты юзера — это был баг.
+	_ = prompt // scope-ссылка оставлена на случай будущих фильтров
+	if result.UsagePerDay, err = s.analytics.PromptUsageTimeline(ctx, promptID, dr); err != nil {
 		return nil, err
 	}
-	// Timeline share-просмотров владельца — фильтр именно по этой ссылке не
-	// реализован; отдаём общий ShareViewsPerDay. Уточним в AnalyticsRepository
-	// позже (метод PerShareLinkViews) если понадобится point-accurate.
-	if result.ShareViewsPerDay, err = s.analytics.ShareViewsPerDay(ctx, prompt.UserID, dr); err != nil {
+	// Share-просмотры именно этого промпта: JOIN share_links по prompt_id.
+	if result.ShareViewsPerDay, err = s.analytics.PromptShareViewsTimeline(ctx, promptID, dr); err != nil {
 		return nil, err
 	}
+	ensurePromptNonNil(result)
 	return result, nil
 }

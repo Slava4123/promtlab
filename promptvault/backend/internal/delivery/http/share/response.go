@@ -3,6 +3,7 @@ package share
 import (
 	"time"
 
+	"promptvault/internal/models"
 	shareuc "promptvault/internal/usecases/share"
 )
 
@@ -17,13 +18,14 @@ type ShareLinkResponse struct {
 }
 
 type PublicPromptResponse struct {
-	Title     string              `json:"title"`
-	Content   string              `json:"content"`
-	Model     string              `json:"model,omitempty"`
-	Tags      []PublicTagResponse `json:"tags"`
-	Author    AuthorResponse      `json:"author"`
-	CreatedAt time.Time           `json:"created_at"`
-	UpdatedAt time.Time           `json:"updated_at"`
+	Title     string               `json:"title"`
+	Content   string               `json:"content"`
+	Model     string               `json:"model,omitempty"`
+	Tags      []PublicTagResponse  `json:"tags"`
+	Author    AuthorResponse       `json:"author"`
+	CreatedAt time.Time            `json:"created_at"`
+	UpdatedAt time.Time            `json:"updated_at"`
+	Branding  *models.BrandingInfo `json:"branding,omitempty"`
 }
 
 type PublicTagResponse struct {
@@ -61,5 +63,6 @@ func toPublicPromptResponse(info *shareuc.PublicPromptInfo) PublicPromptResponse
 		Author:    AuthorResponse{Name: info.Author.Name, AvatarURL: info.Author.AvatarURL},
 		CreatedAt: info.CreatedAt,
 		UpdatedAt: info.UpdatedAt,
+		Branding:  info.Branding,
 	}
 }

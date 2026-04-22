@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthStore } from "@/stores/auth-store"
 import { usePersonalAnalytics, useInsights } from "@/hooks/use-analytics"
-import { downloadAnalyticsCSV, type AnalyticsRange } from "@/api/analytics"
+import { computeDelta, downloadAnalyticsCSV, formatRange, type AnalyticsRange } from "@/api/analytics"
 import { MetricCard } from "@/components/analytics/metric-card"
 import { UsageChart } from "@/components/analytics/usage-chart"
 import { TopPromptsTable } from "@/components/analytics/top-prompts-table"
@@ -12,6 +12,7 @@ import { QuotaProgress } from "@/components/analytics/quota-progress"
 import { RangePicker } from "@/components/analytics/range-picker"
 import { UpgradeGate } from "@/components/analytics/upgrade-gate"
 import { InsightsPanel } from "@/components/analytics/insights-panel"
+import { ModelSegmentationChart } from "@/components/analytics/model-segmentation-chart"
 import { toast } from "sonner"
 
 // Phase 14 C.2: /analytics — личный dashboard.
@@ -31,15 +32,15 @@ export default function AnalyticsPage() {
   const insightsQuery = useInsights(isMax)
 
   const totalUses = useMemo(
-    () => data?.usage_per_day.reduce((s, p) => s + p.count, 0) ?? 0,
+    () => data?.usage_per_day?.reduce((s, p) => s + p.count, 0) ?? 0,
     [data],
   )
   const totalCreated = useMemo(
-    () => data?.prompts_created_per_day.reduce((s, p) => s + p.count, 0) ?? 0,
+    () => data?.prompts_created_per_day?.reduce((s, p) => s + p.count, 0) ?? 0,
     [data],
   )
   const totalShareViews = useMemo(
-    () => data?.share_views_per_day.reduce((s, p) => s + p.count, 0) ?? 0,
+    () => data?.share_views_per_day?.reduce((s, p) => s + p.count, 0) ?? 0,
     [data],
   )
 
@@ -94,17 +95,24 @@ export default function AnalyticsPage() {
             <MetricCard
               title="Всего использований"
               value={totalUses.toLocaleString("ru")}
-              subtitle={`за ${data.range}`}
+              subtitle={`за ${formatRange(data.range)}`}
+              delta={computeDelta(data.totals_current.uses, data.totals_previous.uses)}
             />
             <MetricCard
               title="Новых промптов"
               value={totalCreated.toLocaleString("ru")}
-              subtitle={`создано за ${data.range}`}
+              subtitle={`создано за ${formatRange(data.range)}`}
+              delta={computeDelta(data.totals_current.created, data.totals_previous.created)}
             />
             <MetricCard
-              title="Просмотров share-ссылок"
+              title="Просмотров публичных ссылок"
               value={totalShareViews.toLocaleString("ru")}
-              subtitle={isPaid ? `за ${data.range}` : "Доступно на Pro+"}
+              subtitle={isPaid ? `за ${formatRange(data.range)}` : "Доступно на Pro+"}
+              delta={
+                isPaid
+                  ? computeDelta(data.totals_current.share_views, data.totals_previous.share_views)
+                  : undefined
+              }
             />
             <MetricCard
               title="Топ-промпт"
@@ -123,11 +131,14 @@ export default function AnalyticsPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             <TopPromptsTable title="Топ-10 промптов по использованию" prompts={data.top_prompts} />
             <TopPromptsTable
-              title="Топ промптов по просмотрам share-ссылок"
+              title="Топ промптов по просмотрам публичных ссылок"
               prompts={data.top_shared}
               metricLabel="Просмотров"
             />
           </div>
+
+          {/* Segmentation по AI-моделям */}
+          <ModelSegmentationChart data={data.usage_by_model} />
 
           {/* Квоты */}
           {data.quotas ? (
@@ -135,9 +146,8 @@ export default function AnalyticsPage() {
               <QuotaProgress title="Промпты" quota={data.quotas.prompts} />
               <QuotaProgress title="Коллекции" quota={data.quotas.collections} />
               <QuotaProgress
-                title="Share-ссылок сегодня"
+                title="Публичных ссылок сегодня"
                 quota={data.quotas.daily_shares_today}
-                format={(u, l) => (l === -1 ? `${u} / без лимита` : `${u} / ${l}`)}
               />
               <QuotaProgress title="MCP-вызовов сегодня" quota={data.quotas.mcp_uses_today} />
             </div>
@@ -154,7 +164,7 @@ export default function AnalyticsPage() {
             ) : null
           ) : (
             <UpgradeGate
-              title="Smart Insights — на тарифе Max"
+              title="Умные инсайты — на тарифе Max"
               description="Автоматически находим забытые, популярные и похожие промпты. Обновляется раз в сутки."
               targetPlan="Max"
             />

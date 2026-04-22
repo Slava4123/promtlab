@@ -31,6 +31,7 @@ const PromptEditor = lazy(() => import("@/pages/prompt-editor"))
 const Collections = lazy(() => import("@/pages/collections"))
 const CollectionView = lazy(() => import("@/pages/collection-view"))
 const Versions = lazy(() => import("@/pages/versions"))
+const PromptAnalytics = lazy(() => import("@/pages/prompt-analytics"))
 // /settings/* — nested routes. Layout — lazy (грузится один раз при заходе),
 // sub-страницы — eager: формы лёгкие, per-section split дал бы 8 микро-чанков
 // и мерцание Suspense fallback при каждом переключении nav.
@@ -140,6 +141,7 @@ function AppRoutes() {
           <Route path="/prompts/new" element={<Suspense fallback={<PageFallback />}><PromptEditor /></Suspense>} />
           <Route path="/prompts/:id" element={<Suspense fallback={<PageFallback />}><PromptEditor /></Suspense>} />
           <Route path="/prompts/:id/versions" element={<Suspense fallback={<PageFallback />}><Versions /></Suspense>} />
+          <Route path="/prompts/:id/analytics" element={<Suspense fallback={<PageFallback />}><PromptAnalytics /></Suspense>} />
           <Route path="/collections" element={<Suspense fallback={<PageFallback />}><Collections /></Suspense>} />
           <Route path="/collections/:id" element={<Suspense fallback={<PageFallback />}><CollectionView /></Suspense>} />
           <Route path="/teams" element={<Suspense fallback={<PageFallback />}><Teams /></Suspense>} />

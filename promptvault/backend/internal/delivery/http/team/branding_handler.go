@@ -90,7 +90,7 @@ func respondBrandingError(w http.ResponseWriter, r *http.Request, err error) {
 		httperr.Respond(w, httperr.Forbidden("Нет доступа"))
 	case errors.Is(err, teamuc.ErrBrandingMaxOnly):
 		httperr.RespondQuotaError(w, "branding", 0, 0, "pro",
-			"Branded share pages — фича тарифа Max. Обновитесь на /pricing.")
+			"Брендинг публичных ссылок доступен только на тарифе Max. Обновитесь на странице /pricing.")
 	case errors.Is(err, teamuc.ErrBrandingInvalidURL),
 		errors.Is(err, teamuc.ErrBrandingInvalidColor),
 		errors.Is(err, teamuc.ErrBrandingInvalidTagline):

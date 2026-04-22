@@ -2,7 +2,6 @@ package analytics
 
 import (
 	"fmt"
-	"mime"
 	"net/http"
 	"strconv"
 
@@ -10,7 +9,6 @@ import (
 
 	httperr "promptvault/internal/delivery/http/errors"
 	"promptvault/internal/delivery/http/utils"
-	repo "promptvault/internal/interface/repository"
 	authmw "promptvault/internal/middleware/auth"
 	analyticsuc "promptvault/internal/usecases/analytics"
 )
@@ -95,9 +93,23 @@ func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 	utils.WriteOK(w, map[string]any{"items": toInsightResponses(insights)})
 }
 
-// Export — CSV streaming для usage-данных. Free → 402 (export = Pro+).
-// Current MVP: один sheet с colon-сепарированными строками по дням.
+// RefreshInsights — POST-endpoint для форсированного пересчёта инсайтов
+// (обычно считаются ежесуточно cron'ом). Max-only + rate-limit 1/час
+// (middleware в app.go). Возвращает свежий список после пересчёта.
+func (h *Handler) RefreshInsights(w http.ResponseWriter, r *http.Request) {
+	userID := authmw.GetUserID(r.Context())
+
+	insights, err := h.svc.RefreshInsightsGated(r.Context(), userID, nil)
+	if err != nil {
+		respondError(w, r, err)
+		return
+	}
+	utils.WriteOK(w, map[string]any{"items": toInsightResponses(insights)})
+}
+
+// Export — CSV или XLSX экспорт. Free → 402 (export = Pro+).
 // Scope: personal или team (по query param).
+// Format: csv (один sheet — только usage_per_day) или xlsx (4 sheets).
 func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 	userID := authmw.GetUserID(r.Context())
 	q := r.URL.Query()
@@ -106,8 +118,8 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 	if format == "" {
 		format = "csv"
 	}
-	if format != "csv" {
-		httperr.Respond(w, httperr.BadRequest("Поддерживается только format=csv"))
+	if format != "csv" && format != "xlsx" {
+		httperr.Respond(w, httperr.BadRequest("Поддерживается format=csv или format=xlsx"))
 		return
 	}
 
@@ -122,9 +134,6 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 	}
 	rng := parseRange(q.Get("range"))
 
-	var filename string
-	var points []repo.UsagePoint
-
 	switch scope {
 	case "personal":
 		dash, err := h.svc.GetPersonalDashboard(r.Context(), userID, rng)
@@ -132,8 +141,12 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, err)
 			return
 		}
-		points = dash.UsagePerDay
-		filename = fmt.Sprintf("analytics-personal-%s.csv", dash.Range)
+		base := fmt.Sprintf("analytics-personal-%s", dash.Range)
+		if format == "xlsx" {
+			writePersonalXLSX(w, base, dash)
+		} else {
+			writeUsageCSV(w, base, dash.UsagePerDay)
+		}
 	case "team":
 		teamIDStr := q.Get("team_id")
 		teamID64, perr := strconv.ParseUint(teamIDStr, 10, 32)
@@ -146,26 +159,13 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, err)
 			return
 		}
-		points = dash.UsagePerDay
-		filename = fmt.Sprintf("analytics-team-%d-%s.csv", teamID64, dash.Range)
+		base := fmt.Sprintf("analytics-team-%d-%s", teamID64, dash.Range)
+		if format == "xlsx" {
+			writeTeamXLSX(w, base, dash)
+		} else {
+			writeUsageCSV(w, base, dash.UsagePerDay)
+		}
 	default:
 		httperr.Respond(w, httperr.BadRequest("scope должен быть personal или team"))
-		return
-	}
-
-	// Stream CSV: простой header "date,uses".
-	// M7: Content-Disposition через mime.FormatMediaType — корректное
-	// квотирование/экранирование filename, защита от Response Splitting.
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
-	w.WriteHeader(http.StatusOK)
-
-	if _, err := fmt.Fprintln(w, "date,uses"); err != nil {
-		return
-	}
-	for _, p := range points {
-		if _, err := fmt.Fprintf(w, "%s,%d\n", p.Day.Format("2006-01-02"), p.Count); err != nil {
-			return
-		}
 	}
 }

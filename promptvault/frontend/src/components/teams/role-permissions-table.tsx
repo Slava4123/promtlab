@@ -37,7 +37,7 @@ const PERMISSIONS: Permission[] = [
     allowed: { viewer: false, editor: true, owner: true },
   },
   {
-    label: "Создавать публичные и share-ссылки",
+    label: "Создавать публичные ссылки на промпты",
     allowed: { viewer: false, editor: true, owner: true },
   },
   {

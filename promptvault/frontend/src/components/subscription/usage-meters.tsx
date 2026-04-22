@@ -26,9 +26,9 @@ function getSuffix(key: string): string {
 }
 
 function Meter({ resourceKey, label, info }: { resourceKey: string; label: string; info: QuotaInfo }) {
-  if (info.limit === -1) return null
+  if (info.limit <= 0) return null
 
-  const pct = info.limit > 0 ? Math.min((info.used / info.limit) * 100, 100) : 0
+  const pct = Math.min((info.used / info.limit) * 100, 100)
   const color =
     pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-emerald-500"
 

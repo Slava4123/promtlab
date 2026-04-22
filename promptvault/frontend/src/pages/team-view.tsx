@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, HelpCircle, Pencil, Trash2, UserPlus, Users, Loader2, BarChart3, Activity } from "lucide-react"
+import { ArrowLeft, HelpCircle, Pencil, Trash2, UserPlus, Users, Loader2, BarChart3, Activity, Palette } from "lucide-react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
 
@@ -171,6 +171,13 @@ export default function TeamView() {
           </Link>
           {isOwner && (
             <>
+              <Link
+                to={`/teams/${slug}/branding`}
+                className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-muted-foreground transition-colors hover:text-foreground border border-border bg-card"
+              >
+                <Palette className="h-3.5 w-3.5" />
+                Брендинг
+              </Link>
               <button
                 onClick={openEdit}
                 className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] text-muted-foreground transition-colors hover:text-foreground border border-border bg-card"

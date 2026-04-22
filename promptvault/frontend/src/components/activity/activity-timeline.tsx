@@ -13,9 +13,22 @@ interface ActivityTimelineProps {
   // useIntersectionObserver: когда true, автоматически подгружает следующую страницу
   // при скролле к концу списка.
   autoLoad?: boolean
+  // hasFilter=true → юзер применил фильтр; пустой результат означает «фильтр
+  // ничего не нашёл», а не «в команде вообще нет активности». Empty state
+  // должен отличать эти случаи, иначе юзер думает, что фильтр сломан.
+  hasFilter?: boolean
+  onClearFilter?: () => void
 }
 
-export function ActivityTimeline({ items, hasMore, isFetching, onLoadMore, autoLoad = true }: ActivityTimelineProps) {
+export function ActivityTimeline({
+  items,
+  hasMore,
+  isFetching,
+  onLoadMore,
+  autoLoad = true,
+  hasFilter = false,
+  onClearFilter,
+}: ActivityTimelineProps) {
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -35,6 +48,21 @@ export function ActivityTimeline({ items, hasMore, isFetching, onLoadMore, autoL
   }, [autoLoad, hasMore, isFetching, onLoadMore])
 
   if (items.length === 0 && !isFetching) {
+    if (hasFilter) {
+      return (
+        <div className="py-12 text-center">
+          <p className="text-base font-medium text-muted-foreground">Нет событий по выбранному фильтру</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Попробуйте выбрать другой тип события или сбросить фильтр.
+          </p>
+          {onClearFilter && (
+            <Button variant="outline" size="sm" className="mt-4" onClick={onClearFilter}>
+              Сбросить фильтр
+            </Button>
+          )}
+        </div>
+      )
+    }
     return (
       <div className="py-12 text-center">
         <p className="text-base font-medium text-muted-foreground">В этой команде пока нет активности</p>

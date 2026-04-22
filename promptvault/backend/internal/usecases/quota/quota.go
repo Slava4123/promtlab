@@ -49,6 +49,10 @@ func (s *Service) getPlan(ctx context.Context, userID uint) (string, *models.Sub
 	return user.PlanID, plan, nil
 }
 
+// isWithinLimit — проверка used < limit. Sentinel -1 (legacy "безлимит")
+// сохранён для старых данных в БД, хотя миграция 000046 заменила все -1
+// на конкретные положительные лимиты. После полного прогона down-миграций
+// эту ветку можно удалить.
 func isWithinLimit(used int64, limit int) bool {
 	return limit == -1 || used < int64(limit)
 }

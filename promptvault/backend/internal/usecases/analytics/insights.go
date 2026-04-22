@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"time"
 
-	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 )
 
@@ -35,7 +33,8 @@ func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint
 	}
 
 	// 2. TRENDING — uses(last 7d) > 2× uses(prev 7d).
-	trending, err := s.computeTrend(ctx, userID, teamID, now, 2.0, true, 5)
+	// SQL CTE в одном запросе — избегаем 2× TopPrompts + in-memory map.
+	trending, err := s.analytics.GetTrendingPrompts(ctx, userID, teamID, 2.0, true, 5)
 	if err != nil {
 		slog.WarnContext(ctx, "analytics.insights.trending_failed",
 			"err", err, "user_id", userID, "team_id", teamID)
@@ -44,7 +43,7 @@ func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint
 	}
 
 	// 3. DECLINING — uses(last 7d) < 0.5× uses(prev 7d).
-	declining, err := s.computeTrend(ctx, userID, teamID, now, 0.5, false, 5)
+	declining, err := s.analytics.GetTrendingPrompts(ctx, userID, teamID, 0.5, false, 5)
 	if err != nil {
 		slog.WarnContext(ctx, "analytics.insights.declining_failed",
 			"err", err, "user_id", userID, "team_id", teamID)
@@ -64,64 +63,8 @@ func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint
 	return nil
 }
 
-// computeTrend возвращает промпты с изменением usage между двумя 7-дневными
-// окнами. growing=true → рост >= factor; growing=false → падение <= factor.
-// Возвращаемые строки используют Uses как uses(last 7d).
-func (s *Service) computeTrend(ctx context.Context, userID uint, teamID *uint, now time.Time, factor float64, growing bool, limit int) ([]trendRow, error) {
-	last7 := repo.DateRange{From: now.AddDate(0, 0, -7), To: now}
-	prev7 := repo.DateRange{From: now.AddDate(0, 0, -14), To: now.AddDate(0, 0, -7)}
-
-	recent, err := s.analytics.TopPrompts(ctx, userID, teamID, last7, 50)
-	if err != nil {
-		return nil, err
-	}
-	previous, err := s.analytics.TopPrompts(ctx, userID, teamID, prev7, 100)
-	if err != nil {
-		return nil, err
-	}
-
-	prevMap := make(map[uint]int64, len(previous))
-	for _, p := range previous {
-		prevMap[p.PromptID] = p.Uses
-	}
-
-	var out []trendRow
-	for _, p := range recent {
-		prev := prevMap[p.PromptID]
-		if growing {
-			// Для растущих — учитываем даже если prev==0 (новый тренд).
-			if prev == 0 || float64(p.Uses) >= float64(prev)*factor {
-				out = append(out, trendRow{
-					PromptID:     p.PromptID,
-					Title:        p.Title,
-					Uses:         p.Uses,
-					PreviousUses: prev,
-				})
-			}
-		} else {
-			// Для падающих — только если prev был значимый.
-			if prev > 0 && float64(p.Uses) <= float64(prev)*factor {
-				out = append(out, trendRow{
-					PromptID:     p.PromptID,
-					Title:        p.Title,
-					Uses:         p.Uses,
-					PreviousUses: prev,
-				})
-			}
-		}
-		if len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
-}
-
-type trendRow struct {
-	PromptID     uint   `json:"prompt_id"`
-	Title        string `json:"title"`
-	Uses         int64  `json:"uses_last_7d"`
-	PreviousUses int64  `json:"uses_prev_7d"`
-}
+// computeTrend удалён — вся логика теперь в SQL (repo.GetTrendingPrompts).
+// Возвращаемые строки — repo.TrendRow с полями uses_last_7d / uses_prev_7d.
 
 // upsertSafe сериализует payload и вызывает UpsertInsight. Ошибки логируются,
 // не возвращаются — один insight не должен ломать пересчёт остальных.

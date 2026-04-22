@@ -1,7 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import type { Insight } from "@/api/analytics"
-import { TrendingUp, TrendingDown, Archive, Copy, Hash, FolderOpen } from "lucide-react"
+import { ApiError } from "@/api/client"
+import { useRefreshInsights } from "@/hooks/use-analytics"
+import { toast } from "sonner"
+import { Loader2, RefreshCw, TrendingUp, TrendingDown, Archive, Copy, Hash, FolderOpen } from "lucide-react"
 
 const ICONS: Record<string, typeof TrendingUp> = {
   unused_prompts: Archive,
@@ -31,12 +35,42 @@ interface InsightsPanelProps {
 }
 
 export function InsightsPanel({ insights }: InsightsPanelProps) {
+  const refresh = useRefreshInsights()
+
+  async function handleRefresh() {
+    try {
+      await refresh.mutateAsync()
+      toast.success("Инсайты обновлены")
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        toast.error("Инсайты можно обновлять не чаще одного раза в час")
+      } else {
+        toast.error("Не удалось обновить инсайты")
+      }
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          Smart Insights
+          Умные инсайты
           <Badge variant="outline">Max</Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            onClick={handleRefresh}
+            disabled={refresh.isPending}
+            aria-label="Обновить инсайты"
+          >
+            {refresh.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
+            <span className="ml-1 text-xs">Обновить</span>
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent>

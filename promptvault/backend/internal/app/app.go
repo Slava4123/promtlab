@@ -186,6 +186,8 @@ type App struct {
 	activityCleanupLoop *analyticsuc.CleanupLoop
 	insightsLoop        *analyticsuc.InsightsComputeLoop
 	feedbackRL        *ratelimit.Limiter[uint]
+	// insightsRL — 1 refresh инсайтов в час на юзера (POST /api/analytics/insights/refresh).
+	insightsRL *ratelimit.Limiter[uint]
 }
 
 func New(cfg *config.Config, db *gorm.DB) *App {
@@ -463,6 +465,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		insightsLoop:         insightsLoop,
 		purgeLoop:         purgeLoop,
 		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour, ratelimit.UintHash),
+		insightsRL:        ratelimit.NewLimiterWithWindow[uint](1, time.Hour, ratelimit.UintHash),
 	}
 }
 
@@ -759,6 +762,20 @@ func (a *App) MountRoutes(r chi.Router) {
 				r.Get("/prompts/{id}", a.analyticsHandler.Prompt)
 				r.Get("/insights", a.analyticsHandler.Insights)
 				r.Get("/export", a.analyticsHandler.Export)
+				// Phase 14.2: force-refresh insights (Max-only, 1 раз/час per user).
+				r.With(func(next http.Handler) http.Handler {
+					return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+						uid := authmw.GetUserID(req.Context())
+						if uid > 0 && !a.insightsRL.Allow(uid) {
+							w.Header().Set("Content-Type", "application/json")
+							w.Header().Set("Retry-After", "3600")
+							w.WriteHeader(http.StatusTooManyRequests)
+							_, _ = w.Write([]byte(`{"error":"Инсайты можно обновлять не чаще одного раза в час"}`))
+							return
+						}
+						next.ServeHTTP(w, req)
+					})
+				}).Post("/insights/refresh", a.analyticsHandler.RefreshInsights)
 			})
 
 			// Feedback (5/hour per user)

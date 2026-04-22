@@ -21,6 +21,7 @@ const quotaLabels: Record<string, string> = {
   teams: "команд",
   team_members: "участников команды",
   share_links: "публичных ссылок",
+  daily_shares: "публичных ссылок в день",
   ext_daily: "вставок через расширение на сегодня",
   mcp_daily: "MCP-вызовов на сегодня",
 }
@@ -52,6 +53,11 @@ const quotaBenefits: Record<string, QuotaBenefit> = {
   share_links: {
     headline: "10 публичных ссылок на Pro",
     detail: "Делитесь готовыми промптами — безлимит на Max.",
+    targetPlan: "pro",
+  },
+  daily_shares: {
+    headline: "100 публичных ссылок в день на Pro",
+    detail: "На Free — 10, на Max — 1000 в день.",
     targetPlan: "pro",
   },
   ext_daily: {

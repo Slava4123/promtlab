@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useForm, useWatch, Controller, type Control } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, History, Copy, Trash2, Share2, MoreHorizontal } from "lucide-react"
+import { ArrowLeft, Loader2, FileText, Sparkles, FolderOpen, Tag, History, Copy, Trash2, Share2, MoreHorizontal, BarChart3 } from "lucide-react"
 import { toast } from "sonner"
 
 import { usePrompt, useCreatePrompt, useUpdatePrompt, useIncrementUsage, useDeletePrompt } from "@/hooks/use-prompts"
@@ -498,6 +498,10 @@ export default function PromptEditor() {
                 <DropdownMenuItem onClick={() => navigate(`/prompts/${promptId}/versions`)}>
                   <History className="h-3.5 w-3.5" />
                   История версий
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate(`/prompts/${promptId}/analytics`)}>
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  Аналитика
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShareOpen(true)}>
                   <Share2 className="h-3.5 w-3.5" />
