@@ -57,6 +57,7 @@ func (r *fakeUserRepo) MarkReferralRewarded(context.Context, uint) (bool, error)
 	return false, nil
 }
 func (r *fakeUserRepo) ListMaxUsers(context.Context) ([]uint, error) { return nil, nil }
+func (r *fakeUserRepo) SetInsightEmailsEnabled(context.Context, uint, bool) error { return nil }
 
 type fakePlanRepo struct {
 	plans map[string]*models.SubscriptionPlan

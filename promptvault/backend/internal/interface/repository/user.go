@@ -50,4 +50,19 @@ type UserRepository interface {
 	// Используется analytics.InsightsComputeLoop для ежесуточного пересчёта
 	// детерминированных Smart Insights. Ограничение — active (не frozen/deleted).
 	ListMaxUsers(ctx context.Context) ([]uint, error)
+
+	// SetInsightEmailsEnabled атомарно меняет users.insight_emails_enabled
+	// (Phase 14 M-10). Opt-in по ФЗ-152.
+	SetInsightEmailsEnabled(ctx context.Context, userID uint, enabled bool) error
+}
+
+// InsightNotificationRepository — лог отправленных email-уведомлений
+// по Smart Insights. Используется для rate-limit 1 письмо/неделю.
+type InsightNotificationRepository interface {
+	// RecentlySent возвращает true, если за последние `within` было отправлено
+	// уведомление пары (userID, insightType). Rate-limit защита.
+	RecentlySent(ctx context.Context, userID uint, insightType string, within time.Duration) (bool, error)
+
+	// Record вставляет лог-запись факта отправки.
+	Record(ctx context.Context, userID uint, insightType string) error
 }

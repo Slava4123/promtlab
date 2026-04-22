@@ -237,6 +237,49 @@ func (s *Service) SendPreExpireReminder(to, planName string, daysLeft int, endsA
 	return s.send(to, subject, body)
 }
 
+// insightTypeLabel — человекочитаемое описание типа инсайта для тела письма.
+// Синхронизировано с UI-константами (frontend/src/components/analytics/insights-panel).
+func insightTypeLabel(t string) string {
+	switch t {
+	case "unused_prompts":
+		return "неиспользуемые промпты"
+	case "trending":
+		return "растущие промпты"
+	case "declining":
+		return "теряющие популярность промпты"
+	case "most_edited":
+		return "часто редактируемые промпты"
+	case "possible_duplicates":
+		return "возможные дубликаты"
+	case "orphan_tags":
+		return "неиспользуемые теги"
+	case "empty_collections":
+		return "пустые коллекции"
+	default:
+		return t
+	}
+}
+
+// SendInsightsDigest — краткое email-уведомление о новом Smart Insight для
+// Max-юзеров (Phase 14 M-10). Rate-limit 1/неделя на пару (user, insightType)
+// enforce'ится в EmailInsightsNotifier через insight_notifications таблицу.
+func (s *Service) SendInsightsDigest(to, name, insightType, frontendURL string) error {
+	greeting := "Привет"
+	if name != "" {
+		greeting = fmt.Sprintf("Привет, %s", name)
+	}
+	label := insightTypeLabel(insightType)
+	body := fmt.Sprintf(
+		"%s!\r\n\r\n"+
+			"Появился новый Smart Insight в ПромтЛаб: %s.\r\n\r\n"+
+			"Открыть инсайты: %s/analytics\r\n\r\n"+
+			"Эти письма можно выключить в настройках уведомлений.\r\n\r\n"+
+			"Если есть вопросы — пиши на %s.",
+		greeting, label, frontendURL, supportEmail,
+	)
+	return s.send(to, "Новый Smart Insight — ПромтЛаб", body)
+}
+
 // SendSubscriptionExpired уведомляет о переводе на Free после исчерпания
 // retry-попыток. Отправляется из ExpirationLoop когда подписка переходит в expired.
 func (s *Service) SendSubscriptionExpired(to, planName, frontendURL string) error {

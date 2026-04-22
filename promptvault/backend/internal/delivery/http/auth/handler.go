@@ -401,6 +401,22 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	utils.WriteOK(w, NewUserResponse(*user))
 }
 
+// PATCH /api/auth/notifications/insights — opt-in toggle для Smart Insights digest.
+// Phase 14 M-10; default false (ФЗ-152 требует явное согласие).
+func (h *Handler) SetInsightEmails(w http.ResponseWriter, r *http.Request) {
+	userID := authmw.GetUserID(r.Context())
+	req, err := utils.DecodeAndValidate[InsightEmailsRequest](r, h.validate)
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest(err.Error()))
+		return
+	}
+	if err := h.auth.SetInsightEmailsEnabled(r.Context(), userID, req.Enabled); err != nil {
+		respondError(w, err)
+		return
+	}
+	utils.WriteOK(w, map[string]bool{"insight_emails_enabled": req.Enabled})
+}
+
 // PUT /api/auth/password
 func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	userID := authmw.GetUserID(r.Context())

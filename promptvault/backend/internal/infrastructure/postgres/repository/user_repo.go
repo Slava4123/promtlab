@@ -117,6 +117,17 @@ func (r *userRepo) ListInactiveForReengagement(ctx context.Context, inactiveBefo
 	return users, err
 }
 
+// SetInsightEmailsEnabled атомарно тоглит флаг. Phase 14 M-10 (opt-in ФЗ-152).
+func (r *userRepo) SetInsightEmailsEnabled(ctx context.Context, userID uint, enabled bool) error {
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]any{
+			"insight_emails_enabled": enabled,
+			"updated_at":             time.Now(),
+		}).Error
+}
+
 func (r *userRepo) MarkReengagementSent(ctx context.Context, userID uint) error {
 	now := time.Now()
 	return r.db.WithContext(ctx).

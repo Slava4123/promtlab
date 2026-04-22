@@ -47,6 +47,12 @@ type UpdateProfileRequest struct {
 	AvatarURL string  `json:"avatar_url" validate:"omitempty,url,max=500"`
 }
 
+// InsightEmailsRequest — PATCH /api/auth/notifications/insights.
+// Opt-in toggle email-уведомлений по Smart Insights (ФЗ-152).
+type InsightEmailsRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
 type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" validate:"required"`
 	NewPassword string `json:"new_password" validate:"required,min=8,max=128"`

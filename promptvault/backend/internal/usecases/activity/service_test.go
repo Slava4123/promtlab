@@ -87,6 +87,9 @@ func (m *mockUserRepo) MarkReferralRewarded(ctx context.Context, userID uint) (b
 	return false, nil
 }
 func (m *mockUserRepo) ListMaxUsers(_ context.Context) ([]uint, error) { return nil, nil }
+func (m *mockUserRepo) SetInsightEmailsEnabled(_ context.Context, _ uint, _ bool) error {
+	return nil
+}
 
 func newTestActivityService() (*Service, *mockActivityRepo, *mockUserRepo) {
 	ar := new(mockActivityRepo)

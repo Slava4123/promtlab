@@ -15,8 +15,6 @@ import (
 	"promptvault/internal/infrastructure/email"
 	"promptvault/internal/infrastructure/metrics"
 	pgrepo "promptvault/internal/infrastructure/postgres/repository"
-	repo "promptvault/internal/interface/repository"
-	"promptvault/internal/models"
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/middleware/ipallowlist"
 	"promptvault/internal/middleware/ratelimit"
@@ -75,70 +73,7 @@ import (
 	useruc "promptvault/internal/usecases/user"
 )
 
-// apiKeyValidatorAdapter адаптирует *apikeyuc.Service к узкому интерфейсу
-// authmw.APIKeyValidator, чтобы middleware не зависел от usecases package.
-type apiKeyValidatorAdapter struct {
-	svc *apikeyuc.Service
-}
-
-func (a *apiKeyValidatorAdapter) ValidateKey(ctx context.Context, rawKey string) (userID uint, keyID uint, err error) {
-	result, err := a.svc.ValidateKey(ctx, rawKey)
-	if err != nil {
-		return 0, 0, err
-	}
-	return result.UserID, result.KeyID, nil
-}
-
-// mcpPromptAdapter оборачивает *promptuc.Service и скрывает newly_unlocked_badges
-// из сигнатур Create/Update — они не нужны MCP клиентам (Claude), которые работают
-// через JSON-RPC и не имеют toast-UI. Адаптер позволяет не тянуть badge-логику в
-// mcpserver package и сохранить узкий mcpserver.PromptService интерфейс.
-type mcpPromptAdapter struct {
-	*promptuc.Service
-}
-
-func (a *mcpPromptAdapter) Create(ctx context.Context, in promptuc.CreateInput) (*models.Prompt, error) {
-	p, _, err := a.Service.Create(ctx, in)
-	return p, err
-}
-
-func (a *mcpPromptAdapter) Update(ctx context.Context, id, userID uint, in promptuc.UpdateInput) (*models.Prompt, error) {
-	p, _, err := a.Service.Update(ctx, id, userID, in)
-	return p, err
-}
-
-func (a *mcpPromptAdapter) RevertToVersion(ctx context.Context, promptID, userID, versionID uint) (*models.Prompt, error) {
-	p, _, err := a.Service.RevertToVersion(ctx, promptID, userID, versionID)
-	return p, err
-}
-
-func (a *mcpPromptAdapter) IncrementUsage(ctx context.Context, id, userID uint) error {
-	_, err := a.Service.IncrementUsage(ctx, id, userID)
-	return err
-}
-
-// mcpCollectionAdapter — симметричный адаптер для *colluc.Service. Скрывает
-// возвращаемый slice бейджей из Create, чтобы mcpserver.CollectionService
-// оставался узким контрактом.
-type mcpCollectionAdapter struct {
-	*colluc.Service
-}
-
-// adminHealthAdapter — узкий интерфейс HealthCounter для adminhttp.Handler,
-// делегирующий в AdminRepository.CountUsers. Лежит в app.go, чтобы не тянуть
-// repo-slices в handler package.
-type adminHealthAdapter struct {
-	repo repo.AdminRepository
-}
-
-func (a *adminHealthAdapter) CountUsers(ctx context.Context) (total, admins, active, frozen int64, err error) {
-	return a.repo.CountUsers(ctx)
-}
-
-func (a *mcpCollectionAdapter) Create(ctx context.Context, userID uint, name, description, color, icon string, teamID *uint) (*models.Collection, error) {
-	c, _, err := a.Service.Create(ctx, userID, name, description, color, icon, teamID)
-	return c, err
-}
+// Адаптеры вынесены в adapters.go для чистоты DI-графа.
 
 type App struct {
 	cfg              *config.Config
@@ -251,6 +186,13 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	analyticsSvc := analyticsuc.NewService(analyticsRepo, promptRepo, teamRepo, userRepo, quotaSvc)
 	// Q2: experimental insights flag — 4 неготовых типа скрыты до M8.
 	analyticsSvc.SetExperimentalInsights(cfg.Analytics.ExperimentalInsights)
+
+	// Phase 14 M-10: email-digest по Smart Insights. Rate-limit 1/неделя
+	// через insight_notifications. Orchestration SMTP → repo → service.
+	insightNotifRepo := pgrepo.NewInsightNotificationRepository(db)
+	insightsNotifier := email.NewEmailInsightsNotifier(emailSvc, userRepo, insightNotifRepo, cfg.Server.FrontendURL)
+	analyticsSvc.SetNotifier(insightsNotifier)
+
 	// Phase B подключает analyticsSvc в MCP-server (ниже) и в HTTP handlers.
 
 	// Cleanup loops — ежесуточно. Retention: Free=30д, Pro=90д, Max=365д (per-plan в SQL).
@@ -635,6 +577,8 @@ func (a *App) MountRoutes(r chi.Router) {
 			r.Post("/auth/set-password/confirm", a.authHandler.ConfirmSetPassword)
 			r.Put("/auth/profile", a.authHandler.UpdateProfile)
 			r.Put("/auth/password", a.authHandler.ChangePassword)
+			// Phase 14 M-10: opt-in toggle Smart Insights email digest.
+			r.Patch("/auth/notifications/insights", a.authHandler.SetInsightEmails)
 			r.Get("/auth/linked-accounts", a.authHandler.LinkedAccounts)
 			r.Delete("/auth/unlink/{provider}", a.authHandler.UnlinkProvider)
 			r.Post("/auth/link/{provider}", a.oauthHandler.InitiateLink)

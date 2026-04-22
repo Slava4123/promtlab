@@ -25,6 +25,10 @@ type AnalyticsFilter struct {
 	Range        DateRange
 }
 
+// HasTag/HasCollection helpers — удобные предикаты для SQL-builder'ов.
+func (f AnalyticsFilter) HasTag() bool        { return f.TagID != nil }
+func (f AnalyticsFilter) HasCollection() bool { return f.CollectionID != nil }
+
 // UsagePoint — точка таймсерии (день + count). Дата — day-precision UTC.
 type UsagePoint struct {
 	Day   time.Time `json:"day"`

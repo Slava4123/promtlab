@@ -55,6 +55,10 @@ type User struct {
 	ReferredBy         string     `gorm:"column:referred_by;size:16" json:"-"`
 	ReferralRewardedAt *time.Time `gorm:"column:referral_rewarded_at" json:"-"`
 
+	// Phase 14 M-10 opt-in по ФЗ-152. Default false — юзер должен явно
+	// включить email-уведомления по Smart Insights в настройках.
+	InsightEmailsEnabled bool `gorm:"column:insight_emails_enabled;not null;default:false" json:"insight_emails_enabled"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 

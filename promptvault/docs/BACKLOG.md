@@ -1,12 +1,12 @@
-# Backlog — Post Phase 14.3
+# Backlog — Post Phase 14.3+
 
 **Дата:** 2026-04-23
-**Предыдущий CI:** `e0c5ea3` (UTF-8 truncate в share)
-**Prod:** `promtlabs.ru` актуален, включая Analytics v2 + pricing fix.
+**Предыдущий CI:** `2cad5ad` (Phase 14.3 wave 1)
+**Prod:** `promtlabs.ru` актуален.
 
-Ранее документ содержал 16 пронумерованных пунктов. В Phase 14.3 закрыты
-#2, #3 (частично), #4, #5, #6, #8, #12, #13, #15, #16 (каркас), #18,
-#21, #22, #28 (AST-lint вместо декоратора), #29, #30, #31.
+В Phase 14.3 wave 1 закрыты 16+ пунктов (см. раздел ниже).
+В Phase 14.3 wave 2 закрыты #17 (SMTP notifier), частично #14 (adapters вынесены),
+пилот #9 (AnalyticsFilter + helpers).
 
 ---
 
@@ -29,29 +29,42 @@
 
 ---
 
+## ✅ Закрыто в Phase 14.3 wave 2
+
+- #17 **SMTP insights notifier** — `EmailInsightsNotifier` в `infrastructure/email/insights_notifier.go`, rate-limit 1/неделя через `insight_notifications` repo, `InsightNotificationRepository` + GORM impl, `email.Service.SendInsightsDigest` plain-text. Opt-in через `users.insight_emails_enabled` + `PATCH /api/auth/notifications/insights`. NoopNotifier заменён на реальный в app.go.
+- #14 **app.go частичный split** — 4 адаптера (apiKeyValidatorAdapter, mcpPromptAdapter, mcpCollectionAdapter, adminHealthAdapter) вынесены в `app/adapters.go`. app.go снижен с 845 до 780 строк.
+- #9 пилот **AnalyticsFilter** helpers — `HasTag()`/`HasCollection()` методы.
+
+---
+
 ## 🔒 Осталось (блокировано внешним)
 
 ### 1. `github.com/docker/docker` CVE (high + medium)
-- **Статус:** ждём upstream — `v29.x` в Go-modules.
+- **Статус:** `go get latest` не поднимает — `v29.x` ещё не в Go-modules.
 - **Когда станет доступно:** `go get github.com/docker/docker@v29.x && go mod tidy` + прогон тестов.
 
 ### 8b. Smart Insights feature-flag toggle в prod
 - **Что сделать:** установить `ANALYTICS_EXPERIMENTAL_INSIGHTS=true` в `.env.prod` после проверки что managed Postgres поддерживает `pg_trgm` (миграция 000048 прошла).
 - **Мониторинг:** 24 часа через `analytics_insights_refresh_total{result="success"}`.
 
-### 17. Email notifications — SMTP реализация
-- **Что сделать:** `infrastructure/email/insights_notifier.go` с rate-limit 1/неделю через `insight_notifications` + HTML-шаблон `insights_digest.html` + settings UI `/settings/notifications`.
-- **Ждёт:** решение продукта по UX digest и opt-in формулировкам.
+### 17b. Insights digest UI settings
+- **Что сделать:** UI-toggle в `/settings/notifications` — checkbox «Email-уведомления по Smart Insights» с описанием ФЗ-152 opt-in. Вызывает `PATCH /api/auth/notifications/insights`.
+- **Оценка:** 1 час (endpoint готов, osталась React-страница).
 
 ---
 
 ## 🔧 Остаётся (не блокировано, но отложено)
 
 ### 9b. Drill-down migration — остальные методы AnalyticsRepository
-Pilot `AnalyticsFilter` struct в интерфейсе есть, 16 методов ещё принимают отдельные `teamID *uint, rng DateRange`. Поэтапная миграция — отдельный PR без API-breakage.
+`AnalyticsFilter` struct + `HasTag/HasCollection` helpers готовы. 16 методов
+ещё принимают отдельные `teamID *uint, rng DateRange`. Поэтапная миграция —
+отдельный PR без API-breakage. Риск: меняются сигнатуры в ~16 местах +
+service + handler + все моки (5 mock_test'ов) + frontend (использование хука).
 
-### 14. Рефакторинг `app.go` (540+ строк)
-Кандидат на `app/repos.go`/`usecases.go`/`handlers.go`/`loops.go`/`routes.go` split. Не критично сейчас.
+### 14b. Рефакторинг `app.go` — MountRoutes split
+Адаптеры вынесены. Осталось вынести MountRoutes (~335 строк) в `app/routes.go`
+и StartBackground/Shutdown в `app/lifecycle.go`. Риск средний (много wiring-точек),
+поэтому отложено до «тихого» окна без активной feature-разработки в app.go.
 
 ### 15. MCP `checkMCPQuota()` как middleware
 AST-lint-test (квmerged-тест) решает забываемость — декоратор дешевле не становится. Оставлено ручным.

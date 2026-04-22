@@ -564,6 +564,12 @@ func (s *Service) UpdateProfile(ctx context.Context, userID uint, name, avatarUR
 	return user, nil
 }
 
+// SetInsightEmailsEnabled — opt-in toggle для Smart Insights digest (Phase 14 M-10).
+// Проверка существования юзера — на стороне repository/БД (FK constraint).
+func (s *Service) SetInsightEmailsEnabled(ctx context.Context, userID uint, enabled bool) error {
+	return s.users.SetInsightEmailsEnabled(ctx, userID, enabled)
+}
+
 func (s *Service) ChangePassword(ctx context.Context, userID uint, oldPassword, newPassword string) error {
 	user, err := s.getUser(ctx, userID)
 	if err != nil {

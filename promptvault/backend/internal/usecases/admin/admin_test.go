@@ -83,6 +83,9 @@ func (f *fakeUserRepo) MarkReferralRewarded(_ context.Context, _ uint) (bool, er
 	return false, nil
 }
 func (f *fakeUserRepo) ListMaxUsers(_ context.Context) ([]uint, error) { return nil, nil }
+func (f *fakeUserRepo) SetInsightEmailsEnabled(_ context.Context, _ uint, _ bool) error {
+	return nil
+}
 
 type fakeAdminRepo struct {
 	users          []repo.UserSummary
