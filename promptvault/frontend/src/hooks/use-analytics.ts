@@ -19,10 +19,10 @@ export function usePersonalAnalytics(range: AnalyticsRange, filter?: PersonalAna
   })
 }
 
-export function useTeamAnalytics(teamId: number | undefined, range: AnalyticsRange) {
+export function useTeamAnalytics(teamId: number | undefined, range: AnalyticsRange, filter?: PersonalAnalyticsFilter) {
   return useQuery({
-    queryKey: ["analytics", "team", teamId, range],
-    queryFn: () => fetchTeamAnalytics(teamId!, range),
+    queryKey: ["analytics", "team", teamId, range, filter?.tagId ?? null, filter?.collectionId ?? null],
+    queryFn: () => fetchTeamAnalytics(teamId!, range, filter),
     enabled: typeof teamId === "number" && teamId > 0,
   })
 }

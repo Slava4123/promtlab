@@ -318,6 +318,76 @@ func ensurePromptNonNil(p *PromptAnalytics) {
 	}
 }
 
+// GetTeamDashboardFiltered — team dashboard с drill-down по тегу/коллекции (#9c).
+// При nil фильтрах делегирует в GetTeamDashboard (fast path). Contributors
+// не подпадают под drill-down: список членов команды не зависит от tag/collection.
+func (s *Service) GetTeamDashboardFiltered(ctx context.Context, userID, teamID uint, requestedRange RangeID, tagID, collectionID *uint) (*TeamDashboard, error) {
+	if tagID == nil && collectionID == nil {
+		return s.GetTeamDashboard(ctx, userID, teamID, requestedRange)
+	}
+	tid := teamID
+	if err := teamcheck.RequireMembership(ctx, s.teams, []uint{teamID}, userID); err != nil {
+		if errors.Is(err, teamcheck.ErrForbidden) {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	rng := ClampRange(requestedRange, user.PlanID)
+	dr := BuildDateRange(rng, s.nowFn())
+	filter := repo.AnalyticsFilter{
+		UserID:       userID,
+		TeamID:       &tid,
+		TagID:        tagID,
+		CollectionID: collectionID,
+		Range:        dr,
+	}
+
+	dashboard := &TeamDashboard{Range: rng}
+	if dashboard.UsagePerDay, err = s.analytics.UsagePerDayFiltered(ctx, filter); err != nil {
+		return nil, err
+	}
+	if dashboard.TopPrompts, err = s.analytics.TopPromptsFiltered(ctx, filter, 10); err != nil {
+		return nil, err
+	}
+	if dashboard.PromptsCreated, err = s.analytics.PromptsCreatedPerDayFiltered(ctx, filter); err != nil {
+		return nil, err
+	}
+	if dashboard.PromptsUpdated, err = s.analytics.PromptsUpdatedPerDayFiltered(ctx, filter); err != nil {
+		return nil, err
+	}
+	// Contributors — полный список команды без filter (tag/collection-aware
+	// contributors потребовали бы counting через JOIN trash, overkill для #9c).
+	if dashboard.Contributors, err = s.analytics.Contributors(ctx, tid, dr, 10); err != nil {
+		return nil, err
+	}
+
+	dashboard.TotalsCurrent = Totals{
+		Uses:    sumPoints(dashboard.UsagePerDay),
+		Created: sumPoints(dashboard.PromptsCreated),
+		Updated: sumPoints(dashboard.PromptsUpdated),
+	}
+	prevFilter := filter
+	prevFilter.Range = BuildPreviousRange(rng, s.nowFn())
+	if prev, perr := s.analytics.UsagePerDayFiltered(ctx, prevFilter); perr == nil {
+		dashboard.TotalsPrevious.Uses = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.PromptsCreatedPerDayFiltered(ctx, prevFilter); perr == nil {
+		dashboard.TotalsPrevious.Created = sumPoints(prev)
+	}
+	if prev, perr := s.analytics.PromptsUpdatedPerDayFiltered(ctx, prevFilter); perr == nil {
+		dashboard.TotalsPrevious.Updated = sumPoints(prev)
+	}
+	if rows, merr := s.analytics.UsageByModelFiltered(ctx, filter); merr == nil {
+		dashboard.UsageByModel = rows
+	}
+	ensureTeamNonNil(dashboard)
+	return dashboard, nil
+}
+
 // GetTeamDashboard — team scope. Проверяет membership (viewer+ достаточно для чтения).
 func (s *Service) GetTeamDashboard(ctx context.Context, userID, teamID uint, requestedRange RangeID) (*TeamDashboard, error) {
 	// Чтобы читать team analytics — достаточно быть членом команды (любая роль).

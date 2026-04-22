@@ -147,8 +147,15 @@ export function fetchPersonalAnalytics(
   return api<PersonalDashboard>(`/analytics/personal?${params.toString()}`)
 }
 
-export function fetchTeamAnalytics(teamId: number, range: AnalyticsRange = "7d"): Promise<TeamDashboard> {
-  return api<TeamDashboard>(`/analytics/teams/${teamId}?range=${range}`)
+export function fetchTeamAnalytics(
+  teamId: number,
+  range: AnalyticsRange = "7d",
+  filter?: PersonalAnalyticsFilter,
+): Promise<TeamDashboard> {
+  const params = new URLSearchParams({ range })
+  if (filter?.tagId != null) params.set("tag_id", String(filter.tagId))
+  if (filter?.collectionId != null) params.set("collection_id", String(filter.collectionId))
+  return api<TeamDashboard>(`/analytics/teams/${teamId}?${params.toString()}`)
 }
 
 export function fetchPromptAnalytics(promptId: number): Promise<PromptAnalytics> {

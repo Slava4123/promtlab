@@ -407,28 +407,5 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	}
 }
 
-func (a *App) StartBackground() {
-	a.purgeLoop.Start()
-	a.expirationLoop.Start()
-	a.renewalLoop.Start()
-	a.reminderLoop.Start()
-	a.reengagementLoop.Start()
-	a.streakReminderLoop.Start()
-	a.activityCleanupLoop.Start()
-	a.insightsLoop.Start()
-}
-
-// Shutdown waits for background tasks to complete.
-func (a *App) Shutdown(timeout time.Duration) {
-	a.purgeLoop.Stop()
-	a.expirationLoop.Stop()
-	a.renewalLoop.Stop()
-	a.reminderLoop.Stop()
-	a.reengagementLoop.Stop()
-	a.streakReminderLoop.Stop()
-	a.activityCleanupLoop.Stop()
-	a.insightsLoop.Stop()
-	a.feedbackRL.Close()
-	a.authSvc.WaitBackground(timeout)
-}
+// StartBackground / Shutdown — см. lifecycle.go.
 

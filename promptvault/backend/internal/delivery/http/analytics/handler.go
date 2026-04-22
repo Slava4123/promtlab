@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	httperr "promptvault/internal/delivery/http/errors"
 	"promptvault/internal/delivery/http/utils"
 	authmw "promptvault/internal/middleware/auth"
+	"promptvault/internal/models"
 	analyticsuc "promptvault/internal/usecases/analytics"
 )
 
@@ -29,6 +31,21 @@ func addBreadcrumb(r *http.Request, category, message string, data map[string]an
 	}, 10)
 }
 
+// analyticsService — минимальный контракт analyticsuc.Service, нужный handler'у.
+// Интерфейс локальный для handler-пакета (accept interfaces, return structs),
+// чтобы HTTP-тесты могли подменить реализацию через testify/mock.
+// *analyticsuc.Service автоматически удовлетворяет.
+type analyticsService interface {
+	GetPersonalDashboard(ctx context.Context, userID uint, rng analyticsuc.RangeID) (*analyticsuc.PersonalDashboard, error)
+	GetPersonalDashboardFiltered(ctx context.Context, userID uint, rng analyticsuc.RangeID, tagID, collectionID *uint) (*analyticsuc.PersonalDashboard, error)
+	GetTeamDashboard(ctx context.Context, userID, teamID uint, rng analyticsuc.RangeID) (*analyticsuc.TeamDashboard, error)
+	GetTeamDashboardFiltered(ctx context.Context, userID, teamID uint, rng analyticsuc.RangeID, tagID, collectionID *uint) (*analyticsuc.TeamDashboard, error)
+	GetPromptAnalytics(ctx context.Context, promptID, userID uint) (*analyticsuc.PromptAnalytics, error)
+	GetInsightsGated(ctx context.Context, userID uint, teamID *uint) ([]models.SmartInsight, error)
+	RefreshInsightsGated(ctx context.Context, userID uint, teamID *uint) ([]models.SmartInsight, error)
+	ExportGate(ctx context.Context, userID uint) error
+}
+
 // Handler — HTTP делегат analytics.Service.
 // Endpoints (Phase 14 B.4):
 //   - GET /api/analytics/personal?range=7d|30d|90d|365d
@@ -40,10 +57,10 @@ func addBreadcrumb(r *http.Request, category, message string, data map[string]an
 // H5: plan-check (Max/Pro gate) вынесен в service (GetInsightsGated, ExportGate).
 // Handler только маппит доменные ошибки в HTTP.
 type Handler struct {
-	svc *analyticsuc.Service
+	svc analyticsService
 }
 
-func NewHandler(svc *analyticsuc.Service) *Handler {
+func NewHandler(svc analyticsService) *Handler {
 	return &Handler{svc: svc}
 }
 
@@ -78,6 +95,7 @@ func parseOptionalUint(raw string) *uint {
 }
 
 // Team — team dashboard. Membership проверяется внутри svc.GetTeamDashboard.
+// Поддерживает drill-down через ?tag_id=:id и ?collection_id=:id.
 func (h *Handler) Team(w http.ResponseWriter, r *http.Request) {
 	userID := authmw.GetUserID(r.Context())
 	teamIDStr := chi.URLParam(r, "id")
@@ -87,8 +105,10 @@ func (h *Handler) Team(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rng := parseRange(r.URL.Query().Get("range"))
+	tagID := parseOptionalUint(r.URL.Query().Get("tag_id"))
+	collectionID := parseOptionalUint(r.URL.Query().Get("collection_id"))
 
-	dash, err := h.svc.GetTeamDashboard(r.Context(), userID, uint(teamID), rng)
+	dash, err := h.svc.GetTeamDashboardFiltered(r.Context(), userID, uint(teamID), rng, tagID, collectionID)
 	if err != nil {
 		respondError(w, r, err)
 		return
