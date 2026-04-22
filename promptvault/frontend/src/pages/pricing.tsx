@@ -42,8 +42,11 @@ const planDescriptions: Record<string, string> = {
 
 type Billing = "monthly" | "yearly"
 
-// Форматируем число с разделителем разрядов (10 000, 1 000) — для больших лимитов.
-function formatNumber(value: number): string {
+// Форматируем число с разделителем разрядов (10 000, 1 000). Если поле
+// отсутствует в ответе backend'а (старый бинарник без свежих миграций) —
+// показываем «—» вместо краша через toLocaleString на undefined.
+function formatNumber(value: number | undefined | null): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—"
   return value.toLocaleString("ru-RU")
 }
 
@@ -51,8 +54,9 @@ function planFeatures(plan: Plan): string[] {
   const features: string[] = []
   features.push(`До ${formatNumber(plan.max_prompts)} промптов`)
   features.push(`До ${formatNumber(plan.max_collections)} коллекций`)
+  const teams = plan.max_teams ?? 0
   features.push(
-    `${plan.max_teams} ${plan.max_teams === 1 ? "команда" : "команд"} (до ${plan.max_team_members} участников)`,
+    `${formatNumber(plan.max_teams)} ${teams === 1 ? "команда" : "команд"} (до ${formatNumber(plan.max_team_members)} участников)`,
   )
   // Phase 14: daily create лимит (основной показатель использования share).
   features.push(`${formatNumber(plan.max_daily_shares)} публичных ссылок/день`)
