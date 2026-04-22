@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
@@ -313,13 +314,21 @@ func (s *Service) logShareView(shareLinkID uint, ownerPlanID string, meta ViewMe
 	}
 }
 
-// truncateString — безопасно обрезает до max байт (без выхода за границы рун).
+// truncateString — безопасно обрезает до max байт, не разрывая UTF-8 руны.
+// Если следующая руна целиком не помещается в maxLen — обрываем на
+// предыдущей границе. Иначе в БД упадёт "invalid byte sequence for encoding
+// UTF8" и запись share_view_log потеряется.
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	// Обрезаем по байтам — для DB VARCHAR достаточно.
-	return s[:maxLen]
+	// range по string даёт индекс начала каждой руны (byte offset).
+	for i, r := range s {
+		if i+utf8.RuneLen(r) > maxLen {
+			return s[:i]
+		}
+	}
+	return s
 }
 
 // uaFamily — возвращает короткий идентификатор браузера (Chrome/Safari/Firefox/Edge/Other).
