@@ -13,7 +13,6 @@ import { useMyInvitations, useAcceptInvitation, useDeclineInvitation } from "@/h
 import { useRefreshSubscription } from "@/hooks/use-subscription"
 import { RoleBadge } from "@/components/teams/role-badge"
 
-// TODO: centralize hardcoded dark theme colors (bg-[#0a0a0c], from-[#101015], etc.) as Tailwind theme tokens
 export default function AppLayout() {
   const { data: invitations } = useMyInvitations()
   const acceptInvitation = useAcceptInvitation()

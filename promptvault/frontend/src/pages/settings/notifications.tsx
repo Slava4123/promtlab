@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Bell, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -14,11 +14,10 @@ export default function SettingsNotificationsPage() {
   const fetchMe = useAuthStore((s) => s.fetchMe)
   const mutation = useSetInsightEmails()
 
-  const [enabled, setEnabled] = useState<boolean>(false)
-
-  useEffect(() => {
-    setEnabled(!!user?.insight_emails_enabled)
-  }, [user?.insight_emails_enabled])
+  // Optimistic override закрывает gap между mutation success и fetchMe refresh.
+  // null → используем server value (user.insight_emails_enabled).
+  const [optimistic, setOptimistic] = useState<boolean | null>(null)
+  const enabled = optimistic ?? !!user?.insight_emails_enabled
 
   if (!user) return null
 
@@ -26,9 +25,9 @@ export default function SettingsNotificationsPage() {
   const isMax = plan.startsWith("max")
 
   async function handleToggle(next: boolean) {
+    setOptimistic(next)
     try {
       await mutation.mutateAsync(next)
-      setEnabled(next)
       await fetchMe()
       toast.success(
         next
@@ -36,8 +35,9 @@ export default function SettingsNotificationsPage() {
           : "Email-уведомления отключены",
       )
     } catch {
-      // toast уже показан хуком, просто откатываем локальный state.
-      setEnabled(!next)
+      // toast уже показан хуком.
+    } finally {
+      setOptimistic(null)
     }
   }
 
