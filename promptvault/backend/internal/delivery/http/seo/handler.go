@@ -26,9 +26,6 @@ type PromptService interface {
 	GetPublicBySlug(ctx context.Context, slug string) (*models.Prompt, error)
 }
 
-// PromptLister deprecated alias для backward-compat (sitemap.go).
-type PromptLister = PromptService
-
 // Handler собирает все SEO-endpoints. Тонкий слой презентации.
 type Handler struct {
 	prompts     PromptService

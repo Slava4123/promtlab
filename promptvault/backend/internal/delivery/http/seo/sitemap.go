@@ -15,7 +15,7 @@ import (
 const (
 	sitemapMaxURLs    = 50_000
 	sitemapWarnURLs   = 45_000 // алерт за 5K до лимита
-	sitemapListLimit  = 10_000 // совпадает с PromptLister.ListPublic max
+	sitemapListLimit  = 10_000 // совпадает с PromptService.ListPublic max
 	sitemapCacheTTL   = time.Hour
 )
 
@@ -46,7 +46,7 @@ func newSitemapCache() *sitemapCache {
 }
 
 // Get возвращает рендеренный sitemap.xml, перестраивая кэш по TTL.
-func (c *sitemapCache) Get(ctx context.Context, lister PromptLister, frontendURL string) ([]byte, error) {
+func (c *sitemapCache) Get(ctx context.Context, lister PromptService, frontendURL string) ([]byte, error) {
 	c.mu.RLock()
 	if c.body != nil && time.Now().Before(c.expiresAt) {
 		body := c.body
@@ -72,7 +72,7 @@ func (c *sitemapCache) Get(ctx context.Context, lister PromptLister, frontendURL
 }
 
 // buildSitemap делает SQL-запрос + сериализует XML.
-func buildSitemap(ctx context.Context, lister PromptLister, frontendURL string) ([]byte, error) {
+func buildSitemap(ctx context.Context, lister PromptService, frontendURL string) ([]byte, error) {
 	prompts, err := lister.ListPublic(ctx, sitemapListLimit)
 	if err != nil {
 		return nil, err

@@ -3,7 +3,7 @@
 // - freeze/unfreeze,
 // - reset password (триггер email со кодом, новый пароль юзер задаёт сам),
 // - grant/revoke badges,
-// - change tier (stub — subscription system пока отсутствует).
+// - change tier (admin override plan_id без оплаты, с отменой активной подписки).
 //
 // Destructive actions обязательно пишут запись в audit_log через inject'енный
 // audit.Service. AdminRequestInfo (admin_id, IP, User-Agent) читается из ctx

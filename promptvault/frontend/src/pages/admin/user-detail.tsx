@@ -131,7 +131,7 @@ export default function AdminUserDetailPage() {
           Статус: <strong>{user.status}</strong>
         </span>
         <span className="rounded-md bg-muted/30 px-2 py-1">
-          Тариф: <strong>{user.tier}</strong> (stub)
+          Тариф: <strong>{user.tier}</strong>
         </span>
         <span className="rounded-md bg-muted/30 px-2 py-1">
           Email {user.email_verified ? "✓" : "×"}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useForm, useWatch, Controller, type Control } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -123,14 +123,13 @@ export default function PromptEditor() {
         content: existing.content,
         model: existing.model || "",
       })
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollectionIds(existing.collections?.map(c => c.id) || [])
       setTagIds(existing.tags?.map(t => t.id) || [])
       setIsPublic(existing.is_public ?? false)
     }
   }, [existing, reset])
 
-  const onSubmit = async (data: PromptForm) => {
+  const onSubmit = useCallback(async (data: PromptForm) => {
     try {
       if (isEdit) {
         await updatePrompt.mutateAsync({ id: promptId, ...data, change_note: changeNote || undefined, collection_ids: collectionIds, tag_ids: tagIds, is_public: isPublic })
@@ -145,7 +144,7 @@ export default function PromptEditor() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ошибка сохранения")
     }
-  }
+  }, [isEdit, updatePrompt, promptId, changeNote, collectionIds, tagIds, isPublic, createPrompt, teamId, navigate])
 
   // Keep a stable ref to onSubmit so the Ctrl+Enter effect doesn't re-subscribe every render.
   // Ref обновляется в useEffect, чтобы не мутировать .current во время рендера (react-hooks/refs).

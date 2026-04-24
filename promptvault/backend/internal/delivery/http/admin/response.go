@@ -52,7 +52,7 @@ type UserDetailResponse struct {
 	TotalUsage       int64     `json:"total_usage"`
 	LinkedProviders  []string  `json:"linked_providers"`
 	UnlockedBadgeIDs []string  `json:"unlocked_badge_ids"` // для admin UI — отличать unlocked vs locked
-	// Tier — stub. Всегда "free" пока subscription system не появится.
+	// Tier — plan_id юзера (user.plan_id). "free" по умолчанию, если plan_id пуст.
 	Tier string `json:"tier"`
 }
 
