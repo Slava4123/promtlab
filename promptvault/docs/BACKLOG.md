@@ -70,7 +70,11 @@
 
 ## 🔒 Осталось (блокировано upstream)
 
-### #1 `github.com/docker/docker` CVE (high + medium)
+### #1 `github.com/docker/docker` CVE (high + medium) — low runtime risk
+
+- **Статус:** `v28.5.2+incompatible`, `indirect`. Проверено `go mod why` → `main module does not need package`. Тянут транзитивно `testcontainers-go` (integration-тесты) и `golang-migrate/migrate/v4` (c file-driver, без docker-driver).
+- **Runtime impact:** нулевой в prod-бинарнике. `Dockerfile.prod` не линкует testcontainers; docker-driver migrate не импортируется. CVE exploitable только при прогоне integration-тестов на скомпрометированной машине.
+- **Почему висит:** govulncheck / Dependabot / trivy читают `go.sum` и репортят версию как «high», не различая runtime vs dead-code. Шумит в отчётах сканеров.
 - **Проверено:** `go list -m -versions github.com/docker/docker` отдаёт максимум `v28.5.2+incompatible`. `v29.x` ещё не в Go-modules.
 - **Следующий шаг:** `go get github.com/docker/docker@v29.x && go mod tidy` + прогон тестов сразу после upstream publish.
 
