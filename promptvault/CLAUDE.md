@@ -223,16 +223,17 @@ backend/internal/
 
 ## Документация (`docs/`)
 - `PLAN.md` — 12-фазный план разработки
-- `FEATURES.md` — детализация фич по фазам
-- `DEPLOY.md` — Docker Compose + GitHub Actions + VPS
-- `MONETIZATION.md` — тарифы Free/Pro/Max, маржа, квоты
-- `ADMIN.md` — bootstrap админа, TOTP 2FA, audit log, admin actions
-- `SENTRY_NEXT_STEPS.md` — GlitchTip self-hosted setup, source maps
+- `BACKLOG.md` — матрица качества + статус задач по волнам Phase 14.x
+- `FEATURES.md` — каталог 104 идей с tier'ами (1-4) и ✅ маркерами закрытых
+- `DEPLOY.md` — Docker Compose + GitHub Actions + VPS + GlitchTip setup
+- `OBSERVABILITY.md` — Prometheus metrics + Sentry breadcrumbs + alert rules
+- `SEO.md` — архитектура server-rendered HTML для ботов + sitemap + OG-images
+- `SENTRY_NEXT_STEPS.md` — опциональные расширения Sentry (performance tracing, alerts); reference активировать по триггерам
 - `MCP.md` — полный справочник сервера (30 tools с квотными аннотациями, resources, use_prompt, cursor-пагинация)
 - `MCP-PUBLISHING.md` — автопубликация CI, DNS setup, roadmap по всем каталогам (Registry/Anthropic Connectors/Smithery/Glama/PulseMCP/Cline)
-- `cline-submission-draft.md` — готовые значения для формы Cline Marketplace (не подано; репо приватный)
-- `SUBSCRIPTION_PLAN.md` — модель подписок и quota enforcement
-- `archive/` — выполненные/исторические документы: `TODO.md`, `LAUNCH_PLAN.md`, `RELEASE_READINESS.md`, `ANTHROPIC_CONNECTORS_TODO.md`
+- `ANTHROPIC_CONNECTORS.md` — blueprint для подачи в Anthropic MCP Directory
+- `cline-submission-draft.md` — готовые значения для формы Cline Marketplace (репо public, подача не сделана)
+- `archive/` — выполненные/исторические документы: `TODO.md`, `LAUNCH_PLAN.md`, `RELEASE_READINESS.md`, `ANTHROPIC_CONNECTORS_TODO.md`, `PHASE14_SELF_REVIEW.md`, `PROGRESS_2026-04-20.md`, `SUBSCRIPTION_PLAN.md` (Phase 13 план), `SECURITY_AUDIT.md` (чеклист перед открытием репо)
 
 ## Admin Panel (кратко)
 
@@ -241,4 +242,3 @@ backend/internal/
 - **Audit log append-only** через PostgreSQL BEFORE UPDATE/DELETE триггеры.
 - **Endpoints** `/api/admin/users/*`, `/api/admin/audit`, `/api/admin/health`.
 - **Frontend** `/admin/users`, `/admin/users/:id`, `/admin/audit`, `/admin/health`, `/admin/totp`.
-- Полная документация — [`docs/ADMIN.md`](docs/ADMIN.md).
