@@ -223,7 +223,6 @@ backend/internal/
 
 ## Документация (`docs/`)
 - `PLAN.md` — 12-фазный план разработки
-- `BACKLOG.md` — матрица качества + статус задач по волнам Phase 14.x
 - `FEATURES.md` — каталог 104 идей с tier'ами (1-4) и ✅ маркерами закрытых
 - `DEPLOY.md` — Docker Compose + GitHub Actions + VPS + GlitchTip setup
 - `OBSERVABILITY.md` — Prometheus metrics + Sentry breadcrumbs + alert rules
@@ -233,7 +232,7 @@ backend/internal/
 - `MCP-PUBLISHING.md` — автопубликация CI, DNS setup, roadmap по всем каталогам (Registry/Anthropic Connectors/Smithery/Glama/PulseMCP/Cline)
 - `ANTHROPIC_CONNECTORS.md` — blueprint для подачи в Anthropic MCP Directory
 - `cline-submission-draft.md` — готовые значения для формы Cline Marketplace (репо public, подача не сделана)
-- `archive/` — выполненные/исторические документы: `TODO.md`, `LAUNCH_PLAN.md`, `RELEASE_READINESS.md`, `ANTHROPIC_CONNECTORS_TODO.md`, `PHASE14_SELF_REVIEW.md`, `PROGRESS_2026-04-20.md`, `SUBSCRIPTION_PLAN.md` (Phase 13 план), `SECURITY_AUDIT.md` (чеклист перед открытием репо)
+- `archive/` — выполненные/исторические документы: `TODO.md`, `LAUNCH_PLAN.md`, `RELEASE_READINESS.md`, `ANTHROPIC_CONNECTORS_TODO.md`, `PHASE14_SELF_REVIEW.md`, `PROGRESS_2026-04-20.md`, `SUBSCRIPTION_PLAN.md` (Phase 13 план), `SECURITY_AUDIT.md` (чеклист перед открытием репо), `BACKLOG_PHASE14.md` (матрица закрытия Phase 14.3 wave 1-4)
 
 ## Admin Panel (кратко)
 

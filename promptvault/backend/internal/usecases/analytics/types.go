@@ -1,8 +1,8 @@
 // Package analytics — dashboard + Smart Insights. Team Dashboard Totals
 // не включает ShareViews: share-ссылки принадлежат юзеру, не команде,
-// поэтому team scope их не агрегирует (намеренно, см. BACKLOG.md TeamDashboard
-// техдолг). Если появится требование на team share-views retention — добавить
-// отдельное поле в TeamDashboard и метод ShareViewsPerDayForTeam(teamID, rng).
+// поэтому team scope их не агрегирует (намеренно). Если появится требование
+// на team share-views retention — добавить отдельное поле в TeamDashboard
+// и метод ShareViewsPerDayForTeam(teamID, rng).
 package analytics
 
 import (
