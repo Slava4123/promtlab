@@ -151,9 +151,80 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # === Phase 15 Observability ===
+  # Стартуют автоматически вместе с остальным стеком.
+  # PRE-УСЛОВИЯ перед deploy:
+  #   1. VPS upgrade до 4 GB+ (P1) — без этого OOM (текущие limits 2.1 GB + 480 MB новых).
+  #   2. На VPS положить Telegram bot_token:
+  #        mkdir -p infra/alertmanager/secrets
+  #        echo -n "$TELEGRAM_BOT_TOKEN" > infra/alertmanager/secrets/bot_token
+  #        chmod 600 infra/alertmanager/secrets/bot_token
+  #   3. На VPS заменить chat_id placeholder в alertmanager.yml:
+  #        sed -i "s/chat_id: 1$/chat_id: $TELEGRAM_CHAT_ID/" infra/alertmanager/alertmanager.yml
+  # См. docs/PHASE15_OBSERVABILITY_PLAN.md и docs/OBSERVABILITY.md.
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=2GB
+      - --web.enable-lifecycle
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yaml:/etc/prometheus/rules/alerts.yaml:ro
+      - prometheus-data:/prometheus
+    # Bind 127.0.0.1 — UI доступен только через SSH tunnel:
+    # ssh -L 9090:127.0.0.1:9090 deploy@85.239.39.45
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # secrets/ — gitignored, на VPS:
+      #   mkdir -p infra/alertmanager/secrets
+      #   echo -n "$TELEGRAM_BOT_TOKEN" > infra/alertmanager/secrets/bot_token
+      #   chmod 600 infra/alertmanager/secrets/bot_token
+      # И sed-replace chat_id placeholder в alertmanager.yml (см. docs/OBSERVABILITY.md Шаг D).
+      - ./infra/alertmanager/secrets:/etc/alertmanager/secrets:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   app:
 
 volumes:
   letsencrypt:
   glitchtip-uploads:
+  prometheus-data:
+  alertmanager-data:

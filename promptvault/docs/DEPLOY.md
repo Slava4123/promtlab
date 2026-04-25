@@ -525,7 +525,7 @@ docker compose -f docker-compose.prod.yml exec glitchtip-web ./manage.py creates
 
 ### 11.9. Memory check после старта
 
-**⚠️ Важно:** итоговые memory limits всех сервисов:
+**⚠️ Важно:** итоговые memory limits всех сервисов (включая Phase 15 observability):
 
 | Сервис | Limit |
 |---|---|
@@ -534,35 +534,47 @@ docker compose -f docker-compose.prod.yml exec glitchtip-web ./manage.py creates
 | glitchtip-web | 768 MB |
 | glitchtip-worker | 512 MB |
 | glitchtip-valkey | 192 MB |
-| **Итого limits** | **2112 MB** |
+| **prometheus** (Phase 15) | **384 MB** |
+| **alertmanager** (Phase 15) | **96 MB** |
+| **grafana** (Phase 15, добавляется позже) | **192 MB** |
+| **Итого limits (Phase 15 без Grafana)** | **2592 MB** |
+| **Итого limits (с Grafana)** | **2784 MB** |
 | + OS / buffers | ~300-400 MB |
-| **Требуется VPS** | **~2.5-3 GB RAM** |
+| **Требуется VPS** | **~3.1-3.2 GB RAM** |
 
-**Текущий VPS 2 GB RAM недостаточен для полного стека.** Нужно **upgrade до 4 GB** в Timeweb Cloud console (примерно +400 ₽/мес) **перед** запуском GlitchTip.
+**Текущий VPS 2 GB RAM недостаточен — необходим upgrade до 4 GB** через Timeweb Cloud console (примерно +400 ₽/мес).
 
-Альтернатива — временно уменьшить limits (в `docker-compose.prod.yml`) до:
+После upgrade на 4 GB VPS остаётся ~900 MB запаса (4096 − 2784 − ~400 OS = ~912 MB) под пики и cache.
+
+Без observability (старая конфигурация без `--profile observability`):
+- Итого limits: **2112 MB**, требуется ~2.5-3 GB. Тоже **выше 2 GB**, нужен upgrade.
+
+Альтернатива (temp, sub-optimal) — уменьшить limits в `docker-compose.prod.yml` до:
 - glitchtip-web: `384M`
 - glitchtip-worker: `256M`
 - glitchtip-valkey: `128M`
 
-И в `.env.glitchtip`: `GUNICORN_WORKERS=2`, `CELERY_WORKER_CONCURRENCY=1`. Но это sub-optimal, лучше делать upgrade.
+И в `.env.glitchtip`: `GUNICORN_WORKERS=2`, `CELERY_WORKER_CONCURRENCY=1`. Но это sub-optimal, лучше upgrade.
 
 Проверка после старта:
 
 ```bash
 free -m
-# Expected: available > 300 MB
+# Expected (4 GB VPS): available > 800 MB
 
 docker stats --no-stream
-# Expected (на 4 GB VPS):
+# Expected (на 4 GB VPS, full stack):
 #   glitchtip-web    ~400-600 MB
 #   glitchtip-worker ~250-400 MB
 #   glitchtip-valkey ~50-120 MB
 #   api              ~80-150 MB
 #   frontend         ~20-50 MB
+#   prometheus       ~150-250 MB  (после ramp-up)
+#   alertmanager     ~30-50 MB
+#   grafana          ~60-100 MB
 ```
 
-Если `available < 300 MB` стабильно — upgrade VPS или вынос GlitchTip на отдельный сервер.
+Если `available < 500 MB` стабильно — увеличить swap, проверить memory leaks через `docker stats` rolling, или вынос GlitchTip на отдельный сервер.
 
 ### 11.10. Smoke test (до начала PR 2)
 
