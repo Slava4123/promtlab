@@ -194,6 +194,7 @@ jobs:
           build-args: |
             DOMAIN=${{ secrets.DOMAIN }}
             SENTRY_DOMAIN=${{ secrets.SENTRY_DOMAIN }}
+            GRAFANA_DOMAIN=grafana.promtlabs.ru
             VITE_SENTRY_ENABLED=${{ vars.VITE_SENTRY_ENABLED || 'false' }}
             VITE_SENTRY_DSN=${{ secrets.VITE_SENTRY_DSN }}
             VITE_SENTRY_ENVIRONMENT=production
