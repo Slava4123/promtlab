@@ -45,3 +45,6 @@ backups/*.sql.gz
 
 # CI/CD rollback marker
 .prev_deploy_commit
+
+# Alertmanager Telegram secrets — bot_token / chat_id files (создаются на VPS на Шаге D Phase 15).
+infra/alertmanager/secrets/

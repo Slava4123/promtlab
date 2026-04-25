@@ -1,7 +1,19 @@
-# Observability (Phase 14.3)
+# Observability (Phase 14.3 + Phase 15 prep)
 
 Документ фиксирует Prometheus counters, Sentry breadcrumbs и alert rules
 для prod-инфраструктуры promtlabs.ru.
+
+## Текущий статус (Phase 15)
+
+- [x] Phase 14.3: counters в `metrics.go`, alert rules в `infra/prometheus/alerts.yaml`.
+- [x] Phase 15 Шаг A: IP-allowlist middleware на `/metrics`, fix `for: 1h` у `InsightsComputeLoopDead`.
+- [x] Phase 15 Шаг B: `infra/prometheus/prometheus.yml`, `infra/alertmanager/alertmanager.yml`, Grafana datasource provisioning.
+- [ ] Phase 15 Шаг C: Prometheus в `docker-compose.prod.yml` — после upgrade VPS до 4 GB.
+- [ ] Phase 15 Шаг D: Alertmanager + Telegram receiver — после создания бота (нужны `bot_token` + `chat_id` в `infra/alertmanager/secrets/` на VPS, файлы gitignored).
+- [ ] Phase 15 Шаг E: Grafana + nginx vhost `grafana.promtlabs.ru` — после A-записи DNS + `htpasswd`.
+- [ ] Phase 15 Шаг F: Runbook по alert'ам + memory budget update в `DEPLOY.md §11.9`.
+
+Полный план: `docs/PHASE15_OBSERVABILITY_PLAN.md`.
 
 ## Prometheus `/metrics`
 

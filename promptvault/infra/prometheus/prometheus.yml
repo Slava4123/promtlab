@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  scrape_timeout: 10s
+  external_labels:
+    env: production
+    service_group: promptvault
+
+rule_files:
+  - /etc/prometheus/rules/*.yaml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  - job_name: 'promptvault-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api:8080']
+        labels:
+          service: api
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
