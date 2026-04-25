@@ -302,6 +302,25 @@ jobs:
               fi
             fi
 
+            # Phase 15 Observability: подставляем TELEGRAM_CHAT_ID из .env.prod
+            # в alertmanager.yml. Файл в git хранит placeholder chat_id: 1
+            # (chat_id это user ID, формально не секрет, но владелец предпочёл
+            # держать его в env, не в публичном репо). Применяется на каждый
+            # deploy — git reset --hard в pull шаге выше может откатить файл.
+            if [ -f infra/alertmanager/alertmanager.yml ]; then
+              if grep -q "^TELEGRAM_CHAT_ID=" .env.prod; then
+                CHAT_ID=$(grep "^TELEGRAM_CHAT_ID=" .env.prod | cut -d= -f2)
+                if [ -n "$CHAT_ID" ] && [ "$CHAT_ID" != "1" ]; then
+                  sed -i "s/^        chat_id: 1$/        chat_id: $CHAT_ID/" infra/alertmanager/alertmanager.yml
+                  echo "=== Substituted TELEGRAM_CHAT_ID into alertmanager.yml ==="
+                else
+                  echo "WARN: TELEGRAM_CHAT_ID empty or =1, alertmanager will not deliver"
+                fi
+              else
+                echo "WARN: TELEGRAM_CHAT_ID not in .env.prod, alertmanager skipped"
+              fi
+            fi
+
             echo "=== Pulling images from GHCR ==="
             set +u
             set -a
