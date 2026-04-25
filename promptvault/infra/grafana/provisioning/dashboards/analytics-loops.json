@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Health и активность analytics loops (Smart Insights + Cleanup) и share quota leak counter. Phase 15 observability.",
+  "description": "Состояние и активность аналитических циклов (Smart Insights + Cleanup) и счётчик утечки квоты share-ссылок. Phase 15 observability.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -39,12 +39,12 @@
                 "0": {
                   "color": "red",
                   "index": 0,
-                  "text": "DOWN"
+                  "text": "НЕДОСТУПЕН"
                 },
                 "1": {
                   "color": "green",
                   "index": 1,
-                  "text": "UP"
+                  "text": "ДОСТУПЕН"
                 }
               },
               "type": "value"
@@ -97,7 +97,7 @@
           "refId": "A"
         }
       ],
-      "title": "API health",
+      "title": "Состояние API",
       "type": "stat"
     },
     {
@@ -154,12 +154,12 @@
             "uid": "prometheus"
           },
           "expr": "share_quota_increment_failed_total",
-          "legendFormat": "Failed quota increments",
+          "legendFormat": "Сбоев инкремента квоты",
           "refId": "A"
         }
       ],
-      "title": "Revenue leak (share quota)",
-      "description": "Cumulative count: share-link создан, но IncrementDailyUsage упал → revenue leak. Должно быть 0.",
+      "title": "Утечка дохода (квота шеринга)",
+      "description": "Накопительный счётчик: share-ссылка создана, но IncrementDailyUsage упал → утечка дохода. Должно быть 0.",
       "type": "stat"
     },
     {
@@ -295,8 +295,8 @@
           "refId": "A"
         }
       ],
-      "title": "Smart Insights refresh rate (5m)",
-      "description": "Скорость пересчётов InsightsComputeLoop по результатам success/error/rate_limited. Stacked.",
+      "title": "Скорость пересчёта Smart Insights (5 мин)",
+      "description": "Скорость итераций InsightsComputeLoop по результатам: success / error / rate_limited. Накопительный график.",
       "type": "timeseries"
     },
     {
@@ -386,8 +386,8 @@
           "refId": "A"
         }
       ],
-      "title": "Retention cleanup deletions (5m)",
-      "description": "Скорость удаления retention cleanup loop'ом по таблицам team_activity / share_views / prompt_usage. Stacked.",
+      "title": "Удаления retention cleanup (5 мин)",
+      "description": "Скорость удаления записей retention-циклом по таблицам team_activity / share_views / prompt_usage. Накопительный график.",
       "type": "timeseries"
     },
     {
@@ -477,12 +477,12 @@
             "uid": "prometheus"
           },
           "expr": "rate(share_quota_increment_failed_total[5m])",
-          "legendFormat": "rate(share_quota_increment_failed)",
+          "legendFormat": "Сбоев инкремента квоты в секунду",
           "refId": "A"
         }
       ],
-      "title": "Revenue leak rate (share quota fail / 5m)",
-      "description": "Если линия выше нуля — share-link create succeeded но IncrementDailyUsage failed. Triggers ShareQuotaIncrementLeak alert при rate > 0 для 10m.",
+      "title": "Скорость утечки дохода (5 мин)",
+      "description": "Если линия выше нуля — share-ссылка создана, но IncrementDailyUsage упал. Триггерит alert ShareQuotaIncrementLeak при rate > 0 в течение 10 минут.",
       "type": "timeseries"
     }
   ],
@@ -499,7 +499,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "PromtLab — Analytics Loops & Revenue",
+  "title": "ПромтЛаб — Аналитика и доход",
   "uid": "promtlab-analytics-loops",
   "version": 1,
   "weekStart": ""
