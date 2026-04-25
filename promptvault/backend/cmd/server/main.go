@@ -20,6 +20,7 @@ import (
 	"promptvault/internal/infrastructure/postgres"
 	corsmw "promptvault/internal/middleware/cors"
 	loggermw "promptvault/internal/middleware/logger"
+	metricsmw "promptvault/internal/middleware/metrics"
 	sentrymw "promptvault/internal/middleware/sentry"
 )
 
@@ -93,6 +94,10 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
 	r.Use(corsmw.Middleware(cfg))
+	// HTTP metrics middleware (Phase 16+ observability) — РОВНО после CORS
+	// и до MountRoutes, чтобы покрывать все handlers (включая /metrics само).
+	// Path label нормализуется до Chi route pattern (см. metrics.routePattern).
+	r.Use(metricsmw.Middleware)
 
 	if cfg.Server.IsDev() {
 		r.HandleFunc("/debug/pprof/", pprof.Index)
