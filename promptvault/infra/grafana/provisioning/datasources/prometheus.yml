@@ -1,7 +1,14 @@
 apiVersion: 1
 
+# Удаляем существующий auto-UID datasource перед созданием с явным UID.
+# Без этого dashboards JSON не находят datasource (UID mismatch).
+deleteDatasources:
+  - name: Prometheus
+
 datasources:
   - name: Prometheus
+    # Стабильный UID для ссылок из dashboards JSON.
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
