@@ -11,9 +11,15 @@ type ServerConfig struct {
 	// который затирает incoming XFF. Иначе атакующий подменяет заголовок и обходит rate-limit.
 	TrustProxy bool `koanf:"trust_proxy"`
 	// MetricsEnabled — включает /metrics endpoint (Prometheus text exposition).
-	// По умолчанию false — endpoint возвращает 404. Нужен IP-allowlist на
-	// reverse-proxy уровне; endpoint не содержит auth.
+	// По умолчанию false — endpoint возвращает 404. Endpoint без auth, защищён
+	// IP-allowlist через MetricsAllowlist + middleware ipallowlist.
 	MetricsEnabled bool `koanf:"metrics_enabled"`
+	// MetricsAllowlist — IP/CIDR, которым разрешён доступ к /metrics.
+	// Применяется ipallowlist middleware. Пустой список = no-op (всё пропускается).
+	// Default покрывает Docker bridge networks (RFC 1918 диапазон 172.16.0.0/12)
+	// + loopback — Prometheus scrape'ит api изнутри Docker network минуя nginx,
+	// поэтому XFF-парсинг не нужен (trustForwarded=false в месте использования).
+	MetricsAllowlist []string `koanf:"metrics_allowlist"`
 }
 
 func (c ServerConfig) IsDev() bool {

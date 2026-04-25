@@ -34,9 +34,12 @@ func (a *App) MountRoutes(r chi.Router) {
 	r.With(byIP(60)).Method(http.MethodHead, "/sitemap.xml", http.HandlerFunc(a.seoHandler.Sitemap))
 
 	// Prometheus /metrics — text exposition. 404 если METRICS_ENABLED=false.
-	// Путь защитить IP-allowlist на nginx уровне (ingress-only). Scrape
-	// rate-limit не нужен — endpoint кешируется в client_golang registry.
-	r.Method(http.MethodGet, "/metrics", metrics.Handler(a.cfg.Server.MetricsEnabled))
+	// Защита через middleware ipallowlist (см. SERVER_METRICS_ALLOWLIST):
+	// scrape Prometheus идёт изнутри Docker network минуя nginx, поэтому
+	// trustForwarded=false — XFF на этом пути не имеет смысла.
+	// Scrape rate-limit не нужен — endpoint кешируется в client_golang registry.
+	r.With(ipallowlist.New(a.cfg.Server.MetricsAllowlist, false)).
+		Method(http.MethodGet, "/metrics", metrics.Handler(a.cfg.Server.MetricsEnabled))
 
 	// /p/{slug} — server-rendered HTML. nginx роутит сюда ТОЛЬКО bot-UA
 	// (Yandexbot/Googlebot/Telegram/VK/...). Обычные юзеры получают SPA.

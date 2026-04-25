@@ -13,10 +13,12 @@ groups:
 
       - alert: InsightsComputeLoopDead
         expr: absent_over_time(analytics_insights_refresh_total{result="success"}[48h])
+        for: 1h
         labels:
           severity: critical
         annotations:
           summary: "InsightsComputeLoop мёртв > 48 часов"
+          description: "Метрика отсутствует 48ч+. Проверить контейнер api, cron InsightsComputeLoop, миграции БД. for: 1h страхует от false positive при первом старте Prometheus, у которого нет истории за 48h."
 
       - alert: CleanupLoopStalled
         expr: increase(analytics_cleanup_deleted_total[25h]) == 0

@@ -57,6 +57,15 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Comma-separated IP/CIDR для /metrics allowlist. Тот же приём что для
+	// WebhookAllowedIPs — env даёт строку, конвертим в slice для ipallowlist.New.
+	if len(cfg.Server.MetricsAllowlist) == 1 && strings.Contains(cfg.Server.MetricsAllowlist[0], ",") {
+		cfg.Server.MetricsAllowlist = strings.Split(cfg.Server.MetricsAllowlist[0], ",")
+		for i, ip := range cfg.Server.MetricsAllowlist {
+			cfg.Server.MetricsAllowlist[i] = strings.TrimSpace(ip)
+		}
+	}
+
 	// Production safety checks
 	if cfg.Server.IsProd() {
 		if err := validateProdJWTSecret(cfg.JWT.Secret); err != nil {
@@ -102,11 +111,12 @@ func Load() (*Config, error) {
 func defaults() map[string]any {
 	return map[string]any{
 		"server": map[string]any{
-			"port":            "8080",
-			"environment":     "development",
-			"allowed_origins": []string{"http://localhost:5173"},
-			"frontend_url":    "http://localhost:5173",
-			"trust_proxy":     false,
+			"port":              "8080",
+			"environment":       "development",
+			"allowed_origins":   []string{"http://localhost:5173"},
+			"frontend_url":      "http://localhost:5173",
+			"trust_proxy":       false,
+			"metrics_allowlist": []string{"172.16.0.0/12", "127.0.0.1"},
 		},
 		"database": map[string]any{
 			"host":           "localhost",
