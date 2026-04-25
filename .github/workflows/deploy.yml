@@ -239,6 +239,11 @@ jobs:
           npm run build
 
       - name: Upload source maps to GlitchTip
+        # GlitchTip self-hosted временно недоступен → не блокируем deploy.
+        # Source maps это "nice to have" для красивых stack traces в errors,
+        # но prod всё равно работает без них. Errors в GlitchTip приходят
+        # минифицированными. При следующем удачном деплое source maps загрузятся.
+        continue-on-error: true
         if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
         working-directory: promptvault/frontend
         env:
