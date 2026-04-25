@@ -29,6 +29,7 @@ RUN printf 'VITE_SENTRY_ENABLED=%s\nVITE_SENTRY_DSN=%s\nVITE_SENTRY_ENVIRONMENT=
 FROM jonasal/nginx-certbot:5-alpine
 ARG DOMAIN
 ARG SENTRY_DOMAIN
+ARG GRAFANA_DOMAIN
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx/nginx.conf /tmp/nginx.conf.template
-RUN envsubst '${DOMAIN} ${SENTRY_DOMAIN}' < /tmp/nginx.conf.template > /etc/nginx/user_conf.d/default.conf && rm /tmp/nginx.conf.template
+RUN envsubst '${DOMAIN} ${SENTRY_DOMAIN} ${GRAFANA_DOMAIN}' < /tmp/nginx.conf.template > /etc/nginx/user_conf.d/default.conf && rm /tmp/nginx.conf.template
