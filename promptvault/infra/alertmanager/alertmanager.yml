@@ -11,8 +11,14 @@ route:
 receivers:
   - name: telegram
     telegram_configs:
+      # bot_token читается из файла (gitignored, кладётся на VPS вручную).
       - bot_token_file: /etc/alertmanager/secrets/bot_token
-        chat_id_file: /etc/alertmanager/secrets/chat_id
+        # chat_id (numeric Telegram user ID) — placeholder=1 (явно invalid).
+        # На Шаге D на VPS заменить через sed:
+        #   sed -i "s/chat_id: 1$/chat_id: $TELEGRAM_CHAT_ID/" infra/alertmanager/alertmanager.yml
+        # Alertmanager v0.27.0 не имеет chat_id_file (появился в v0.28+).
+        # При апгрейде до v0.28 — заменить на chat_id_file для симметрии с bot_token.
+        chat_id: 1
         parse_mode: HTML
         send_resolved: true
         message: |
