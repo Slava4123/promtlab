@@ -1,5 +1,12 @@
 global:
   resolve_timeout: 5m
+  # SMTP — для email уведомлений на critical alerts (Phase 2 observability).
+  # Gmail SMTP, port 587 STARTTLS. Пароль читается из gitignored файла.
+  smtp_smarthost: smtp.gmail.com:587
+  smtp_from: promstlab@gmail.com
+  smtp_auth_username: promstlab@gmail.com
+  smtp_auth_password_file: /etc/alertmanager/secrets/smtp_password
+  smtp_require_tls: true
 
 route:
   receiver: telegram
@@ -7,6 +14,13 @@ route:
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
+  routes:
+    # Critical alerts дублируются на email + продолжают идти в Telegram через
+    # parent route (continue: true). Warning остаётся только Telegram.
+    - matchers:
+        - severity="critical"
+      receiver: email-critical
+      continue: true
 
 receivers:
   - name: telegram
@@ -26,4 +40,20 @@ receivers:
           {{ range .Alerts }}
           {{ .Annotations.summary }}
           {{ if .Annotations.description }}{{ .Annotations.description }}{{ end }}
+          {{ end }}
+
+  # Phase 2: SMTP fallback для critical alerts (redundancy против Telegram outage).
+  # Owner email = promstlab@gmail.com (тот же что SMTP_FROM — простота для self-hosted).
+  - name: email-critical
+    email_configs:
+      - to: promstlab@gmail.com
+        send_resolved: true
+        headers:
+          Subject: '[ALERT] {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }})'
+        html: |
+          <h3>{{ .CommonLabels.alertname }} — {{ .CommonLabels.severity }}</h3>
+          <p>Status: <b>{{ .Status | toUpper }}</b></p>
+          {{ range .Alerts }}
+          <p><b>Summary:</b> {{ .Annotations.summary }}</p>
+          {{ if .Annotations.description }}<p><b>Description:</b> {{ .Annotations.description }}</p>{{ end }}
           {{ end }}
