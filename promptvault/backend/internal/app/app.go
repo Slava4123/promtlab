@@ -191,13 +191,16 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		}
 		return c.PlanID, true
 	})
-	// Probe pg_trgm: possible_duplicates требует расширения; на managed PG
-	// без admin-доступа extension может быть недоступен — graceful degrade.
+	// Probe pg_trgm: possible_duplicates (analytics) и hybrid search (prompt_repo)
+	// требуют расширения. На managed PG без admin-доступа extension может быть
+	// недоступен — graceful degrade: analytics пропускает один тип, поиск
+	// деградирует на чистый FTS без trigram-fuzzy.
 	if caps, err := postgres.DetectExtensions(context.Background(), db); err != nil {
 		slog.Warn("postgres.detect_extensions.failed", "error", err)
 	} else {
 		slog.Info("postgres.capabilities", "trgm", caps.TrgmAvailable)
 		analyticsSvc.SetTrgmAvailable(caps.TrgmAvailable)
+		promptRepo.SetTrgmAvailable(caps.TrgmAvailable)
 	}
 
 	// Phase 14 M-10: email-digest по Smart Insights. Rate-limit 1/неделя

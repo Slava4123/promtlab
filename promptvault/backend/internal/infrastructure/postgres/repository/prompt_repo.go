@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,12 +14,18 @@ import (
 )
 
 type promptRepo struct {
-	db *gorm.DB
+	db            *gorm.DB
+	trgmAvailable bool
 }
 
 func NewPromptRepository(db *gorm.DB) *promptRepo {
 	return &promptRepo{db: db}
 }
+
+// SetTrgmAvailable — Phase 15: устанавливается из app.go после
+// postgres.DetectExtensions. Влияет на SearchByQuery (fuzzy match через
+// title %% q возможен только при наличии pg_trgm).
+func (r *promptRepo) SetTrgmAvailable(v bool) { r.trgmAvailable = v }
 
 func (r *promptRepo) Create(ctx context.Context, prompt *models.Prompt) error {
 	return r.db.WithContext(ctx).Create(prompt).Error
@@ -140,13 +147,11 @@ func (r *promptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uin
 	// Phase 15 W3: PostgreSQL FTS вместо ILIKE.
 	// websearch_to_tsquery — устойчивый к user input (кавычки, OR, минусы),
 	// не падает на спецсимволах в отличие от to_tsquery.
-	// Гибрид: search_tsv @@ q ИЛИ title %% query (pg_trgm для опечаток).
-	// ts_rank_cd с normalization=32 даёт 0..1 — складывается с trgm.similarity
-	// в weighted score (0.7/0.3).
+	// Гибрид: search_tsv @@ q плюс title %% q (pg_trgm для опечаток) — но
+	// pg_trgm-часть включается только если расширение реально установлено
+	// (probe из postgres.DetectExtensions). Без probe `%%` упадёт на managed PG.
 	var prompts []models.Prompt
 
-	// Сначала находим ID-шники по score (raw SQL для функций ts_rank_cd / similarity),
-	// затем GORM Find с Preload по этим ID — сохраняет relations и тип Prompt.
 	var ids []uint
 	scopeWhere := "user_id = ? AND team_id IS NULL"
 	scopeArgs := []any{userID}
@@ -155,10 +160,10 @@ func (r *promptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uin
 		scopeArgs = []any{*teamID}
 	}
 
+	var rawSQL string
 	rawArgs := append([]any{}, scopeArgs...)
-	rawArgs = append(rawArgs, query, query, query, query, limit)
-
-	rawSQL := `
+	if r.trgmAvailable {
+		rawSQL = `
 		SELECT id FROM prompts
 		WHERE ` + scopeWhere + ` AND deleted_at IS NULL
 		  AND (search_tsv @@ websearch_to_tsquery('russian_unaccent', ?) OR title %% ?)
@@ -167,6 +172,18 @@ func (r *promptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uin
 			COALESCE(similarity(title, ?), 0) * 0.3
 		) DESC, updated_at DESC
 		LIMIT ?`
+		rawArgs = append(rawArgs, query, query, query, query, limit)
+	} else {
+		// Без pg_trgm — только FTS (никаких % операторов и similarity()).
+		rawSQL = `
+		SELECT id FROM prompts
+		WHERE ` + scopeWhere + ` AND deleted_at IS NULL
+		  AND search_tsv @@ websearch_to_tsquery('russian_unaccent', ?)
+		ORDER BY ts_rank_cd(search_tsv, websearch_to_tsquery('russian_unaccent', ?), 32) DESC,
+		         updated_at DESC
+		LIMIT ?`
+		rawArgs = append(rawArgs, query, query, limit)
+	}
 
 	if err := r.db.WithContext(ctx).Raw(rawSQL, rawArgs...).Scan(&ids).Error; err != nil {
 		return nil, err
@@ -310,10 +327,14 @@ func (r *promptRepo) GetPublicBySlug(ctx context.Context, slug string) (*models.
 	// Phase 15: ищем по текущему slug ИЛИ в slug_aliases (старые cyrillic-slug,
 	// сохранённые при ре-транслитерации). `slug_aliases @> '["<slug>"]'::jsonb`
 	// использует GIN-индекс idx_prompts_slug_aliases_gin.
-	aliasFilter := `["` + slug + `"]`
+	// json.Marshal — defense-in-depth: slug `"]` не сломает JSONB literal.
+	aliasFilter, mErr := json.Marshal([]string{slug})
+	if mErr != nil {
+		return nil, mErr
+	}
 	err := r.db.WithContext(ctx).
 		Preload("Tags").Preload("Collections").
-		Where("(slug = ? OR slug_aliases @> ?::jsonb) AND is_public = TRUE", slug, aliasFilter).
+		Where("(slug = ? OR slug_aliases @> ?::jsonb) AND is_public = TRUE", slug, string(aliasFilter)).
 		First(&p).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, repo.ErrNotFound

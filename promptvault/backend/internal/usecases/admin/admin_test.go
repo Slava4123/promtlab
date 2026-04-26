@@ -627,6 +627,30 @@ func TestChangeTier_MissingContext(t *testing.T) {
 	assert.ErrorIs(t, err, auditsvc.ErrMissingRequestInfo)
 }
 
+func TestChangeTier_GetCurrentByUserID_DBError_Aborts(t *testing.T) {
+	fx := newFixture(t)
+	ctx := ctxWithAdmin(1)
+	fx.subsRepo.getCurrentErr = errors.New("db down")
+
+	err := fx.svc.ChangeTier(ctx, 2, "max", "")
+	require.Error(t, err, "ошибка lookup'а подписки должна прерывать ChangeTier")
+	assert.Equal(t, "free", fx.users.users[2].PlanID, "plan_id НЕ обновлён при сбое lookup")
+	assert.Empty(t, fx.auditRepo.entries, "audit НЕ пишется при сбое")
+}
+
+func TestChangeTier_MarkExpiredFails_Aborts(t *testing.T) {
+	fx := newFixture(t)
+	ctx := ctxWithAdmin(1)
+	// Active sub есть, но MarkExpired падает.
+	fx.subsRepo.subsByUser[2] = &models.Subscription{ID: 100, UserID: 2, PlanID: "pro", Status: models.SubStatusActive}
+	fx.subsRepo.markExpiredErr = errors.New("transaction failed")
+
+	err := fx.svc.ChangeTier(ctx, 2, "max", "")
+	require.Error(t, err, "ошибка MarkExpired должна прерывать ChangeTier")
+	assert.Equal(t, "free", fx.users.users[2].PlanID, "plan_id НЕ обновлён — иначе drift со старой sub")
+	assert.Empty(t, fx.auditRepo.entries)
+}
+
 // ========== helpers tests ==========
 
 func TestUserStateSnapshot_ExcludesSensitiveFields(t *testing.T) {

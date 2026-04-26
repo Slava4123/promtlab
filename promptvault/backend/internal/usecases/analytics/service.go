@@ -89,11 +89,11 @@ func (s *Service) lookupPlanID(ctx context.Context, userID uint) (string, error)
 			return plan, nil
 		}
 	}
-	planID, err := s.lookupPlanID(ctx, userID)
+	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return "", err
 	}
-	return planID, nil
+	return user.PlanID, nil
 }
 
 // SetNotifier заменяет NoopNotifier на реальную реализацию (например,

@@ -56,8 +56,6 @@ func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint
 	// possible_duplicates дополнительно требует pg_trgm — если расширение
 	// недоступно (managed PG без прав), тип пропускается, остальные работают.
 	if s.experimentalInsights {
-		_ = now
-
 		// 4. MOST EDITED — по количеству версий.
 		edited, err := s.analytics.MostEditedPrompts(ctx, userID, teamID, 5)
 		if err != nil {

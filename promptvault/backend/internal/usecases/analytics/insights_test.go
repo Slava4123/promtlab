@@ -178,3 +178,75 @@ func TestComputeInsights_KillSwitchOff_OnlyThreeBaseTypes(t *testing.T) {
 	assert.Equal(t, 0, r.calls["OrphanTags"])
 	assert.Equal(t, 0, r.calls["EmptyCollections"])
 }
+
+// TestLookupPlanID_NoRecursion — регрессионный тест на bug, найденный в self-review:
+// global sed заменил `s.users.GetByID` → `s.lookupPlanID` внутри самого helper'а,
+// что вызывало infinite recursion → stack overflow в production. Тест дёргает
+// helper напрямую и проверяет что он завершается без OOM/stack overflow.
+func TestLookupPlanID_NoRecursion(t *testing.T) {
+	users := &fakeUsersForLookup{user: &models.User{ID: 42, PlanID: "max"}}
+	s := &Service{users: users}
+
+	// 1. Без callback — должен пойти в DB.
+	plan, err := s.lookupPlanID(context.Background(), 42)
+	require.NoError(t, err)
+	assert.Equal(t, "max", plan)
+	assert.Equal(t, 1, users.calls)
+
+	// 2. С callback который возвращает ok=true — DB не дёргается.
+	s.SetPlanFromCtx(func(_ context.Context) (string, bool) { return "pro", true })
+	plan2, err2 := s.lookupPlanID(context.Background(), 42)
+	require.NoError(t, err2)
+	assert.Equal(t, "pro", plan2)
+	assert.Equal(t, 1, users.calls, "callback hit — DB не вызвана повторно")
+
+	// 3. Callback вернул ok=false — fallback на DB.
+	s.SetPlanFromCtx(func(_ context.Context) (string, bool) { return "", false })
+	plan3, err3 := s.lookupPlanID(context.Background(), 42)
+	require.NoError(t, err3)
+	assert.Equal(t, "max", plan3)
+	assert.Equal(t, 2, users.calls)
+}
+
+// fakeUsersForLookup — минимальный stub для регрессионного теста recursion.
+type fakeUsersForLookup struct {
+	user  *models.User
+	calls int
+}
+
+func (f *fakeUsersForLookup) GetByID(_ context.Context, _ uint) (*models.User, error) {
+	f.calls++
+	return f.user, nil
+}
+func (f *fakeUsersForLookup) Create(context.Context, *models.User) error { panic("unused") }
+func (f *fakeUsersForLookup) GetByEmail(context.Context, string) (*models.User, error) {
+	panic("unused")
+}
+func (f *fakeUsersForLookup) GetByUsername(context.Context, string) (*models.User, error) {
+	panic("unused")
+}
+func (f *fakeUsersForLookup) SearchUsers(context.Context, string, int) ([]models.User, error) {
+	panic("unused")
+}
+func (f *fakeUsersForLookup) Update(context.Context, *models.User) error { panic("unused") }
+func (f *fakeUsersForLookup) SetQuotaWarningSentOn(context.Context, uint, time.Time) error {
+	panic("unused")
+}
+func (f *fakeUsersForLookup) TouchLastLogin(context.Context, uint) error { panic("unused") }
+func (f *fakeUsersForLookup) ListInactiveForReengagement(context.Context, time.Time, time.Time, int) ([]models.User, error) {
+	panic("unused")
+}
+func (f *fakeUsersForLookup) MarkReengagementSent(context.Context, uint) error { panic("unused") }
+func (f *fakeUsersForLookup) CountReferredBy(context.Context, string) (int64, error) {
+	panic("unused")
+}
+func (f *fakeUsersForLookup) GetByReferralCode(context.Context, string) (*models.User, error) {
+	panic("unused")
+}
+func (f *fakeUsersForLookup) MarkReferralRewarded(context.Context, uint) (bool, error) {
+	panic("unused")
+}
+func (f *fakeUsersForLookup) ListMaxUsers(context.Context) ([]uint, error) { panic("unused") }
+func (f *fakeUsersForLookup) SetInsightEmailsEnabled(context.Context, uint, bool) error {
+	panic("unused")
+}
