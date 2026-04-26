@@ -221,6 +221,109 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # === Phase 16 Observability — system + DB + container + uptime exporters ===
+
+  # node-exporter — host-level metrics (CPU, RAM, Disk, Network, Load avg).
+  # Mount /proc, /sys, / (rootfs) read-only с rslave propagation для динамических FS.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    pid: host
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # postgres-exporter — pg_stat_* views для DB monitoring (connections, locks,
+  # slow queries, table sizes). Требует на managed Postgres user metrics_user
+  # с pg_monitor role:
+  #   CREATE USER metrics_user WITH PASSWORD '<password>';
+  #   GRANT pg_monitor TO metrics_user;
+  # Password в .env.prod как POSTGRES_EXPORTER_PASSWORD (gitignored).
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      - DATA_SOURCE_NAME=postgresql://metrics_user:${POSTGRES_EXPORTER_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?sslmode=${DATABASE_SSLMODE}
+    volumes:
+      - ./ca.crt:/app/ca.crt:ro
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # cAdvisor — per-container resource usage (CPU, memory, network, IO).
+  # Дополняет node-exporter (host-level) per-process granularity.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # blackbox-exporter — external HTTP probes для uptime monitoring.
+  # Prometheus scrape с params (target URL) → blackbox делает HTTP request
+  # → возвращает probe_success, probe_duration_seconds, probe_http_status_code.
+  # Покрывает случаи когда Prometheus сам жив, но api/frontend упали.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./infra/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
   grafana:
     image: grafana/grafana:11.3.0
     environment:
