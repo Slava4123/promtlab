@@ -38,3 +38,24 @@ var (
 		Help: "Rows deleted by analytics retention cleanup, labelled by table.",
 	}, []string{"table"})
 )
+
+// init zero-инициализирует все ожидаемые label combinations CounterVec'ов.
+//
+// Без этого series появляется только после первого .Inc() — а пока loop
+// видит пустой набор работы (total=0), он не зовёт Inc() ни на success,
+// ни на error. В Prometheus при этом метрика отсутствует целиком, и
+// alert `absent_over_time(...)[48h]` через час становится firing —
+// false positive на тихом проде.
+//
+// .Add(0) создаёт series со значением 0 без побочных эффектов (idempotent
+// относительно последующих Inc), absent_over_time возвращает 0,
+// increase() остаётся корректным.
+func init() {
+	InsightsRefresh.WithLabelValues("success").Add(0)
+	InsightsRefresh.WithLabelValues("rate_limited").Add(0)
+	InsightsRefresh.WithLabelValues("error").Add(0)
+
+	AnalyticsCleanupDeleted.WithLabelValues("team_activity").Add(0)
+	AnalyticsCleanupDeleted.WithLabelValues("share_views").Add(0)
+	AnalyticsCleanupDeleted.WithLabelValues("prompt_usage").Add(0)
+}

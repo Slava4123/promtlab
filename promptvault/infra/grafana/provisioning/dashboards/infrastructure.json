@@ -89,7 +89,7 @@
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container:memory:usage_bytes", "legendFormat": "{{name}}", "refId": "A"}
       ],
       "title": "Память по контейнерам",
-      "description": "⚠️ NO DATA на этом VPS: Docker storage-driver=overlayfs (Docker 28+ default, Ubuntu 24.04) — cAdvisor не может зарезолвить containers в `name` label. cAdvisor issue #3450. Fallback: docker stats через SSH. Host RAM выше работает.",
+      "description": "Working set (исключая page cache) — то, что kernel учитывает при OOM kill. cAdvisor v0.54+ корректно экспортирует с label name на Docker overlayfs storage driver.",
       "type": "timeseries"
     },
     {
@@ -108,7 +108,7 @@
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container:cpu:usage_rate5m", "legendFormat": "{{name}}", "refId": "A"}
       ],
       "title": "CPU по контейнерам (5 мин rate)",
-      "description": "⚠️ NO DATA на этом VPS — см. описание панели «Память по контейнерам» (Docker overlayfs storage driver). Fallback: docker stats через SSH.",
+      "description": "rate(container_cpu_usage_seconds_total) — доля одного ядра, используемая контейнером (1.0 = 100% одного CPU).",
       "type": "timeseries"
     },
     {

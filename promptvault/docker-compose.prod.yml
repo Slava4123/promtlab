@@ -290,17 +290,14 @@ services:
   # «Память/CPU по контейнерам» оставались пусты. Источник: cAdvisor 0.50
   # changelog «cgroupv2: full support for systemd-managed slices».
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    image: gcr.io/cadvisor/cadvisor:v0.56.2
     privileged: true
-    # ⚠️ KNOWN LIMITATION на VPS с Ubuntu 24.04 + Docker 28+:
-    # default storage driver — overlayfs (не overlay2). cAdvisor v0.52.1
-    # ищет read-write layer в /var/lib/docker/image/overlayfs/layerdb/mounts/
-    # — этого пути в overlayfs storage driver нет, контейнеры идентифицируются
-    # как cgroup id /system.slice/docker-<hash>.scope без useful `name` label.
-    # Recording rule container:memory:usage_bytes возвращает только root cgroup.
-    # Issue: https://github.com/google/cadvisor/issues/3450
-    # Mitigation: использовать host metrics (node-exporter) + docker stats SSH
-    # для per-container view. На overlay2 хостах cAdvisor работает штатно.
+    # v0.56.2 — содержит fix для Docker overlayfs storage driver (PR #3709,
+    # включён в v0.54.0). Раньше на v0.52.1 контейнеры идентифицировались как
+    # cgroup id /system.slice/docker-<hash>.scope без `name` label, recording
+    # rule container:memory:usage_bytes возвращала только root cgroup. С v0.54+
+    # cAdvisor правильно резолвит overlayfs layer info, name label приходит.
+    # Refs: https://github.com/google/cadvisor/issues/3860
     #
     # --docker_only=true — собирать метрики только Docker containers (через
     # docker.sock), игнорировать system cgroups (init.scope, system.slice).
