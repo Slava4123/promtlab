@@ -163,13 +163,18 @@ func (r *promptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uin
 	var rawSQL string
 	rawArgs := append([]any{}, scopeArgs...)
 	if r.trgmAvailable {
+		// title — varchar(300), pg_trgm требует тип text → cast title::text +
+		// ?::text. Используем функцию similarity() напрямую вместо оператора %
+		// (single percent — GORM Raw() может неоднозначно его экранировать),
+		// порог 0.3 эмпирически — ловит typos типа "резмюе" → "резюме".
 		rawSQL = `
 		SELECT id FROM prompts
 		WHERE ` + scopeWhere + ` AND deleted_at IS NULL
-		  AND (search_tsv @@ websearch_to_tsquery('russian_unaccent', ?) OR title %% ?)
+		  AND (search_tsv @@ websearch_to_tsquery('russian_unaccent', ?)
+		       OR similarity(title::text, ?::text) > 0.3)
 		ORDER BY (
 			ts_rank_cd(search_tsv, websearch_to_tsquery('russian_unaccent', ?), 32) * 0.7 +
-			COALESCE(similarity(title, ?), 0) * 0.3
+			COALESCE(similarity(title::text, ?::text), 0) * 0.3
 		) DESC, updated_at DESC
 		LIMIT ?`
 		rawArgs = append(rawArgs, query, query, query, query, limit)
