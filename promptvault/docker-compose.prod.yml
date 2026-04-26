@@ -343,7 +343,9 @@ services:
     command: -config.file=/etc/tempo/tempo.yaml
     volumes:
       - ./infra/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
-      - tempo-data:/tempo
+      # Mount /var/tempo (не /tempo) — в Tempo image /tempo это binary file,
+      # mount поверх него вызывает "source ... is not directory" error.
+      - tempo-data:/var/tempo
     ports:
       - "127.0.0.1:3200:3200"  # Tempo API (для Grafana datasource через Docker net)
     networks:
