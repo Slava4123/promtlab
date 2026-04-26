@@ -1,0 +1,27 @@
+apiVersion: 1
+
+# Loki datasource для Grafana (Phase 16 Этап 2).
+# Auto-provisioned, immutable. UID 'loki' стабилен для ссылок из dashboards
+# и trace-to-logs корреляции из Tempo (см. Этап 3).
+
+deleteDatasources:
+  - name: Loki
+
+datasources:
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: false
+    jsonData:
+      # Maximum lines в query response (UI display).
+      maxLines: 1000
+      # derivedFields — превращает trace_id в clickable ссылку на Tempo.
+      # Активируется когда Tempo datasource будет provisioned (Этап 3).
+      derivedFields:
+        - datasourceUid: tempo
+          matcherRegex: 'trace_id["\\s:=]*([a-f0-9]+)'
+          name: TraceID
+          url: '$${__value.raw}'

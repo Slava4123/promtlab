@@ -331,6 +331,57 @@ services:
         max-size: "5m"
         max-file: "2"
 
+  # === Phase 16 Этап 2 — Logs (Loki + Promtail) ===
+
+  # Loki — log aggregation. Single-binary mode, filesystem storage,
+  # 7d retention. Auth disabled (Docker network internal).
+  loki:
+    image: grafana/loki:3.6.0
+    command: -config.file=/etc/loki/config.yaml
+    volumes:
+      - ./infra/loki/loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Promtail — log shipper, читает Docker container logs с host
+  # и пушит в Loki. Mount /var/lib/docker/containers + docker socket
+  # для Docker SD (service discovery с labels).
+  promtail:
+    image: grafana/promtail:3.6.0
+    command: -config.file=/etc/promtail/config.yaml
+    volumes:
+      - ./infra/promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/promtail
+    networks:
+      - app
+    restart: unless-stopped
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
   grafana:
     image: grafana/grafana:11.3.0
     environment:
@@ -368,3 +419,5 @@ volumes:
   prometheus-data:
   alertmanager-data:
   grafana-data:
+  loki-data:
+  promtail-positions:
