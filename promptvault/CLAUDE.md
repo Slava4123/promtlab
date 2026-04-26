@@ -231,7 +231,6 @@ backend/internal/
 - `MCP.md` — полный справочник сервера (30 tools с квотными аннотациями, resources, use_prompt, cursor-пагинация)
 - `MCP-PUBLISHING.md` — автопубликация CI, DNS setup, roadmap по всем каталогам (Registry/Anthropic Connectors/Smithery/Glama/PulseMCP/Cline)
 - `ANTHROPIC_CONNECTORS.md` — blueprint для подачи в Anthropic MCP Directory
-- `cline-submission-draft.md` — готовые значения для формы Cline Marketplace (репо public, подача не сделана)
 - `archive/` — выполненные/исторические документы: `TODO.md`, `LAUNCH_PLAN.md`, `RELEASE_READINESS.md`, `ANTHROPIC_CONNECTORS_TODO.md`, `PHASE14_SELF_REVIEW.md`, `PROGRESS_2026-04-20.md`, `SUBSCRIPTION_PLAN.md` (Phase 13 план), `SECURITY_AUDIT.md` (чеклист перед открытием репо), `BACKLOG_PHASE14.md` (матрица закрытия Phase 14.3 wave 1-4)
 
 ## Admin Panel (кратко)

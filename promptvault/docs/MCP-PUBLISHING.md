@@ -8,7 +8,7 @@
 - ⏳ **Anthropic Connectors Directory** — большой импакт (десятки млн Claude.ai пользователей). **Статус: OAuth 2.1 server реализован** (`usecases/oauth_server/`, миграция `000037`). Осталось: подать Google-форму https://forms.gle/tyiAZvch1kDADKoP9 с 3 use-case'ами и тест-аккаунтом.
 - ⏳ **Glama.ai** — автосинк из Official Registry. Passive verify-job `verify-catalogs` проверяет появление через 30 мин после релиза (HTML grep, public API не документирован).
 - ⏳ **PulseMCP** — автосинк. Passive verify-job через `/v0.1/servers?search=` API. Optional secrets `PULSEMCP_API_KEY` + `PULSEMCP_TENANT_ID` — без них деградирует до HTML-check.
-- 🔒 **Cline Marketplace** — **отложено до перевода репо в public**. Cline требует открытый GitHub-репозиторий для ревью кода. Артефакты (логотип, `llms-install.md`, `docs/cline-submission-draft.md`) оставлены в репо — если репо будет сделан публичным, подача делается одним шагом.
+- 🔒 **Cline Marketplace** — **отложено до перевода репо в public**. Cline требует открытый GitHub-репозиторий для ревью кода. Артефакты (логотип, `llms-install.md`, `docs/archive/cline-submission-draft.md`) оставлены в репо — если репо будет сделан публичным, подача делается одним шагом.
 
 ### OAuth 2.1 Authorization Server (для Anthropic Connectors)
 
@@ -241,12 +241,12 @@ smithery mcp publish "https://ваш-домен/mcp" -n yourorg/promptvault
 
 - **Логотип:** `promptvault/frontend/public/logo-mcp-400.png` (400×400 PNG, ~16 KB), публично доступен как `https://promtlabs.ru/logo-mcp-400.png`.
 - **Install guide для Cline agent'а:** `promptvault/llms-install.md` — объясняет LLM'у, что сервер remote и клонировать не нужно, как только прописать URL + Bearer token.
-- **Draft формы подачи:** `promptvault/docs/cline-submission-draft.md` — готовые значения полей под YAML-форму Cline.
+- **Draft формы подачи:** `promptvault/docs/archive/cline-submission-draft.md` — готовые значения полей под YAML-форму Cline.
 
 ### Процедура подачи (ручная)
 
 1. Открыть https://github.com/cline/mcp-marketplace/issues/new?template=mcp-server-submission.yml
-2. Заполнить поля значениями из `promptvault/docs/cline-submission-draft.md`:
+2. Заполнить поля значениями из `promptvault/docs/archive/cline-submission-draft.md`:
    - GitHub Repository URL
    - Logo Image (URL или drag-and-drop `logo-mcp-400.png`)
    - Installation Testing (оба чекбокса)
