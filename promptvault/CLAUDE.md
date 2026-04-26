@@ -220,6 +220,13 @@ backend/internal/
 - Забыли пароль: публичный flow через email-код (не раскрывает существование аккаунта)
 - MCP autopublish: bump `promptvault/server.json` → commit → `git tag v1.3.0 && git push --tags` → workflow сам логинится в Registry через DNS (secret `MCP_DNS_PRIVATE_KEY`), публикует и создаёт GitHub Release. Локально `mcp-publisher` ставить не нужно. Не-bump'нутые тэги падают на шаге Verify server.json version matches tag.
 - SPA chunk-load-error после деплоя: `src/components/error-boundary.tsx` детектит "Failed to fetch dynamically imported module" и один раз `location.reload()` (флаг в sessionStorage, очищается при mount в `main.tsx`).
+- **Phase 15 (доделка базовых мест):**
+  - **Smart Insights:** kill-switch `ANALYTICS_EXPERIMENTAL_INSIGHTS` (default `true`). Все 7 типов; `possible_duplicates` skip если pg_trgm недоступен (probe `postgres.DetectExtensions` на старте). Team scope добавлен через `TeamRepository.ListOwnedTeams` + второй проход в `InsightsComputeLoop`.
+  - **Admin ChangeTier:** доделан в `usecases/admin/admin.go`. Заменил `subs.CancelAtPeriodEnd` → `MarkExpired` + ловит paused-подписки через `subs.GetCurrentByUserID`. Audit-payload содержит `reason`+`source:"admin_override"`. Email через `TierChangeNotifier` (non-blocking).
+  - **Slug:** транслитерация cyrillic через `mozillazg/go-unidecode` (раньше "Мой промпт" → `p-<id>`, теперь `moi-promt-<id>`). Backward-compat через `prompts.slug_aliases jsonb` — старая опубликованная ссылка продолжает резолвиться.
+  - **M9 (analytics hot-path):** `Claims.PlanID` в JWT access-токене. `analytics.Service.lookupPlanID` читает из ctx через injected callback (`SetPlanFromCtx` в `app.go`), fallback на `users.GetByID` для legacy-JWT. Минус 1 DB-hit на каждый /api/analytics/* запрос.
+  - **Search FTS:** `prompts.search_tsv` GENERATED STORED tsvector с `russian_unaccent` + english stemming. GIN-индекс. `websearch_to_tsquery` устойчив к user-input. Гибрид с pg_trgm `title %% query` для опечаток. Score = `ts_rank_cd × 0.7 + similarity × 0.3`.
+  - **Extension Sentry:** реальная отправка envelope NDJSON POST в GlitchTip (раньше только console). `WXT_SENTRY_DSN` в .env, host_permissions добавлены, rate-limit 10/min.
 
 ## Документация (`docs/`)
 - `PLAN.md` — 12-фазный план разработки
