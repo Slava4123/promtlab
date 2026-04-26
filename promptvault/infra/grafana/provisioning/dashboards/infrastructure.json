@@ -89,6 +89,7 @@
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container:memory:usage_bytes", "legendFormat": "{{name}}", "refId": "A"}
       ],
       "title": "Память по контейнерам",
+      "description": "TODO: cAdvisor v0.49 на VPS с cgroup v2 + systemd cgroup driver не показывает container-level метрики через container_memory_usage_bytes{name=...}. Host-метрики (RAM/Disk/Load) выше работают. Требует исследования по детектированию containers — нужно либо новая cAdvisor версия, либо переход на vanilla container_*_memory_working_set_bytes с relabel по id.",
       "type": "timeseries"
     },
     {
@@ -107,6 +108,7 @@
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container:cpu:usage_rate5m", "legendFormat": "{{name}}", "refId": "A"}
       ],
       "title": "CPU по контейнерам (5 мин rate)",
+      "description": "TODO: см. Память по контейнерам — cAdvisor cgroup v2 issue. Используйте `docker stats` через SSH как fallback пока не пофиксили.",
       "type": "timeseries"
     },
     {
