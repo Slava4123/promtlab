@@ -1,5 +1,13 @@
 # Observability end-to-end: Prometheus + Alertmanager + Grafana
 
+> **Status: ✅ Closed (2026-04-26).** Phase 15 завершена и фактически
+> расширена до Phase 16 объёма: помимо Prometheus + Alertmanager + Grafana
+> добавлены node-exporter, postgres-exporter, cAdvisor v0.52.1 (cgroup v2),
+> blackbox-exporter, Loki + Promtail (logs), Tempo (traces) и SLO
+> multi-burn-rate alerts. Финальный scope и runbook — в `docs/OBSERVABILITY.md`.
+> Этот документ оставлен как исторический план, разделы ниже отражают
+> исходное намерение Phase 15.
+
 ## Context
 
 Код observability частично готов с Phase 14.3: зарегистрировано 3 counter-метрики в `backend/internal/infrastructure/metrics/metrics.go` (`share_quota_increment_failed_total`, `analytics_insights_refresh_total{result}`, `analytics_cleanup_deleted_total{table}`), написаны 4 alert rules в `promptvault/infra/prometheus/alerts.yaml`, есть feature-flag `SERVER_METRICS_ENABLED`. **Но end-to-end pipeline не развёрнут**: `/metrics` endpoint за nginx отдаёт SPA fallback (нет location), нет scraper'а, нет Alertmanager'а, alert rules лежат мёртвым грузом. Сейчас prod мониторит только GlitchTip (exceptions), метрик — нет.

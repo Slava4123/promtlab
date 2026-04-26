@@ -67,10 +67,13 @@ groups:
         expr: |
           sum by (name) (rate(container_cpu_usage_seconds_total{name!=""}[5m]))
 
-      # Container memory usage in bytes.
+      # Container memory — working_set_bytes устойчивее usage_bytes на
+      # cgroup v2 (исключает page cache, ближе к «реально занятой» памяти,
+      # которую считает kernel при OOM kill). На cAdvisor < v0.50 + cgroup v2
+      # usage_bytes мог не приходить без полезного name label вообще.
       - record: container:memory:usage_bytes
         expr: |
-          sum by (name) (container_memory_usage_bytes{name!=""})
+          sum by (name) (container_memory_working_set_bytes{name!=""})
 
   - name: database
     interval: 30s

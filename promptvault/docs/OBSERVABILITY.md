@@ -1,21 +1,40 @@
-# Observability (Phase 14.3 + Phase 15 prep)
+# Observability (Phase 14.3 + Phase 15 ✅ + Phase 16)
 
-Документ фиксирует Prometheus counters, Sentry breadcrumbs и alert rules
-для prod-инфраструктуры promtlabs.ru.
+Документ фиксирует metrics, traces, logs и alerts для prod-инфраструктуры
+promtlabs.ru.
 
-## Текущий статус (Phase 15)
+## Текущий статус — Phase 15 ✅ closed (2026-04-26)
 
-- [x] Phase 14.3: counters в `metrics.go`, alert rules в `infra/prometheus/alerts.yaml`.
-- [x] Phase 15 Шаг A: IP-allowlist middleware на `/metrics`, fix `for: 1h` у `InsightsComputeLoopDead`.
-- [x] Phase 15 Шаг B: `infra/prometheus/prometheus.yml`, `infra/alertmanager/alertmanager.yml`, Grafana datasource provisioning.
-- [ ] Phase 15 Шаг C: Prometheus в `docker-compose.prod.yml` — после upgrade VPS до 4 GB.
-- [ ] Phase 15 Шаг D: Alertmanager + Telegram receiver — после создания бота. На VPS:
-  - `bot_token` — файл `infra/alertmanager/secrets/bot_token` (gitignored), монтируется в контейнер.
-  - `chat_id` — заменить placeholder `1` в `alertmanager.yml`: `sed -i "s/chat_id: 1$/chat_id: $TELEGRAM_CHAT_ID/" infra/alertmanager/alertmanager.yml`. (Alertmanager v0.27.0 не поддерживает `chat_id_file` — появилось в v0.28+.)
-- [ ] Phase 15 Шаг E: Grafana + nginx vhost `grafana.promtlabs.ru` — после A-записи DNS + `htpasswd`.
-- [ ] Phase 15 Шаг F: Runbook по alert'ам + memory budget update в `DEPLOY.md §11.9`.
+Phase 15 завершена и фактически расширена до Phase 16 объёма (cAdvisor,
+Loki, Tempo, SLO/SLA multi-burn-rate alerts). Финальный scope ниже.
+
+- [x] **Phase 14.3** — counters в `metrics.go`, alert rules в `alerts.yaml`.
+- [x] **Phase 15 A** — IP-allowlist на `/metrics`, fix `for: 1h` у `InsightsComputeLoopDead`.
+- [x] **Phase 15 B** — `prometheus.yml`, `alertmanager.yml`, Grafana datasource provisioning.
+- [x] **Phase 15 C** — Prometheus в `docker-compose.prod.yml` (90d retention, 10GB cap).
+- [x] **Phase 15 D** — Alertmanager + Telegram receiver. SMTP email-critical receiver готов
+      (см. «SMTP redundancy» ниже + `infra/alertmanager/SECRETS.md` для активации на VPS).
+- [x] **Phase 15 E** — Grafana + nginx vhost `grafana.promtlabs.ru`, basic auth.
+- [x] **Phase 15 F** — Runbook (этот документ) + memory budget в `DEPLOY.md`.
+- [x] **Phase 16** — node-exporter, postgres-exporter, cAdvisor v0.52.1 (cgroup v2),
+      blackbox, Loki + Promtail (logs), Tempo (traces), SLO multi-burn-rate alerts.
 
 Полный план: `docs/PHASE15_OBSERVABILITY_PLAN.md`.
+
+## Stack components
+
+| Компонент | Версия | Bind | RAM limit | Назначение |
+|---|---|---|---|---|
+| Prometheus | v3.0.1 | 127.0.0.1:9090 | 384M | TSDB + alert evaluation, 90d retention |
+| Alertmanager | v0.27.0 | 127.0.0.1:9093 | 96M | Routing → Telegram + SMTP critical |
+| Grafana | 11.3.0 | grafana.promtlabs.ru | 192M | Dashboards (5 шт., русские) + Explore |
+| Loki | 3.6.0 | 127.0.0.1:3100 | 384M | Logs schema v13, 7d retention |
+| Promtail | 3.6.0 | — | 96M | Docker SD + slog JSON pipeline |
+| Tempo | 2.6.0 | 127.0.0.1:3200 | 384M | Traces OTLP gRPC :4317, 7d retention |
+| node-exporter | v1.8.2 | — | 64M | Host CPU/RAM/Disk/Net/Load |
+| postgres-exporter | v0.16.0 | — | 64M | pg_stat_* metrics |
+| cAdvisor | v0.52.1 | — | 192M | Per-container metrics, cgroup v2 |
+| blackbox-exporter | v0.25.0 | — | 64M | External HTTP probes |
 
 ## Prometheus `/metrics`
 
@@ -43,6 +62,57 @@
 
 Данные не содержат PII (email, prompt content). Включать через
 `SENTRY_ENABLED=true`.
+
+## Distributed tracing (Tempo)
+
+Backend инструментирован через OpenTelemetry SDK (`internal/infrastructure/telemetry/otel.go`):
+
+- **HTTP spans** — `otelchi.Middleware("promptvault-api", otelchi.WithChiRoutes(r))`
+  нормализует route patterns (`/api/prompts/{id}` вместо raw URL) — отсутствие
+  cardinality explosion даже при бурном QPS.
+- **SQL spans** — `otelgorm.NewPlugin()` подключён в `postgres.go`, все repos
+  передают `*gorm.DB.WithContext(ctx)` → SQL spans линкуются к parent HTTP span.
+- **Propagator** — W3C TraceContext + Baggage (готовы к multi-service deployments).
+- **Sampler** — `ParentBased(TraceIDRatioBased(rate))`. Уважает родительское
+  решение, поэтому traces не разрываются между сервисами.
+
+### Активация в проде
+
+В `.env.prod`:
+
+```env
+TELEMETRY_ENABLED=true
+TELEMETRY_OTLP_ENDPOINT=tempo:4317
+TELEMETRY_TRACES_SAMPLE_RATE=0.1
+```
+
+`0.1` (10% sampling) — баланс между видимостью и filesystem cost Tempo
+(7d retention, без object storage). При низком QPS можно поднять до `0.5`
+или `1.0`, мониторить размер `tempo-data` через `du -sh` ежедневно первые
+3 дня после изменения.
+
+### Поиск spans
+
+`Grafana → Explore → datasource Tempo`:
+
+- **Search** — выбрать service `promptvault-api`, по последним 5 мин.
+- **TraceQL** для медленных запросов:
+  ```traceql
+  { resource.service.name = "promptvault-api" && duration > 100ms }
+  ```
+- **Links to logs** — datasource Tempo сконфигурирован с derivedFields на
+  trace_id из Loki, в одном клике переходишь на логи нужного запроса.
+
+## SMTP redundancy для critical alerts (Phase 2)
+
+`alertmanager.yml` содержит receiver `email-critical` с HTML-шаблоном.
+В route `severity="critical"` стоит `continue: true` — critical алерты
+дублируются на email + продолжают идти в Telegram parent route. Warning'и
+остаются только в Telegram.
+
+**Активация на VPS:** см. `infra/alertmanager/SECRETS.md` (Gmail App Password
++ файл `infra/alertmanager/secrets/smtp_password`). Сама конфигурация
+Alertmanager не требует изменений — receiver готов с момента Phase 15 D.
 
 ## Alert rules (Prometheus)
 

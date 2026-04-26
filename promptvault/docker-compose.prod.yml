@@ -287,16 +287,26 @@ services:
 
   # cAdvisor — per-container resource usage (CPU, memory, network, IO).
   # Дополняет node-exporter (host-level) per-process granularity.
+  #
+  # v0.52.1 — обновлено с v0.49.1 для корректной поддержки cgroup v2 + systemd
+  # cgroup driver (Ubuntu 22.04+, Debian 12+). До v0.50 container_memory_*
+  # метрики на cgroup v2 приходили без useful `name` label, dashboards
+  # «Память/CPU по контейнерам» оставались пусты. Источник: cAdvisor 0.50
+  # changelog «cgroupv2: full support for systemd-managed slices».
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
     privileged: true
     # --docker_only=true — собирать метрики только Docker containers (через
     # docker.sock), игнорировать system cgroups (init.scope, system.slice).
     # Без этого container_memory/cpu метрики приходят с id="/system.slice/..."
     # без полезного name label, dashboards не могут breakdown'ить.
+    #
+    # --housekeeping_interval=15s выравнивает с Prometheus scrape_interval=30s,
+    # снижает CPU overhead cAdvisor (default 1s слишком агрессивный).
     command:
       - --docker_only=true
       - --store_container_labels=false
+      - --housekeeping_interval=15s
     devices:
       - /dev/kmsg:/dev/kmsg
     volumes:
