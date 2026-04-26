@@ -14,10 +14,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/riandyrn/otelchi"
+
 	"promptvault/internal/app"
 	"promptvault/internal/delivery/http/utils"
 	"promptvault/internal/infrastructure/config"
 	"promptvault/internal/infrastructure/postgres"
+	"promptvault/internal/infrastructure/telemetry"
 	corsmw "promptvault/internal/middleware/cors"
 	loggermw "promptvault/internal/middleware/logger"
 	metricsmw "promptvault/internal/middleware/metrics"
@@ -80,6 +83,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// OpenTelemetry tracing init (Phase 16 Этап 3). No-op если cfg.Telemetry.Enabled=false.
+	telemetryShutdown, err := telemetry.Setup(context.Background(), cfg.Telemetry,
+		cfg.Server.Environment, cfg.Sentry.Release)
+	if err != nil {
+		slog.Error("telemetry init failed", "error", err)
+		os.Exit(1)
+	}
+
 	application := app.New(cfg, db)
 
 	r := chi.NewRouter()
@@ -93,6 +104,10 @@ func main() {
 	r.Use(loggermw.Middleware)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
+	// otelchi: auto-инструментация HTTP requests — span на каждый handler
+	// с trace_id propagated в context. No-op если TracerProvider — default
+	// no-op (Telemetry.Enabled=false).
+	r.Use(otelchi.Middleware("promptvault-api", otelchi.WithChiRoutes(r)))
 	r.Use(corsmw.Middleware(cfg))
 	// HTTP metrics middleware (Phase 16+ observability) — РОВНО после CORS
 	// и до MountRoutes, чтобы покрывать все handlers (включая /metrics само).
@@ -146,6 +161,11 @@ func main() {
 	}
 
 	application.Shutdown(15 * time.Second)
+
+	// OpenTelemetry: drain pending spans перед exit. No-op если SDK не активен.
+	if err := telemetryShutdown(shutdownCtx); err != nil {
+		slog.Warn("telemetry shutdown error", "error", err)
+	}
 
 	// Flush отправляет все pending Sentry events перед exit. Если Sentry не
 	// был инициализирован — no-op.

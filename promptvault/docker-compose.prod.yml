@@ -331,6 +331,31 @@ services:
         max-size: "5m"
         max-file: "2"
 
+  # === Phase 16 Этап 3 — Distributed Tracing (Tempo) ===
+
+  # Tempo — distributed trace storage. Single-binary mode, filesystem
+  # storage, 7d retention. OTLP gRPC :4317 принимает spans от api.
+  tempo:
+    image: grafana/tempo:2.6.0
+    command: -config.file=/etc/tempo/tempo.yaml
+    volumes:
+      - ./infra/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/tempo
+    ports:
+      - "127.0.0.1:3200:3200"  # Tempo API (для Grafana datasource через Docker net)
+    networks:
+      - app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # === Phase 16 Этап 2 — Logs (Loki + Promtail) ===
 
   # Loki — log aggregation. Single-binary mode, filesystem storage,
@@ -421,3 +446,4 @@ volumes:
   grafana-data:
   loki-data:
   promtail-positions:
+  tempo-data:

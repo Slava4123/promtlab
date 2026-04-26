@@ -10,4 +10,5 @@ type Config struct {
 	MCP       MCPConfig       `koanf:"mcp"`
 	Payment   PaymentConfig   `koanf:"payment"`
 	Analytics AnalyticsConfig `koanf:"analytics"`
+	Telemetry TelemetryConfig `koanf:"telemetry"`
 }

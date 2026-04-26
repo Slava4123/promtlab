@@ -1,0 +1,48 @@
+# Tempo single-binary config — distributed tracing storage.
+# Phase 16 Этап 3.
+#
+# OTLP gRPC receiver на :4317 (стандарт OpenTelemetry).
+# Filesystem storage, 7d retention.
+
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+  log_level: info
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  trace_idle_period: 10s
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 168h  # 7 days
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tempo/blocks
+    wal:
+      path: /tempo/wal
+
+querier:
+  max_concurrent_queries: 20
+
+query_frontend:
+  search:
+    duration_slo: 5s
+    throughput_bytes_slo: 1.073741824e+09
+  trace_by_id:
+    duration_slo: 5s
+
+# Без metrics generator (memory hungry, не нужно для базового tracing).
+# Без overrides — defaults достаточно для 1 instance.

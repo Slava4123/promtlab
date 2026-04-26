@@ -1,10 +1,12 @@
 package postgres
 
 import (
+	"log/slog"
 	"time"
 
 	"promptvault/internal/infrastructure/config"
 
+	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -20,6 +22,12 @@ func Connect(cfg config.DatabaseConfig, isDev bool) (*gorm.DB, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// OpenTelemetry: span на каждый SQL query. No-op если TracerProvider — default.
+	// Phase 16 Этап 3 — distributed tracing через GORM hooks.
+	if err := db.Use(otelgorm.NewPlugin()); err != nil {
+		slog.Warn("postgres.otel_plugin_failed", "error", err)
 	}
 
 	sqlDB, err := db.DB()

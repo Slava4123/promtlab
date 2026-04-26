@@ -166,6 +166,11 @@ func defaults() map[string]any {
 		"analytics": map[string]any{
 			"experimental_insights": false,
 		},
+		"telemetry": map[string]any{
+			"enabled":            false,
+			"otlp_endpoint":      "tempo:4317",
+			"traces_sample_rate": 0.1,
+		},
 	}
 }
 
