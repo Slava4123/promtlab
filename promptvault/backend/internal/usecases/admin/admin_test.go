@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -189,17 +190,136 @@ func (f *fakeBadgeRepo) CountVersionedPrompts(_ context.Context, _ uint, minV in
 	return f.versionedPrompts[minV], nil
 }
 
+// ========== Plan / Subscription / Notifier fakes ==========
+
+type fakePlansRepo struct {
+	plans map[string]*models.SubscriptionPlan
+}
+
+func newFakePlansRepo(ids ...string) *fakePlansRepo {
+	m := make(map[string]*models.SubscriptionPlan, len(ids))
+	for _, id := range ids {
+		m[id] = &models.SubscriptionPlan{ID: id, Name: id, IsActive: true}
+	}
+	return &fakePlansRepo{plans: m}
+}
+
+func (f *fakePlansRepo) GetAll(_ context.Context) ([]models.SubscriptionPlan, error) {
+	out := make([]models.SubscriptionPlan, 0, len(f.plans))
+	for _, p := range f.plans {
+		out = append(out, *p)
+	}
+	return out, nil
+}
+func (f *fakePlansRepo) GetByID(_ context.Context, id string) (*models.SubscriptionPlan, error) {
+	p, ok := f.plans[id]
+	if !ok {
+		return nil, repo.ErrNotFound
+	}
+	return p, nil
+}
+func (f *fakePlansRepo) GetActive(_ context.Context) ([]models.SubscriptionPlan, error) {
+	return f.GetAll(context.Background())
+}
+
+// fakeSubsRepo — минимальный fake для SubscriptionRepository, реализует только
+// методы, нужные admin.ChangeTier (GetCurrentByUserID, MarkExpired). Остальные
+// методы паникуют — тесты admin не должны их трогать.
+type fakeSubsRepo struct {
+	subsByUser   map[uint]*models.Subscription
+	markedExpired []uint
+	getCurrentErr error
+	markExpiredErr error
+}
+
+func newFakeSubsRepo() *fakeSubsRepo {
+	return &fakeSubsRepo{subsByUser: make(map[uint]*models.Subscription)}
+}
+
+func (f *fakeSubsRepo) GetCurrentByUserID(_ context.Context, userID uint) (*models.Subscription, error) {
+	if f.getCurrentErr != nil {
+		return nil, f.getCurrentErr
+	}
+	s, ok := f.subsByUser[userID]
+	if !ok {
+		return nil, repo.ErrNotFound
+	}
+	return s, nil
+}
+func (f *fakeSubsRepo) MarkExpired(_ context.Context, subID uint) error {
+	if f.markExpiredErr != nil {
+		return f.markExpiredErr
+	}
+	f.markedExpired = append(f.markedExpired, subID)
+	return nil
+}
+
+// not used in admin tests — paniciem чтобы нечаянно не вызвали
+func (f *fakeSubsRepo) Create(context.Context, *models.Subscription) error { panic("unused") }
+func (f *fakeSubsRepo) GetActiveByUserID(context.Context, uint) (*models.Subscription, error) {
+	panic("unused")
+}
+func (f *fakeSubsRepo) Update(context.Context, *models.Subscription) error { panic("unused") }
+func (f *fakeSubsRepo) ListExpiring(context.Context, time.Time) ([]models.Subscription, error) {
+	panic("unused")
+}
+func (f *fakeSubsRepo) ActivateWithPlanUpdate(context.Context, *models.Subscription, uint, string) error {
+	panic("unused")
+}
+func (f *fakeSubsRepo) CancelAtPeriodEnd(context.Context, uint) error           { panic("unused") }
+func (f *fakeSubsRepo) ExpireAndDowngrade(context.Context, uint, uint) error    { panic("unused") }
+func (f *fakeSubsRepo) SetRebillId(context.Context, uint, string) error         { panic("unused") }
+func (f *fakeSubsRepo) SetAutoRenew(context.Context, uint, bool) error          { panic("unused") }
+func (f *fakeSubsRepo) ListReadyForRenewal(context.Context, time.Time, time.Time, int) ([]models.Subscription, error) {
+	panic("unused")
+}
+func (f *fakeSubsRepo) ExtendPeriod(context.Context, uint, time.Time) error { panic("unused") }
+func (f *fakeSubsRepo) RecordRenewalFailure(context.Context, uint) error    { panic("unused") }
+func (f *fakeSubsRepo) ListPreExpiring(context.Context, time.Time, time.Time, int16) ([]models.Subscription, error) {
+	panic("unused")
+}
+func (f *fakeSubsRepo) SetPreExpireStage(context.Context, uint, int16) error { panic("unused") }
+func (f *fakeSubsRepo) Pause(context.Context, uint, uint, time.Time, time.Time) error {
+	panic("unused")
+}
+func (f *fakeSubsRepo) Resume(context.Context, uint, uint, time.Time, time.Time) error {
+	panic("unused")
+}
+func (f *fakeSubsRepo) ListExpiredPauses(context.Context, time.Time) ([]models.Subscription, error) {
+	panic("unused")
+}
+func (f *fakeSubsRepo) RecordCancellation(context.Context, *models.SubscriptionCancellation) error {
+	panic("unused")
+}
+
+type tierEmailCall struct {
+	to, name, oldPlan, newPlan, reason, frontendURL string
+}
+
+type fakeNotifier struct {
+	calls   []tierEmailCall
+	sendErr error
+}
+
+func (f *fakeNotifier) SendAdminTierChanged(to, name, oldPlan, newPlan, reason, frontendURL string) error {
+	f.calls = append(f.calls, tierEmailCall{to, name, oldPlan, newPlan, reason, frontendURL})
+	return f.sendErr
+}
+
 // ========== Test helpers ==========
 
 type fixture struct {
-	svc          *Service
-	users        *fakeUserRepo
-	adminRepo    *fakeAdminRepo
-	auditRepo    *fakeAuditRepo
-	badgeRepo    *fakeBadgeRepo
-	badgeSvc     *badgeuc.Service
-	adminUser    *models.User
-	targetUser   *models.User
+	svc        *Service
+	users      *fakeUserRepo
+	adminRepo  *fakeAdminRepo
+	auditRepo  *fakeAuditRepo
+	badgeRepo  *fakeBadgeRepo
+	badgeSvc   *badgeuc.Service
+	plansRepo  *fakePlansRepo
+	subsRepo   *fakeSubsRepo
+	notifier   *fakeNotifier
+	adminUser  *models.User
+	targetUser *models.User
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -207,7 +327,7 @@ func newFixture(t *testing.T) *fixture {
 
 	users := newFakeUserRepo()
 	adminUser := &models.User{ID: 1, Email: "admin@example.com", Role: models.RoleAdmin, Status: models.StatusActive}
-	target := &models.User{ID: 2, Email: "user@example.com", Role: models.RoleUser, Status: models.StatusActive}
+	target := &models.User{ID: 2, Email: "user@example.com", Name: "Тестовый Пользователь", Role: models.RoleUser, Status: models.StatusActive, PlanID: "free"}
 	users.users[1] = adminUser
 	users.users[2] = target
 
@@ -221,7 +341,12 @@ func newFixture(t *testing.T) *fixture {
 	badgeSvc, err := badgeuc.NewService(badgeRepo, nil)
 	require.NoError(t, err)
 
-	svc := NewService(adminRepo, users, auditSvc, nil, badgeSvc, nil, nil)
+	plansRepo := newFakePlansRepo("free", "pro", "max")
+	subsRepo := newFakeSubsRepo()
+	notifier := &fakeNotifier{}
+
+	svc := NewService(adminRepo, users, auditSvc, nil, badgeSvc, plansRepo, subsRepo)
+	svc.SetTierChangeNotifier(notifier, "https://promtlabs.ru")
 
 	return &fixture{
 		svc:        svc,
@@ -230,6 +355,9 @@ func newFixture(t *testing.T) *fixture {
 		auditRepo:  auditRepo,
 		badgeRepo:  badgeRepo,
 		badgeSvc:   badgeSvc,
+		plansRepo:  plansRepo,
+		subsRepo:   subsRepo,
+		notifier:   notifier,
 		adminUser:  adminUser,
 		targetUser: target,
 	}
@@ -386,12 +514,117 @@ func TestRevokeBadge_UnknownBadge(t *testing.T) {
 
 // ========== ChangeTier ==========
 
-func TestChangeTier_InvalidPlan(t *testing.T) {
+func TestChangeTier_Success_NoActiveSub(t *testing.T) {
 	fx := newFixture(t)
 	ctx := ctxWithAdmin(1)
-	// plans repo is nil → returns ErrInvalidTier
-	err := fx.svc.ChangeTier(ctx, 2, "pro")
+	// User free → max, без подписки.
+	err := fx.svc.ChangeTier(ctx, 2, "max", "Manual upgrade per ticket #42")
+	require.NoError(t, err)
+
+	assert.Equal(t, "max", fx.users.users[2].PlanID, "plan_id обновлён")
+	assert.Empty(t, fx.subsRepo.markedExpired, "MarkExpired не вызван если подписки нет")
+	require.Len(t, fx.auditRepo.entries, 1)
+
+	entry := fx.auditRepo.entries[0]
+	assert.Equal(t, "change_tier", entry.Action)
+	// AuditLog payload — JSON-marshalled, сравним поля через json.Unmarshal.
+	var after map[string]any
+	require.NoError(t, json.Unmarshal(entry.AfterState, &after))
+	assert.Equal(t, "max", after["plan_id"])
+	assert.Equal(t, "Manual upgrade per ticket #42", after["reason"])
+	assert.Equal(t, "admin_override", after["source"])
+
+	require.Len(t, fx.notifier.calls, 1)
+	assert.Equal(t, "user@example.com", fx.notifier.calls[0].to)
+	assert.Equal(t, "free", fx.notifier.calls[0].oldPlan)
+	assert.Equal(t, "max", fx.notifier.calls[0].newPlan)
+}
+
+func TestChangeTier_Success_CancelsActiveSub(t *testing.T) {
+	fx := newFixture(t)
+	ctx := ctxWithAdmin(1)
+
+	fx.targetUser.PlanID = "pro"
+	fx.subsRepo.subsByUser[2] = &models.Subscription{ID: 100, UserID: 2, PlanID: "pro", Status: models.SubStatusActive}
+
+	err := fx.svc.ChangeTier(ctx, 2, "max", "")
+	require.NoError(t, err)
+	assert.Equal(t, []uint{100}, fx.subsRepo.markedExpired, "active sub помечена expired")
+	assert.Equal(t, "max", fx.users.users[2].PlanID)
+}
+
+func TestChangeTier_Success_PausedSub(t *testing.T) {
+	fx := newFixture(t)
+	ctx := ctxWithAdmin(1)
+
+	fx.targetUser.PlanID = "free" // paused юзер уже на free пока пауза
+	fx.subsRepo.subsByUser[2] = &models.Subscription{ID: 200, UserID: 2, PlanID: "pro", Status: models.SubStatusPaused}
+
+	err := fx.svc.ChangeTier(ctx, 2, "max", "")
+	require.NoError(t, err)
+	assert.Equal(t, []uint{200}, fx.subsRepo.markedExpired, "paused sub тоже завершается")
+	assert.Equal(t, "max", fx.users.users[2].PlanID)
+}
+
+func TestChangeTier_SameTier_Idempotent(t *testing.T) {
+	fx := newFixture(t)
+	ctx := ctxWithAdmin(1)
+	fx.targetUser.PlanID = "max"
+
+	err := fx.svc.ChangeTier(ctx, 2, "max", "")
+	require.NoError(t, err)
+	assert.Empty(t, fx.auditRepo.entries, "no audit для no-op")
+	assert.Empty(t, fx.notifier.calls, "no email для no-op")
+	assert.Empty(t, fx.subsRepo.markedExpired)
+}
+
+func TestChangeTier_InvalidTier(t *testing.T) {
+	fx := newFixture(t)
+	ctx := ctxWithAdmin(1)
+	err := fx.svc.ChangeTier(ctx, 2, "enterprise", "")
 	assert.ErrorIs(t, err, ErrInvalidTier)
+}
+
+func TestChangeTier_UserNotFound(t *testing.T) {
+	fx := newFixture(t)
+	ctx := ctxWithAdmin(1)
+	err := fx.svc.ChangeTier(ctx, 999, "max", "")
+	assert.ErrorIs(t, err, ErrUserNotFound)
+}
+
+func TestChangeTier_AuditPayload(t *testing.T) {
+	fx := newFixture(t)
+	ctx := ctxWithAdmin(1)
+
+	require.NoError(t, fx.svc.ChangeTier(ctx, 2, "pro", "support ticket"))
+	require.Len(t, fx.auditRepo.entries, 1)
+
+	var before map[string]any
+	require.NoError(t, json.Unmarshal(fx.auditRepo.entries[0].BeforeState, &before))
+	assert.Equal(t, "free", before["plan_id"])
+
+	var after map[string]any
+	require.NoError(t, json.Unmarshal(fx.auditRepo.entries[0].AfterState, &after))
+	assert.Equal(t, "pro", after["plan_id"])
+	assert.Equal(t, "support ticket", after["reason"])
+	assert.Equal(t, "admin_override", after["source"])
+}
+
+func TestChangeTier_NotifierFailure_DoesNotBlock(t *testing.T) {
+	fx := newFixture(t)
+	ctx := ctxWithAdmin(1)
+	fx.notifier.sendErr = errors.New("smtp unreachable")
+
+	err := fx.svc.ChangeTier(ctx, 2, "pro", "")
+	require.NoError(t, err, "notifier failure must not block ChangeTier")
+	assert.Equal(t, "pro", fx.users.users[2].PlanID, "plan всё равно обновлён")
+	require.Len(t, fx.auditRepo.entries, 1, "audit всё равно записан")
+}
+
+func TestChangeTier_MissingContext(t *testing.T) {
+	fx := newFixture(t)
+	err := fx.svc.ChangeTier(context.Background(), 2, "max", "")
+	assert.ErrorIs(t, err, auditsvc.ErrMissingRequestInfo)
 }
 
 // ========== helpers tests ==========

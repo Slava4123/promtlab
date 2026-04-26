@@ -43,7 +43,7 @@ type AdminService interface {
 	ResetPassword(ctx context.Context, targetID uint) error
 	GrantBadge(ctx context.Context, targetID uint, badgeID string) (*badgeuc.Badge, error)
 	RevokeBadge(ctx context.Context, targetID uint, badgeID string) error
-	ChangeTier(ctx context.Context, targetID uint, tier string) error
+	ChangeTier(ctx context.Context, targetID uint, tier, reason string) error
 }
 
 // TOTPVerifier — узкий интерфейс для sudo-mode verification. *adminauthuc.Service
@@ -217,7 +217,8 @@ func (h *Handler) RevokeBadge(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/admin/users/{id}/tier
-// REQUIRES fresh TOTP (sudo mode). STUB — возвращает 501.
+// REQUIRES fresh TOTP (sudo mode). Admin override без оплаты, отменяет
+// активную подписку (если есть) через ExpireAndDowngrade и шлёт юзеру email.
 func (h *Handler) ChangeTier(w http.ResponseWriter, r *http.Request) {
 	userID, err := parseUintParam(r, "id")
 	if err != nil {
@@ -229,12 +230,11 @@ func (h *Handler) ChangeTier(w http.ResponseWriter, r *http.Request) {
 		httperr.Respond(w, httperr.BadRequest(err.Error()))
 		return
 	}
-	// Verify TOTP (sudo mode) даже для stub — для UX-предсказуемости.
 	if err := h.verifyTOTPCode(r.Context(), req.TOTPCode); err != nil {
 		respondError(w, err)
 		return
 	}
-	if err := h.admin.ChangeTier(r.Context(), userID, req.Tier); err != nil {
+	if err := h.admin.ChangeTier(r.Context(), userID, req.Tier, req.Reason); err != nil {
 		respondError(w, err)
 		return
 	}

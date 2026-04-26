@@ -31,14 +31,21 @@ import (
 
 // Service — usecase для административных операций.
 // Композит из существующих usecase-сервисов (audit, auth, badge) + admin-repo.
+//
+// notifier и frontendURL — опциональны (для email-уведомлений в ChangeTier).
+// Если notifier == nil или frontendURL == "" — email не отправляется.
+// Устанавливаются через SetTierChangeNotifier после конструктора, чтобы не
+// раздувать сигнатуру NewService и не ломать существующие тесты.
 type Service struct {
-	admins repo.AdminRepository
-	users  repo.UserRepository
-	audit  *auditsvc.Service
-	auth   *authuc.Service
-	badges *badgeuc.Service
-	plans  repo.PlanRepository
-	subs   repo.SubscriptionRepository
+	admins      repo.AdminRepository
+	users       repo.UserRepository
+	audit       *auditsvc.Service
+	auth        *authuc.Service
+	badges      *badgeuc.Service
+	plans       repo.PlanRepository
+	subs        repo.SubscriptionRepository
+	notifier    TierChangeNotifier
+	frontendURL string
 }
 
 func NewService(
@@ -59,6 +66,13 @@ func NewService(
 		plans:  plans,
 		subs:   subs,
 	}
+}
+
+// SetTierChangeNotifier подключает email-уведомление об изменении тарифа.
+// Вызывается из app.go после NewService. Если не вызван — ChangeTier не шлёт email.
+func (s *Service) SetTierChangeNotifier(n TierChangeNotifier, frontendURL string) {
+	s.notifier = n
+	s.frontendURL = frontendURL
 }
 
 // ==================== read-only ====================
@@ -203,8 +217,15 @@ func (s *Service) ResetPassword(ctx context.Context, targetID uint) error {
 }
 
 // ChangeTier устанавливает plan_id для юзера (admin override, без оплаты).
-// Если у юзера есть активная подписка — отменяет её.
-func (s *Service) ChangeTier(ctx context.Context, targetID uint, tier string) error {
+// Если у юзера есть текущая подписка (active/past_due/paused) — переводит её
+// в expired немедленно (без grace period) через MarkExpired. plan_id юзера
+// устанавливается в указанный tier (не обязательно free).
+//
+// reason — опциональная причина, попадает в audit_log.after_state.source = "admin_override".
+// При успехе шлёт юзеру email-уведомление (non-blocking, если notifier подключён).
+//
+// Идемпотентность: смена на тот же тариф = no-op (без записи в audit, без email).
+func (s *Service) ChangeTier(ctx context.Context, targetID uint, tier, reason string) error {
 	if _, ok := auditsvc.FromContext(ctx); !ok {
 		return auditsvc.ErrMissingRequestInfo
 	}
@@ -225,17 +246,23 @@ func (s *Service) ChangeTier(ctx context.Context, targetID uint, tier string) er
 		return err
 	}
 
-	before := map[string]any{"plan_id": user.PlanID}
+	oldPlan := user.PlanID
+	if oldPlan == tier {
+		// Idempotent: тариф уже такой же — ничего не делаем, не пишем в audit, не шлём email.
+		return nil
+	}
 
-	// Cancel active subscription if exists.
-	// CancelAtPeriodEnd ошибку логируем и прерываемся: иначе plan_id обновится в users,
-	// а старая подписка останется active → billing-конфликт без сигнала админу.
-	if sub, subErr := s.subs.GetActiveByUserID(ctx, targetID); subErr == nil {
-		if cancelErr := s.subs.CancelAtPeriodEnd(ctx, sub.ID); cancelErr != nil {
-			slog.Error("admin.change_tier.cancel_sub_failed",
-				"target_user_id", targetID, "sub_id", sub.ID, "error", cancelErr)
-			return fmt.Errorf("cancel existing subscription: %w", cancelErr)
+	// Завершить текущую подписку (active/past_due/paused), если есть. MarkExpired
+	// меняет только статус подписки; users.plan_id мы перезапишем сами в нужный.
+	if sub, subErr := s.subs.GetCurrentByUserID(ctx, targetID); subErr == nil {
+		if expErr := s.subs.MarkExpired(ctx, sub.ID); expErr != nil {
+			slog.Error("admin.change_tier.expire_sub_failed",
+				"target_user_id", targetID, "sub_id", sub.ID, "error", expErr)
+			return fmt.Errorf("expire existing subscription: %w", expErr)
 		}
+	} else if !errors.Is(subErr, repo.ErrNotFound) {
+		// Любая другая ошибка — прерываемся: иначе plan_id обновится, а sub останется в подвисшем состоянии.
+		return fmt.Errorf("lookup current subscription: %w", subErr)
 	}
 
 	// Update user plan
@@ -244,14 +271,33 @@ func (s *Service) ChangeTier(ctx context.Context, targetID uint, tier string) er
 		return err
 	}
 
-	after := map[string]any{"plan_id": tier}
-	return s.audit.Log(ctx, auditsvc.LogInput{
+	before := map[string]any{"plan_id": oldPlan}
+	after := map[string]any{
+		"plan_id": tier,
+		"reason":  reason,
+		"source":  "admin_override",
+	}
+	if err := s.audit.Log(ctx, auditsvc.LogInput{
 		Action:      auditsvc.ActionChangeTier,
 		TargetType:  auditsvc.TargetUser,
 		TargetID:    &targetID,
 		BeforeState: before,
 		AfterState:  after,
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Non-blocking email — ошибка только логируется.
+	if s.notifier != nil && s.frontendURL != "" {
+		if err := s.notifier.SendAdminTierChanged(user.Email, user.Name, oldPlan, tier, reason, s.frontendURL); err != nil {
+			slog.Warn("admin.change_tier.email_failed",
+				"target_user_id", targetID, "error", err)
+		}
+	}
+
+	slog.Info("admin.change_tier.success",
+		"target_user_id", targetID, "old_plan", oldPlan, "new_plan", tier, "reason_set", reason != "")
+	return nil
 }
 
 // ==================== destructive: badges ====================

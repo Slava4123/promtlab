@@ -36,6 +36,17 @@ type SubscriptionRepository interface {
 	// ExpireAndDowngrade переводит подписку в expired и users.plan_id в "free".
 	ExpireAndDowngrade(ctx context.Context, subID uint, userID uint) error
 
+	// GetCurrentByUserID возвращает текущую (не-expired) подписку юзера —
+	// active, past_due или paused. Используется в admin.ChangeTier для
+	// корректного завершения подписки при ручном изменении тарифа,
+	// в т.ч. для paused, которые GetActiveByUserID не ловит.
+	GetCurrentByUserID(ctx context.Context, userID uint) (*models.Subscription, error)
+
+	// MarkExpired атомарно переводит подписку в expired без изменения users.plan_id.
+	// Отличается от ExpireAndDowngrade тем, что caller сам управляет user.plan_id
+	// (нужно для admin override на любой тариф, не только free).
+	MarkExpired(ctx context.Context, subID uint) error
+
 	// SetRebillId сохраняет RebillId, выданный T-Bank после первого рекуррентного
 	// платежа. Используется для последующих /Charge.
 	SetRebillId(ctx context.Context, subID uint, rebillID string) error

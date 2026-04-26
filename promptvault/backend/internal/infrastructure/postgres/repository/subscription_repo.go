@@ -100,6 +100,38 @@ func (r *subscriptionRepo) ExpireAndDowngrade(ctx context.Context, subID uint, u
 	})
 }
 
+func (r *subscriptionRepo) GetCurrentByUserID(ctx context.Context, userID uint) (*models.Subscription, error) {
+	var sub models.Subscription
+	err := r.db.WithContext(ctx).
+		Preload("Plan").
+		Where("user_id = ? AND status IN ?",
+			userID,
+			[]models.SubscriptionStatus{
+				models.SubStatusActive,
+				models.SubStatusPastDue,
+				models.SubStatusPaused,
+			}).
+		First(&sub).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repo.ErrNotFound
+		}
+		return nil, err
+	}
+	return &sub, nil
+}
+
+func (r *subscriptionRepo) MarkExpired(ctx context.Context, subID uint) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).
+		Model(&models.Subscription{}).
+		Where("id = ?", subID).
+		Updates(map[string]any{
+			"status":     models.SubStatusExpired,
+			"updated_at": now,
+		}).Error
+}
+
 func (r *subscriptionRepo) SetRebillId(ctx context.Context, subID uint, rebillID string) error {
 	return r.db.WithContext(ctx).
 		Model(&models.Subscription{}).

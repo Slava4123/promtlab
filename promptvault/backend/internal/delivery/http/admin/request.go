@@ -14,10 +14,12 @@ type ListUsersRequest struct {
 
 // ChangeTierRequest — тело POST /api/admin/users/{id}/tier.
 // Tier — один из заранее известных значений ("free", "pro", "max").
-// В MVP handler возвращает 501 т.к. subscription system отсутствует.
+// Reason — опциональная причина изменения, попадает в audit_log.after_state
+// (для расследований / support tickets).
 type ChangeTierRequest struct {
 	Tier     string `json:"tier" validate:"required,oneof=free pro max"`
 	TOTPCode string `json:"totp_code" validate:"required"`
+	Reason   string `json:"reason" validate:"max=500"`
 }
 
 // TOTPCodeRequest — базовая структура для destructive actions, требующих

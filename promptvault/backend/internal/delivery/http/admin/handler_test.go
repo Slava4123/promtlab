@@ -77,7 +77,7 @@ func (f *fakeAdminSvc) RevokeBadge(_ context.Context, _ uint, _ string) error {
 	f.revokeCalls++
 	return f.revokeErr
 }
-func (f *fakeAdminSvc) ChangeTier(_ context.Context, _ uint, _ string) error {
+func (f *fakeAdminSvc) ChangeTier(_ context.Context, _ uint, _, _ string) error {
 	return f.tierErr
 }
 

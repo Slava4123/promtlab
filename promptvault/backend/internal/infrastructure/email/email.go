@@ -280,6 +280,29 @@ func (s *Service) SendInsightsDigest(to, name, insightType, frontendURL string) 
 	return s.send(to, "Новый Smart Insight — ПромтЛаб", body)
 }
 
+// SendAdminTierChanged уведомляет юзера о ручном изменении тарифа администратором.
+// reason опциональна (может быть пустой). Тон сухой, без маркетинга — это
+// служебное уведомление, юзер должен понимать что к нему был применён override.
+func (s *Service) SendAdminTierChanged(to, name, oldPlan, newPlan, reason, frontendURL string) error {
+	greeting := "Здравствуйте"
+	if name != "" {
+		greeting = fmt.Sprintf("Здравствуйте, %s", name)
+	}
+	var reasonBlock string
+	if reason != "" {
+		reasonBlock = fmt.Sprintf("\r\n\r\nПричина: %s", reason)
+	}
+	body := fmt.Sprintf(
+		"%s!\r\n\r\n"+
+			"Администратор ПромтЛаб изменил ваш тариф: %s → %s.%s\r\n\r\n"+
+			"Если у вас была активная подписка, она была завершена в момент изменения. "+
+			"Вопросы по биллингу — пишите на %s.\r\n\r\n"+
+			"Просмотреть текущий тариф: %s/settings/subscription",
+		greeting, oldPlan, newPlan, reasonBlock, supportEmail, frontendURL,
+	)
+	return s.send(to, "Тариф изменён администратором — ПромтЛаб", body)
+}
+
 // SendSubscriptionExpired уведомляет о переводе на Free после исчерпания
 // retry-попыток. Отправляется из ExpirationLoop когда подписка переходит в expired.
 func (s *Service) SendSubscriptionExpired(to, planName, frontendURL string) error {
