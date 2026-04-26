@@ -313,7 +313,7 @@ func TestGenerateAndValidateToken(t *testing.T) {
 	svc := newTestService(new(mockUserRepo), new(mockLinkedAccountRepo), new(mockVerificationRepo))
 
 	// Generate token pair
-	tokens, err := svc.generateTokenPair(42, "test-nonce")
+	tokens, err := svc.generateTokenPair(42, "test-nonce", "free")
 	assert.NoError(t, err)
 	assert.NotEmpty(t, tokens.AccessToken)
 
@@ -329,7 +329,7 @@ func TestValidateToken_Expired(t *testing.T) {
 
 	// Generate a token that expired 1 hour ago
 	now := time.Now().Add(-2 * time.Hour)
-	tokenStr, err := svc.generateToken(1, TokenTypeAccess, "", now, 1*time.Hour)
+	tokenStr, err := svc.generateToken(1, TokenTypeAccess, "", "", now, 1*time.Hour)
 	assert.NoError(t, err)
 
 	_, err = svc.ValidateToken(tokenStr, TokenTypeAccess)
@@ -340,7 +340,7 @@ func TestValidateToken_WrongType(t *testing.T) {
 	svc := newTestService(new(mockUserRepo), new(mockLinkedAccountRepo), new(mockVerificationRepo))
 
 	// Generate a refresh token
-	tokens, err := svc.generateTokenPair(1, "test-nonce")
+	tokens, err := svc.generateTokenPair(1, "test-nonce", "free")
 	assert.NoError(t, err)
 
 	// Try to validate refresh token as access — should fail
@@ -574,7 +574,7 @@ func TestRefresh_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Generate a valid refresh token first
-	tokens, err := svc.generateTokenPair(1, "test-nonce")
+	tokens, err := svc.generateTokenPair(1, "test-nonce", "free")
 	assert.NoError(t, err)
 
 	user := &models.User{ID: 1, Email: "test@example.com", Name: "Test", TokenNonce: "test-nonce"}
@@ -598,7 +598,7 @@ func TestRefresh_ExpiredToken(t *testing.T) {
 
 	// Generate a token that expired in the past
 	now := time.Now().Add(-2 * time.Hour)
-	expiredRefresh, err := svc.generateToken(1, TokenTypeRefresh, "test-nonce", now, 1*time.Hour)
+	expiredRefresh, err := svc.generateToken(1, TokenTypeRefresh, "test-nonce", "", now, 1*time.Hour)
 	assert.NoError(t, err)
 
 	resultUser, tokens, err := svc.Refresh(ctx, expiredRefresh)
@@ -614,7 +614,7 @@ func TestRefresh_UserDeleted(t *testing.T) {
 	ctx := context.Background()
 
 	// Generate a valid refresh token
-	tokens, err := svc.generateTokenPair(999, "test-nonce")
+	tokens, err := svc.generateTokenPair(999, "test-nonce", "free")
 	assert.NoError(t, err)
 
 	users.On("GetByID", ctx, uint(999)).Return(nil, repo.ErrNotFound)

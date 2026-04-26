@@ -207,7 +207,7 @@ func (s *Service) issueTokens(ctx context.Context, user *models.User) (*TokenPai
 	if err := s.users.Update(ctx, user); err != nil {
 		return nil, err
 	}
-	return s.generateTokenPair(user.ID, user.TokenNonce)
+	return s.generateTokenPair(user.ID, user.TokenNonce, user.PlanID)
 }
 
 // IssueTokens — экспортированная обёртка над issueTokens. Используется из
@@ -247,7 +247,7 @@ func (s *Service) AuthenticatePassword(ctx context.Context, userEmail, password 
 // access token — не даёт доступа ни к одному protected endpoint, кроме
 // POST /api/auth/verify-totp (где он обменивается на полный pair).
 func (s *Service) IssuePreAuthToken(userID uint) (string, error) {
-	return s.generateToken(userID, TokenTypePreAuth, "", time.Now(), PreAuthTokenDuration)
+	return s.generateToken(userID, TokenTypePreAuth, "", "", time.Now(), PreAuthTokenDuration)
 }
 
 // ValidatePreAuthToken проверяет подпись и срок pre_auth токена, возвращает

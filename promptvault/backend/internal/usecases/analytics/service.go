@@ -35,6 +35,12 @@ type Service struct {
 	// notifier — опциональный hook на изменение insights (email/push).
 	// Default NoopNotifier.
 	notifier InsightsNotifier
+	// planFromCtx — Phase 15 (M9): callback для чтения PlanID из ctx без
+	// users.GetByID на каждый запрос. Возвращает (planID, true) если в ctx
+	// лежит свежий *Claims с непустым PlanID, иначе ("", false) и caller
+	// делает fallback на DB. Устанавливается из app.go (см. SetPlanFromCtx).
+	// Если nil — всегда fallback (legacy-behaviour до M9).
+	planFromCtx func(ctx context.Context) (string, bool)
 }
 
 func NewService(
@@ -67,6 +73,29 @@ func (s *Service) SetExperimentalInsights(v bool) { s.experimentalInsights = v }
 // (most_edited, orphan_tags, empty_collections) от pg_trgm не зависят.
 func (s *Service) SetTrgmAvailable(v bool) { s.trgmAvailable = v }
 
+// SetPlanFromCtx — Phase 15: callback для чтения PlanID из request context.
+// Реализация в app.go: ctx.Value(authmw.ClaimsKey).(*authuc.Claims).PlanID.
+// Передаётся как функция, чтобы analytics не импортировал middleware/auth
+// (избегаем circular import: middleware → usecases/auth → ... → analytics).
+func (s *Service) SetPlanFromCtx(fn func(ctx context.Context) (string, bool)) {
+	s.planFromCtx = fn
+}
+
+// lookupPlanID — read-through helper: сначала из ctx (zero DB hit), потом
+// fallback на users.GetByID. Возвращает PlanID юзера и nil error при успехе.
+func (s *Service) lookupPlanID(ctx context.Context, userID uint) (string, error) {
+	if s.planFromCtx != nil {
+		if plan, ok := s.planFromCtx(ctx); ok {
+			return plan, nil
+		}
+	}
+	planID, err := s.lookupPlanID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	return planID, nil
+}
+
 // SetNotifier заменяет NoopNotifier на реальную реализацию (например,
 // EmailInsightsNotifier из infrastructure/email). Вызывать после NewService.
 func (s *Service) SetNotifier(n InsightsNotifier) {
@@ -80,11 +109,11 @@ func (s *Service) SetNotifier(n InsightsNotifier) {
 // GetInsightsGated — проверка плана + чтение insights. Free/Pro получают
 // ErrMaxRequired. Логика плана вынесена из handler'а в service (H5).
 func (s *Service) GetInsightsGated(ctx context.Context, userID uint, teamID *uint) ([]models.SmartInsight, error) {
-	user, err := s.users.GetByID(ctx, userID)
+	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if !subscription.IsMax(user.PlanID) {
+	if !subscription.IsMax(planID) {
 		return nil, ErrMaxRequired
 	}
 	return s.analytics.GetInsights(ctx, userID, teamID)
@@ -94,11 +123,11 @@ func (s *Service) GetInsightsGated(ctx context.Context, userID uint, teamID *uin
 // раз в сутки в InsightsComputeLoop; этот endpoint позволяет юзеру
 // триггернуть пересчёт руками (rate-limit на уровне middleware).
 func (s *Service) RefreshInsightsGated(ctx context.Context, userID uint, teamID *uint) ([]models.SmartInsight, error) {
-	user, err := s.users.GetByID(ctx, userID)
+	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if !subscription.IsMax(user.PlanID) {
+	if !subscription.IsMax(planID) {
 		return nil, ErrMaxRequired
 	}
 	if err := s.ComputeInsights(ctx, userID, teamID); err != nil {
@@ -110,11 +139,11 @@ func (s *Service) RefreshInsightsGated(ctx context.Context, userID uint, teamID 
 // ExportGate возвращает nil если юзеру доступен export (Pro+), иначе
 // ErrProRequired. Handler вызывает перед streaming'ом CSV (H5).
 func (s *Service) ExportGate(ctx context.Context, userID uint) error {
-	user, err := s.users.GetByID(ctx, userID)
+	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if !subscription.IsPaid(user.PlanID) {
+	if !subscription.IsPaid(planID) {
 		return ErrProRequired
 	}
 	return nil
@@ -133,11 +162,11 @@ func (s *Service) GetPersonalDashboardFiltered(ctx context.Context, userID uint,
 		return s.GetPersonalDashboard(ctx, userID, requestedRange)
 	}
 
-	user, err := s.users.GetByID(ctx, userID)
+	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	rng := ClampRange(requestedRange, user.PlanID)
+	rng := ClampRange(requestedRange, planID)
 	dr := BuildDateRange(rng, s.nowFn())
 	filter := repo.AnalyticsFilter{
 		UserID:       userID,
@@ -203,11 +232,11 @@ func (s *Service) GetPersonalDashboardFiltered(ctx context.Context, userID uint,
 
 // GetPersonalDashboard — personal scope (team_id IS NULL).
 func (s *Service) GetPersonalDashboard(ctx context.Context, userID uint, requestedRange RangeID) (*PersonalDashboard, error) {
-	user, err := s.users.GetByID(ctx, userID)
+	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	rng := ClampRange(requestedRange, user.PlanID)
+	rng := ClampRange(requestedRange, planID)
 	dr := BuildDateRange(rng, s.nowFn())
 
 	dashboard := &PersonalDashboard{Range: rng}
@@ -341,11 +370,11 @@ func (s *Service) GetTeamDashboardFiltered(ctx context.Context, userID, teamID u
 		}
 		return nil, err
 	}
-	user, err := s.users.GetByID(ctx, userID)
+	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	rng := ClampRange(requestedRange, user.PlanID)
+	rng := ClampRange(requestedRange, planID)
 	dr := BuildDateRange(rng, s.nowFn())
 	filter := repo.AnalyticsFilter{
 		UserID:       userID,
@@ -408,11 +437,11 @@ func (s *Service) GetTeamDashboard(ctx context.Context, userID, teamID uint, req
 		return nil, err
 	}
 
-	user, err := s.users.GetByID(ctx, userID)
+	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	rng := ClampRange(requestedRange, user.PlanID)
+	rng := ClampRange(requestedRange, planID)
 	dr := BuildDateRange(rng, s.nowFn())
 
 	dashboard := &TeamDashboard{Range: rng}
@@ -478,11 +507,11 @@ func (s *Service) GetPromptAnalytics(ctx context.Context, promptID, userID uint)
 		}
 	}
 
-	user, err := s.users.GetByID(ctx, userID)
+	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	rng := ClampRange(Range90d, user.PlanID) // prompt page — фиксированное окно с clamp
+	rng := ClampRange(Range90d, planID) // prompt page — фиксированное окно с clamp
 	dr := BuildDateRange(rng, s.nowFn())
 
 	result := &PromptAnalytics{PromptID: promptID}

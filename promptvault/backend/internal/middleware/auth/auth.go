@@ -37,6 +37,7 @@ func Middleware(v TokenValidator) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
+			ctx = context.WithValue(ctx, ClaimsKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

@@ -41,15 +41,18 @@ func (s *Service) ValidateToken(tokenStr string, expectedType TokenType) (*Claim
 	return claims, nil
 }
 
-func (s *Service) generateTokenPair(userID uint, nonce string) (*TokenPair, error) {
+// generateTokenPair выдаёт access + refresh пары. planID попадает только
+// в access-токен (refresh при rotate переоформит свежий plan из БД).
+// При nonce="" (или для preauth) planID можно передать "" — претензий нет.
+func (s *Service) generateTokenPair(userID uint, nonce, planID string) (*TokenPair, error) {
 	now := time.Now()
 
-	accessToken, err := s.generateToken(userID, TokenTypeAccess, "", now, s.accessDuration)
+	accessToken, err := s.generateToken(userID, TokenTypeAccess, "", planID, now, s.accessDuration)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := s.generateToken(userID, TokenTypeRefresh, nonce, now, s.refreshDuration)
+	refreshToken, err := s.generateToken(userID, TokenTypeRefresh, nonce, "", now, s.refreshDuration)
 	if err != nil {
 		return nil, err
 	}
@@ -61,11 +64,12 @@ func (s *Service) generateTokenPair(userID uint, nonce string) (*TokenPair, erro
 	}, nil
 }
 
-func (s *Service) generateToken(userID uint, tokenType TokenType, nonce string, now time.Time, duration time.Duration) (string, error) {
+func (s *Service) generateToken(userID uint, tokenType TokenType, nonce, planID string, now time.Time, duration time.Duration) (string, error) {
 	claims := &Claims{
 		UserID: userID,
 		Type:   tokenType,
 		Nonce:  nonce,
+		PlanID: planID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(duration)),
 			IssuedAt:  jwt.NewNumericDate(now),

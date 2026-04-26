@@ -182,6 +182,15 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	analyticsSvc := analyticsuc.NewService(analyticsRepo, promptRepo, teamRepo, userRepo, quotaSvc)
 	// kill-switch расширенных Smart Insights (Phase 15: default true).
 	analyticsSvc.SetExperimentalInsights(cfg.Analytics.ExperimentalInsights)
+	// M9: чтение PlanID из ctx без users.GetByID на каждый запрос.
+	// Передаём через callback чтобы analytics не импортировал middleware/auth.
+	analyticsSvc.SetPlanFromCtx(func(ctx context.Context) (string, bool) {
+		c, ok := ctx.Value(authmw.ClaimsKey).(*authuc.Claims)
+		if !ok || c == nil || c.PlanID == "" {
+			return "", false
+		}
+		return c.PlanID, true
+	})
 	// Probe pg_trgm: possible_duplicates требует расширения; на managed PG
 	// без admin-доступа extension может быть недоступен — graceful degrade.
 	if caps, err := postgres.DetectExtensions(context.Background(), db); err != nil {
