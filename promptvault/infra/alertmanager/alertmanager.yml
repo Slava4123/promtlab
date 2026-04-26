@@ -1,7 +1,8 @@
 global:
   resolve_timeout: 5m
-  # SMTP — для email уведомлений на critical alerts (Phase 2 observability).
   # Gmail SMTP, port 587 STARTTLS. Пароль читается из gitignored файла.
+  # Email — единственный канал доставки alert'ов: Telegram Bot API заблокирован
+  # с прод VPS Timeweb (РФ блокировка), Gmail SMTP проходит через IPv6.
   smtp_smarthost: smtp.gmail.com:587
   smtp_from: promstlab@gmail.com
   smtp_auth_username: promstlab@gmail.com
@@ -9,57 +10,25 @@ global:
   smtp_require_tls: true
 
 route:
-  receiver: telegram
+  # Один email-receiver для всех severity. Email-only deployment (см. global выше).
+  receiver: email
   group_by: [alertname, severity]
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
-  routes:
-    # Critical → email backup. continue: true чтобы alert продолжил
-    # проверять sibling routes ниже и попал также в Telegram.
-    # ВАЖНО: continue: true НЕ возвращает alert в parent receiver — он лишь
-    # продолжает matching по последующим sibling routes. Поэтому для дублирования
-    # critical в Telegram нужен явный второй child route.
-    - matchers:
-        - severity="critical"
-      receiver: email-critical
-      continue: true
-    - matchers:
-        - severity="critical"
-      receiver: telegram
 
 receivers:
-  - name: telegram
-    telegram_configs:
-      # bot_token читается из файла (gitignored, кладётся на VPS вручную).
-      - bot_token_file: /etc/alertmanager/secrets/bot_token
-        # chat_id (numeric Telegram user ID) — placeholder=1 (явно invalid).
-        # На VPS заменить через sed (см. инструкцию в docker-compose.prod.yml).
-        # Alertmanager v0.27.0 не имеет chat_id_file (появился в v0.28+).
-        # При апгрейде до v0.28 — заменить на chat_id_file для симметрии с bot_token.
-        chat_id: 1
-        parse_mode: HTML
-        send_resolved: true
-        message: |
-          {{ if eq .CommonLabels.severity "critical" }}🔴 <b>P0</b>{{ else if eq .CommonLabels.severity "warning" }}🟡 <b>P1</b>{{ else }}🟢 <b>P2</b>{{ end }} <b>[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}</b>
-          {{ range .Alerts }}
-          {{ .Annotations.summary }}
-          {{ if .Annotations.description }}<i>{{ .Annotations.description }}</i>{{ end }}
-          {{ if .Annotations.runbook_url }}📖 <a href="{{ .Annotations.runbook_url }}">Runbook</a>{{ end }}
-          {{ end }}
-
-  # Phase 2: SMTP fallback для critical alerts (redundancy против Telegram outage).
-  # Owner email = promstlab@gmail.com (тот же что SMTP_FROM — простота для self-hosted).
-  - name: email-critical
+  - name: email
     email_configs:
       - to: promstlab@gmail.com
         send_resolved: true
         headers:
-          Subject: '[ALERT] {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }})'
+          Subject: '[{{ .CommonLabels.severity | toUpper }}] {{ .CommonLabels.alertname }}'
         html: |
           <h3>{{ .CommonLabels.alertname }} — {{ .CommonLabels.severity }}</h3>
           <p>Status: <b>{{ .Status | toUpper }}</b></p>
           {{ range .Alerts }}
           <p><b>Summary:</b> {{ .Annotations.summary }}</p>
           {{ if .Annotations.description }}<p><b>Description:</b> {{ .Annotations.description }}</p>{{ end }}
+          {{ if .Annotations.runbook_url }}<p><a href="{{ .Annotations.runbook_url }}">📖 Runbook</a></p>{{ end }}
           {{ end }}

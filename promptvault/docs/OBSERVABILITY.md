@@ -12,8 +12,9 @@ Loki, Tempo, SLO/SLA multi-burn-rate alerts). Финальный scope ниже.
 - [x] **Phase 15 A** — IP-allowlist на `/metrics`, fix `for: 1h` у `InsightsComputeLoopDead`.
 - [x] **Phase 15 B** — `prometheus.yml`, `alertmanager.yml`, Grafana datasource provisioning.
 - [x] **Phase 15 C** — Prometheus в `docker-compose.prod.yml` (90d retention, 10GB cap).
-- [x] **Phase 15 D** — Alertmanager + Telegram receiver. SMTP email-critical receiver готов
-      (см. «SMTP redundancy» ниже + `infra/alertmanager/SECRETS.md` для активации на VPS).
+- [x] **Phase 15 D** — Alertmanager + email receiver через Gmail SMTP
+      (см. `infra/alertmanager/SECRETS.md`). Telegram удалён: с прод VPS Timeweb
+      api.telegram.org:443 блокируется на IPv4 (РКН), пакеты не уходят.
 - [x] **Phase 15 E** — Grafana + nginx vhost `grafana.promtlabs.ru`, basic auth.
 - [x] **Phase 15 F** — Runbook (этот документ) + memory budget в `DEPLOY.md`.
 - [x] **Phase 16** — node-exporter, postgres-exporter, cAdvisor v0.52.1 (cgroup v2),
@@ -26,7 +27,7 @@ Loki, Tempo, SLO/SLA multi-burn-rate alerts). Финальный scope ниже.
 | Компонент | Версия | Bind | RAM limit | Назначение |
 |---|---|---|---|---|
 | Prometheus | v3.0.1 | 127.0.0.1:9090 | 384M | TSDB + alert evaluation, 90d retention |
-| Alertmanager | v0.27.0 | 127.0.0.1:9093 | 96M | Routing → Telegram + SMTP critical |
+| Alertmanager | v0.27.0 | 127.0.0.1:9093 | 96M | Routing → Gmail SMTP (email-only) |
 | Grafana | 11.3.0 | grafana.promtlabs.ru | 192M | Dashboards (5 шт., русские) + Explore |
 | Loki | 3.6.0 | 127.0.0.1:3100 | 384M | Logs schema v13, 7d retention |
 | Promtail | 3.6.0 | — | 96M | Docker SD + slog JSON pipeline |
@@ -127,16 +128,21 @@ TELEMETRY_TRACES_SAMPLE_RATE=0.1
 - **Links to logs** — datasource Tempo сконфигурирован с derivedFields на
   trace_id из Loki, в одном клике переходишь на логи нужного запроса.
 
-## SMTP redundancy для critical alerts (Phase 2)
+## Email-only delivery (Gmail SMTP)
 
-`alertmanager.yml` содержит receiver `email-critical` с HTML-шаблоном.
-В route `severity="critical"` стоит `continue: true` — critical алерты
-дублируются на email + продолжают идти в Telegram parent route. Warning'и
-остаются только в Telegram.
+С прод VPS Timeweb (РФ) Telegram Bot API недоступен: пакеты к
+`api.telegram.org:443` блокируются на IPv4. Поэтому в `alertmanager.yml`
+один receiver `email`, доставка через `smtp.gmail.com:587` (работает по
+IPv6 через Docker bridge).
 
-**Активация на VPS:** см. `infra/alertmanager/SECRETS.md` (Gmail App Password
-+ файл `infra/alertmanager/secrets/smtp_password`). Сама конфигурация
-Alertmanager не требует изменений — receiver готов с момента Phase 15 D.
+Все severity (critical + warning) уходят на `promstlab@gmail.com` с темой
+`[CRITICAL]/[WARNING] <alertname>` и HTML-телом со списком alerts +
+runbook ссылкой.
+
+**Активация на VPS:** см. `infra/alertmanager/SECRETS.md` (Gmail App
+Password в `infra/alertmanager/secrets/smtp_password`, владелец 65534:65534).
+В будущем при появлении канала с прокси-выходом наружу (Telegram через
+selfhost bot-api или Mattermost/Discord webhook) — добавить второй receiver.
 
 ## Alert rules (Prometheus)
 
@@ -188,7 +194,7 @@ groups:
 
 ## Runbook по alert'ам
 
-Когда Telegram приходит уведомление с одним из 4 alert'ов — действовать
+Когда email приходит уведомление с одним из 4 alert'ов — действовать
 по порядку: проверить → диагностировать → починить → подтвердить. После
 получения сообщения сразу зайти в Grafana (`https://grafana.promtlabs.ru`)
 или Prometheus UI (`ssh -L 9090:127.0.0.1:9090 deploy@85.239.39.45`) и

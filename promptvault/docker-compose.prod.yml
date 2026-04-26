@@ -155,14 +155,14 @@ services:
   # === Phase 15 Observability ===
   # Стартуют автоматически вместе с остальным стеком.
   # PRE-УСЛОВИЯ перед deploy:
-  #   1. VPS upgrade до 4 GB+ (P1) — без этого OOM (текущие limits 2.1 GB + 480 MB новых).
-  #   2. На VPS положить Telegram bot_token:
+  #   1. VPS 4 GB+ — без этого OOM (полный стек ~2 GB реального использования).
+  #   2. На VPS положить Gmail App Password (для email-критических уведомлений):
   #        mkdir -p infra/alertmanager/secrets
-  #        echo -n "$TELEGRAM_BOT_TOKEN" > infra/alertmanager/secrets/bot_token
-  #        chmod 600 infra/alertmanager/secrets/bot_token
-  #   3. На VPS заменить chat_id placeholder в alertmanager.yml:
-  #        sed -i "s/chat_id: 1$/chat_id: $TELEGRAM_CHAT_ID/" infra/alertmanager/alertmanager.yml
-  # См. docs/PHASE15_OBSERVABILITY_PLAN.md и docs/OBSERVABILITY.md.
+  #        printf '%s' "$GMAIL_APP_PASSWORD" > infra/alertmanager/secrets/smtp_password
+  #        chown 65534:65534 infra/alertmanager/secrets/smtp_password   # alertmanager UID
+  #        chmod 600 infra/alertmanager/secrets/smtp_password
+  # См. docs/PHASE15_OBSERVABILITY_PLAN.md, docs/OBSERVABILITY.md и
+  # infra/alertmanager/SECRETS.md.
 
   prometheus:
     image: prom/prometheus:v3.0.1
@@ -203,11 +203,7 @@ services:
       - --storage.path=/alertmanager
     volumes:
       - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      # secrets/ — gitignored, на VPS:
-      #   mkdir -p infra/alertmanager/secrets
-      #   echo -n "$TELEGRAM_BOT_TOKEN" > infra/alertmanager/secrets/bot_token
-      #   chmod 600 infra/alertmanager/secrets/bot_token
-      # И sed-replace chat_id placeholder в alertmanager.yml (см. docs/OBSERVABILITY.md Шаг D).
+      # secrets/ — gitignored, на VPS только smtp_password (см. SECRETS.md).
       - ./infra/alertmanager/secrets:/etc/alertmanager/secrets:ro
       - alertmanager-data:/alertmanager
     ports:
