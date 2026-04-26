@@ -52,8 +52,9 @@ func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint
 	}
 
 	// 4-7. MOST EDITED / POSSIBLE DUPLICATES / ORPHAN TAGS / EMPTY COLLECTIONS.
-	// Скрыты за Analytics.ExperimentalInsights feature-flag (Q2) — default false.
-	// Включать после проверки pg_trgm в prod (PossibleDuplicates требует его).
+	// experimentalInsights — kill-switch (default true с Phase 15).
+	// possible_duplicates дополнительно требует pg_trgm — если расширение
+	// недоступно (managed PG без прав), тип пропускается, остальные работают.
 	if s.experimentalInsights {
 		_ = now
 
@@ -66,14 +67,18 @@ func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint
 			s.upsertSafe(ctx, userID, teamID, models.InsightMostEdited, edited)
 		}
 
-		// 5. POSSIBLE DUPLICATES — через pg_trgm similarity(). Если extension
-		// не установлен на managed PG — тихо fail и пропускаем.
-		dups, err := s.analytics.PossibleDuplicates(ctx, userID, teamID, 0.8, 10)
-		if err != nil {
-			slog.WarnContext(ctx, "analytics.insights.duplicates_failed",
-				"err", err, "user_id", userID, "team_id", teamID)
-		} else if len(dups) > 0 {
-			s.upsertSafe(ctx, userID, teamID, models.InsightPossibleDuplicates, dups)
+		// 5. POSSIBLE DUPLICATES — только если pg_trgm доступен.
+		if s.trgmAvailable {
+			dups, err := s.analytics.PossibleDuplicates(ctx, userID, teamID, 0.8, 10)
+			if err != nil {
+				slog.WarnContext(ctx, "analytics.insights.duplicates_failed",
+					"err", err, "user_id", userID, "team_id", teamID)
+			} else if len(dups) > 0 {
+				s.upsertSafe(ctx, userID, teamID, models.InsightPossibleDuplicates, dups)
+			}
+		} else {
+			slog.DebugContext(ctx, "analytics.insights.duplicates_skipped",
+				"reason", "pg_trgm_unavailable", "user_id", userID)
 		}
 
 		// 6. ORPHAN TAGS — теги без промптов.

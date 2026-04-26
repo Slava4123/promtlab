@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -11,6 +12,31 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// PGCapabilities — сводка опциональных расширений PostgreSQL, обнаруженных
+// при старте сервера. Используется для feature-gating функций, требующих
+// extensions, которые могут быть недоступны на managed PG (e.g. Timeweb).
+type PGCapabilities struct {
+	// TrgmAvailable — установлен ли pg_trgm. Нужен для PossibleDuplicates
+	// в analytics.Service и для fuzzy match в search.
+	TrgmAvailable bool
+}
+
+// DetectExtensions проверяет наличие опциональных PostgreSQL расширений.
+// Безопасно вызывать после Connect и RunMigrations — если миграция не смогла
+// создать extension (нет прав на managed PG), DetectExtensions просто вернёт
+// TrgmAvailable=false, и зависимые фичи graceful-deграднут.
+func DetectExtensions(ctx context.Context, db *gorm.DB) (PGCapabilities, error) {
+	var trgmCount int64
+	if err := db.WithContext(ctx).
+		Raw("SELECT COUNT(*) FROM pg_extension WHERE extname = 'pg_trgm'").
+		Scan(&trgmCount).Error; err != nil {
+		return PGCapabilities{}, err
+	}
+	return PGCapabilities{
+		TrgmAvailable: trgmCount > 0,
+	}, nil
+}
 
 func Connect(cfg config.DatabaseConfig, isDev bool) (*gorm.DB, error) {
 	logLevel := logger.Warn

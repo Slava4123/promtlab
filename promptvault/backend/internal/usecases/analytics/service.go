@@ -25,9 +25,13 @@ type Service struct {
 	quotas    *quotauc.Service
 	// nowFn — для тестируемости времени. Default time.Now.
 	nowFn func() time.Time
-	// experimentalInsights включает 4 неготовых Smart Insight типа (Q2).
-	// Default false, toggle через Analytics.ExperimentalInsights.
+	// experimentalInsights — kill-switch для 4 расширенных Smart Insight типов.
+	// Default true (Phase 15). Можно выключить через .env без деплоя.
 	experimentalInsights bool
+	// trgmAvailable — установлено ли расширение pg_trgm в БД (probe на старте).
+	// При false тип possible_duplicates тихо пропускается, остальные 3 расширенных
+	// типа (most_edited, orphan_tags, empty_collections) работают независимо.
+	trgmAvailable bool
 	// notifier — опциональный hook на изменение insights (email/push).
 	// Default NoopNotifier.
 	notifier InsightsNotifier
@@ -54,9 +58,14 @@ func NewService(
 // SetNowFn переопределяет now (для unit-тестов).
 func (s *Service) SetNowFn(fn func() time.Time) { s.nowFn = fn }
 
-// SetExperimentalInsights включает/выключает расчёт 4 заглушечных
-// Smart Insight типов (Q2). Вызывается из app.go на основе config.
+// SetExperimentalInsights включает/выключает расчёт 4 расширенных
+// Smart Insight типов (kill-switch). Вызывается из app.go на основе config.
 func (s *Service) SetExperimentalInsights(v bool) { s.experimentalInsights = v }
+
+// SetTrgmAvailable отмечает наличие расширения pg_trgm в БД (probe из app.go).
+// Влияет только на тип possible_duplicates, остальные 3 расширенных типа
+// (most_edited, orphan_tags, empty_collections) от pg_trgm не зависят.
+func (s *Service) SetTrgmAvailable(v bool) { s.trgmAvailable = v }
 
 // SetNotifier заменяет NoopNotifier на реальную реализацию (например,
 // EmailInsightsNotifier из infrastructure/email). Вызывать после NewService.

@@ -11,6 +11,7 @@ import (
 
 	"promptvault/internal/infrastructure/config"
 	"promptvault/internal/infrastructure/email"
+	"promptvault/internal/infrastructure/postgres"
 	pgrepo "promptvault/internal/infrastructure/postgres/repository"
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/middleware/ratelimit"
@@ -179,8 +180,16 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	// retention cleanup.
 	analyticsRepo := pgrepo.NewAnalyticsRepository(db)
 	analyticsSvc := analyticsuc.NewService(analyticsRepo, promptRepo, teamRepo, userRepo, quotaSvc)
-	// Q2: experimental insights flag — 4 неготовых типа скрыты до M8.
+	// kill-switch расширенных Smart Insights (Phase 15: default true).
 	analyticsSvc.SetExperimentalInsights(cfg.Analytics.ExperimentalInsights)
+	// Probe pg_trgm: possible_duplicates требует расширения; на managed PG
+	// без admin-доступа extension может быть недоступен — graceful degrade.
+	if caps, err := postgres.DetectExtensions(context.Background(), db); err != nil {
+		slog.Warn("postgres.detect_extensions.failed", "error", err)
+	} else {
+		slog.Info("postgres.capabilities", "trgm", caps.TrgmAvailable)
+		analyticsSvc.SetTrgmAvailable(caps.TrgmAvailable)
+	}
 
 	// Phase 14 M-10: email-digest по Smart Insights. Rate-limit 1/неделя
 	// через insight_notifications. Orchestration SMTP → repo → service.
@@ -208,6 +217,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	// Admin usecase (AU1) — зависит от auth/audit/badge сервисов, поэтому
 	// собирается после promptSvc/collectionSvc, но до handlers.
 	adminSvc := adminuc.NewService(adminRepo, userRepo, auditSvc, authSvc, badgeSvc, planRepo, subscriptionRepo)
+	adminSvc.SetTierChangeNotifier(emailSvc, cfg.Server.FrontendURL)
 	adminHealth := &adminHealthAdapter{repo: adminRepo}
 
 	// Search

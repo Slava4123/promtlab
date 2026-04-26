@@ -164,7 +164,11 @@ func defaults() map[string]any {
 			"webhook_trust_xff":    false,
 		},
 		"analytics": map[string]any{
-			"experimental_insights": false,
+			// Default true (Phase 15) — все 7 типов Smart Insights включены.
+			// Установить ANALYTICS_EXPERIMENTAL_INSIGHTS=false в .env для
+			// экстренного отключения 4 расширенных типов (most_edited,
+			// possible_duplicates, orphan_tags, empty_collections) без деплоя.
+			"experimental_insights": true,
 		},
 		"telemetry": map[string]any{
 			"enabled":            false,
