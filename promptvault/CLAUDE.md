@@ -225,8 +225,16 @@ backend/internal/
   - **Admin ChangeTier:** доделан в `usecases/admin/admin.go`. Заменил `subs.CancelAtPeriodEnd` → `MarkExpired` + ловит paused-подписки через `subs.GetCurrentByUserID`. Audit-payload содержит `reason`+`source:"admin_override"`. Email через `TierChangeNotifier` (non-blocking).
   - **Slug:** транслитерация cyrillic через `mozillazg/go-unidecode` (раньше "Мой промпт" → `p-<id>`, теперь `moi-promt-<id>`). Backward-compat через `prompts.slug_aliases jsonb` — старая опубликованная ссылка продолжает резолвиться.
   - **M9 (analytics hot-path):** `Claims.PlanID` в JWT access-токене. `analytics.Service.lookupPlanID` читает из ctx через injected callback (`SetPlanFromCtx` в `app.go`), fallback на `users.GetByID` для legacy-JWT. Минус 1 DB-hit на каждый /api/analytics/* запрос.
-  - **Search FTS:** `prompts.search_tsv` GENERATED STORED tsvector с `russian_unaccent` + english stemming. GIN-индекс. `websearch_to_tsquery` устойчив к user-input. Гибрид с pg_trgm `title %% query` для опечаток. Score = `ts_rank_cd × 0.7 + similarity × 0.3`.
+  - **Search FTS:** `prompts.search_tsv` GENERATED STORED tsvector с `russian_unaccent` + english stemming. GIN-индекс. `websearch_to_tsquery` устойчив к user-input. Гибрид с pg_trgm `similarity(title::text, ?::text) > 0.3` для опечаток (НЕ оператор `%` — см. ADR 0004 про gotcha с varchar/text cast). Score в ORDER BY = `ts_rank_cd × 0.7 + similarity × 0.3`.
   - **Extension Sentry:** реальная отправка envelope NDJSON POST в GlitchTip (раньше только console). `WXT_SENTRY_DSN` в .env, host_permissions добавлены, rate-limit 10/min.
+
+## Phase 15 dev-workflow gotchas (от QA findings)
+
+- **`docker compose up -d` БЕЗ `--build` использует устаревший образ** — миграции/embed файлы из go:embed не подхватятся. Всегда: `docker compose -f docker-compose.dev.yml up -d --build` после изменения миграций или Go-кода.
+- **Frontend anonymous volume `/app/node_modules`** не пересоздаётся при `--build`. После `npm install` нового пакета: `docker compose down` (без `-v` — pgdata save) + `docker compose up -d --build`.
+- **pg_trgm `%`/`%%` оператор + GORM `Raw()`** — источник regressions. Использовать функцию `similarity(title::text, ?::text) > threshold` вместо оператора. См. ADR 0004.
+- **In-memory rate-limit** для destructive endpoints (e.g. `/insights/refresh` 1/час) хранится per-process. Сбрасывается через `docker compose restart api`, НЕ через DELETE из БД.
+- **Юнит-тесты с моками не ловят SQL-regressions** — для repository методов с raw SQL нужен integration test через testcontainers с реальной PG + extensions.
 
 ## Документация (`docs/`)
 - `PLAN.md` — 12-фазный план разработки
