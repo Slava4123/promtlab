@@ -86,7 +86,7 @@
       "id": 4,
       "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container:memory:usage_bytes", "legendFormat": "{{name}}", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container:memory:usage_bytes", "legendFormat": "{{image_short}}", "refId": "A"}
       ],
       "title": "Память по контейнерам",
       "description": "Working set (исключая page cache) — то, что kernel учитывает при OOM kill. cAdvisor v0.55+ корректно экспортирует с label name на Docker overlayfs storage driver.",
@@ -105,7 +105,7 @@
       "id": 5,
       "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container:cpu:usage_rate5m", "legendFormat": "{{name}}", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container:cpu:usage_rate5m", "legendFormat": "{{image_short}}", "refId": "A"}
       ],
       "title": "CPU по контейнерам (5 мин rate)",
       "description": "rate(container_cpu_usage_seconds_total) — доля одного ядра, используемая контейнером (1.0 = 100% одного CPU).",

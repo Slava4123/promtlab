@@ -62,18 +62,31 @@ groups:
           /
           node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
 
-      # Container CPU rate — cAdvisor.
+      # Container CPU/memory — группируем по image, не name. На cAdvisor v0.55
+      # + Docker overlayfs storage driver через containerd factory `name` label
+      # содержит container ID hash, не human-readable имя. `image` (например
+      # `docker.io/grafana/loki:3.6.0`) человекочитаемое, в dashboard понятно
+      # какой сервис ест CPU/RAM. label_replace срезает префикс реестра до
+      # короткого имени.
       - record: container:cpu:usage_rate5m
         expr: |
-          sum by (name) (rate(container_cpu_usage_seconds_total{name!=""}[5m]))
+          sum by (image_short) (
+            label_replace(
+              rate(container_cpu_usage_seconds_total{image!=""}[5m]),
+              "image_short", "$1", "image", ".*/(.+):.*"
+            )
+          )
 
-      # Container memory — working_set_bytes устойчивее usage_bytes на
-      # cgroup v2 (исключает page cache, ближе к «реально занятой» памяти,
-      # которую считает kernel при OOM kill). На cAdvisor < v0.50 + cgroup v2
-      # usage_bytes мог не приходить без полезного name label вообще.
+      # Container memory — working_set_bytes (исключает page cache, ближе к
+      # «реально занятой» памяти, которую kernel считает при OOM kill).
       - record: container:memory:usage_bytes
         expr: |
-          sum by (name) (container_memory_working_set_bytes{name!=""})
+          sum by (image_short) (
+            label_replace(
+              container_memory_working_set_bytes{image!=""},
+              "image_short", "$1", "image", ".*/(.+):.*"
+            )
+          )
 
   - name: database
     interval: 30s

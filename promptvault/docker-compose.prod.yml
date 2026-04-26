@@ -292,23 +292,24 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.55.1
     privileged: true
-    # v0.55.1 — latest на gcr.io (v0.56.x существуют только в GitHub Releases,
-    # в registry не запушены). Содержит PR #3709 (вошёл в v0.54.0) — fix для
-    # Docker overlayfs storage driver (Docker 28+ default на Ubuntu 24.04).
-    # Раньше на v0.52.1 контейнеры идентифицировались как cgroup id
-    # /system.slice/docker-<hash>.scope без `name` label, recording rule
-    # container:memory:usage_bytes возвращала только root cgroup.
-    # Refs: https://github.com/google/cadvisor/issues/3860
+    # v0.55.1 — latest на gcr.io. Содержит PR #3709 (overlayfs fix).
     #
-    # --docker_only=true — собирать метрики только Docker containers (через
-    # docker.sock), игнорировать system cgroups (init.scope, system.slice).
-    # Без этого container_memory/cpu метрики приходят с id="/system.slice/..."
-    # без полезного name label, dashboards не могут breakdown'ить.
+    # Docker 28+ на Ubuntu 24.04 использует embedded containerd (см.
+    # `dockerd --containerd=/run/containerd/containerd.sock`). cAdvisor
+    # на overlayfs storage driver не может зарезолвить containers через
+    # старый Docker code path и пытается через containerd-factory. Поэтому:
+    #   - mount /run/containerd:/run/containerd:ro — даёт доступ к sockету
+    #   - --containerd=/run/containerd/containerd.sock — явный указатель
+    #   - --containerd-namespace=moby — namespace для Docker containers
+    #     (containerd-shim-runc-v2 запускает их именно в moby namespace)
+    # Без --docker_only=true: cadvisor использует containerd factory,
+    # который видит метаданные включая labels → name label приходит.
     #
     # --housekeeping_interval=15s выравнивает с Prometheus scrape_interval=30s,
     # снижает CPU overhead cAdvisor (default 1s слишком агрессивный).
     command:
-      - --docker_only=true
+      - --containerd=/run/containerd/containerd.sock
+      - --containerd-namespace=moby
       - --store_container_labels=false
       - --housekeeping_interval=15s
     devices:
@@ -316,6 +317,7 @@ services:
     volumes:
       - /:/rootfs:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/containerd:/run/containerd:ro
       - /sys:/sys:ro
       - /var/lib/docker:/var/lib/docker:ro
       - /dev/disk:/dev/disk:ro
