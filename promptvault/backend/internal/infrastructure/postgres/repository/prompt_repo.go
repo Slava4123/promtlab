@@ -258,9 +258,13 @@ func (r *promptRepo) GetPublicBySlug(ctx context.Context, slug string) (*models.
 		return nil, repo.ErrNotFound
 	}
 	var p models.Prompt
+	// Phase 15: ищем по текущему slug ИЛИ в slug_aliases (старые cyrillic-slug,
+	// сохранённые при ре-транслитерации). `slug_aliases @> '["<slug>"]'::jsonb`
+	// использует GIN-индекс idx_prompts_slug_aliases_gin.
+	aliasFilter := `["` + slug + `"]`
 	err := r.db.WithContext(ctx).
 		Preload("Tags").Preload("Collections").
-		Where("slug = ? AND is_public = TRUE", slug).
+		Where("(slug = ? OR slug_aliases @> ?::jsonb) AND is_public = TRUE", slug, aliasFilter).
 		First(&p).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, repo.ErrNotFound

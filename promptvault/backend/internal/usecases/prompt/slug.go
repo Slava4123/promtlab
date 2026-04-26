@@ -4,13 +4,15 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/mozillazg/go-unidecode"
 )
 
 // makeSlug — детерминированный slug из title + id.
-// title → lower, оставляем latin [a-z0-9] и тире (русские символы отбрасываем —
-// транслитерация вне scope MVP, cyrillic в URL читается плохо). Добавляем
-// id в base36 для гарантированной уникальности: title_part + "-" + id36.
-// Если title пустой после sanitize (только cyrillic/spaces) — fallback "p-<id>".
+// title → unidecode (cyrillic/прочая non-latin → латинская транслитерация),
+// затем lower и оставляем только [a-z0-9] и тире. Добавляем id в base36
+// для гарантированной уникальности: title_part + "-" + id36.
+// Если title пустой после sanitize — fallback "p-<id>".
 //
 // Длина slug ≤ 120 (column limit). Если slug из title > 100 — обрезаем.
 func makeSlug(id uint, title string) string {
@@ -26,6 +28,9 @@ func makeSlug(id uint, title string) string {
 }
 
 func sanitizeTitle(s string) string {
+	// Транслитерация: "Мой первый промпт" → "Moi pervyi prompt"
+	// (мягкий знак становится "'", тире — обрабатываем ниже).
+	s = unidecode.Unidecode(s)
 	s = strings.ToLower(s)
 	var b strings.Builder
 	var lastDash bool
@@ -39,6 +44,8 @@ func sanitizeTitle(s string) string {
 				b.WriteByte('-')
 				lastDash = true
 			}
+			// Любые другие символы (апостроф, пунктуация) пропускаем —
+			// слова склеиваются: "don't" → "dont", "ёж" → "ezh".
 		}
 	}
 	return strings.Trim(b.String(), "-")

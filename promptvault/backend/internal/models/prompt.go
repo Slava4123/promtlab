@@ -19,6 +19,10 @@ type Prompt struct {
 	// публичный индексируется, share-link — приватный по токену.
 	IsPublic    bool           `gorm:"column:is_public;not null;default:false" json:"is_public"`
 	Slug        string         `gorm:"column:slug;size:120" json:"slug,omitempty"`
+	// SlugAliases — JSONB-массив строк со старыми slug'ами этого промпта.
+	// Phase 15: backward-compat для resluggified cyrillic-titles. Lookup
+	// в share-handler делает `slug = ? OR slug_aliases @> ?`.
+	SlugAliases []string       `gorm:"column:slug_aliases;serializer:json;type:jsonb;default:'[]'" json:"-"`
 	LastUsedAt  *time.Time     `gorm:"" json:"last_used_at,omitempty"`
 	User        User           `gorm:"foreignKey:UserID" json:"-"`
 	Tags        []Tag            `gorm:"many2many:prompt_tags" json:"tags,omitempty"`
