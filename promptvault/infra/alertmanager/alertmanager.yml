@@ -15,12 +15,18 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
-    # Critical alerts дублируются на email + продолжают идти в Telegram через
-    # parent route (continue: true). Warning остаётся только Telegram.
+    # Critical → email backup. continue: true чтобы alert продолжил
+    # проверять sibling routes ниже и попал также в Telegram.
+    # ВАЖНО: continue: true НЕ возвращает alert в parent receiver — он лишь
+    # продолжает matching по последующим sibling routes. Поэтому для дублирования
+    # critical в Telegram нужен явный второй child route.
     - matchers:
         - severity="critical"
       receiver: email-critical
       continue: true
+    - matchers:
+        - severity="critical"
+      receiver: telegram
 
 receivers:
   - name: telegram
