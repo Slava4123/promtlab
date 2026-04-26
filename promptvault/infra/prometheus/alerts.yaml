@@ -10,6 +10,7 @@ groups:
         annotations:
           summary: "InsightsComputeLoop не проработал 25+ часов"
           description: "Нет успешных пересчётов Smart Insights. Проверить analytics.insights_loop.*"
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/InsightsComputeLoopStalled.md"
 
       - alert: InsightsComputeLoopDead
         expr: absent_over_time(analytics_insights_refresh_total{result="success"}[48h])
@@ -19,6 +20,7 @@ groups:
         annotations:
           summary: "InsightsComputeLoop мёртв > 48 часов"
           description: "Метрика отсутствует 48ч+. Проверить контейнер api, cron InsightsComputeLoop, миграции БД. for: 1h страхует от false positive при первом старте Prometheus, у которого нет истории за 48h."
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/InsightsComputeLoopDead.md"
 
       - alert: CleanupLoopStalled
         expr: increase(analytics_cleanup_deleted_total[25h]) == 0
@@ -27,6 +29,7 @@ groups:
           severity: warning
         annotations:
           summary: "CleanupLoop не проработал 25+ часов"
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/CleanupLoopStalled.md"
 
       - alert: ShareQuotaIncrementLeak
         expr: rate(share_quota_increment_failed_total[5m]) > 0
@@ -36,3 +39,4 @@ groups:
         annotations:
           summary: "Revenue-leak: share quota increments fail"
           description: "Share-ссылки создаются, но daily quota counter не инкрементится."
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/ShareQuotaIncrementLeak.md"

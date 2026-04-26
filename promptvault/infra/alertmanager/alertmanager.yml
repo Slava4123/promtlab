@@ -35,11 +35,11 @@ receivers:
         parse_mode: HTML
         send_resolved: true
         message: |
-          <b>[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}</b>
-          severity: {{ .CommonLabels.severity }}
+          {{ if eq .CommonLabels.severity "critical" }}🔴 <b>P0</b>{{ else if eq .CommonLabels.severity "warning" }}🟡 <b>P1</b>{{ else }}🟢 <b>P2</b>{{ end }} <b>[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}</b>
           {{ range .Alerts }}
           {{ .Annotations.summary }}
-          {{ if .Annotations.description }}{{ .Annotations.description }}{{ end }}
+          {{ if .Annotations.description }}<i>{{ .Annotations.description }}</i>{{ end }}
+          {{ if .Annotations.runbook_url }}📖 <a href="{{ .Annotations.runbook_url }}">Runbook</a>{{ end }}
           {{ end }}
 
   # Phase 2: SMTP fallback для critical alerts (redundancy против Telegram outage).
