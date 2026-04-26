@@ -63,6 +63,30 @@ Loki, Tempo, SLO/SLA multi-burn-rate alerts). Финальный scope ниже.
 Данные не содержат PII (email, prompt content). Включать через
 `SENTRY_ENABLED=true`.
 
+## Known limitations
+
+### cAdvisor + Docker overlayfs storage driver (VPS Ubuntu 24.04)
+
+На production VPS Docker 28+ использует storage driver `overlayfs` (новый default,
+не путать с `overlay2`). cAdvisor v0.52.1 ищет read-write layer контейнеров в
+`/var/lib/docker/image/overlayfs/layerdb/mounts/` — этой структуры в новом
+overlayfs нет. Результат: per-container метрики приходят только для root cgroup
+без полезного `name` label. Панели «Память/CPU по контейнерам» в Infrastructure
+dashboard — **No data**.
+
+- Upstream issue: https://github.com/google/cadvisor/issues/3450
+- Workaround: `docker stats` через SSH для per-container view.
+- Альтернатива (рискованная): миграция Docker daemon на storage driver
+  `overlay2` через `/etc/docker/daemon.json` + `systemctl restart docker`,
+  но это уничтожит существующие images и volumes (GlitchTip data, Loki/Tempo
+  history). Делать только при свежем VPS или с полным бэкапом.
+- На overlay2-хостах (старые установки) cAdvisor работает штатно с тем же
+  компоузом и вернёт `container:memory:usage_bytes` с `name` label.
+
+Host-level метрики (`node-exporter`: RAM/CPU/Disk/Network/Load) работают на
+любом storage driver — Infrastructure dashboard top-row stat panels всегда
+актуальны.
+
 ## Distributed tracing (Tempo)
 
 Backend инструментирован через OpenTelemetry SDK (`internal/infrastructure/telemetry/otel.go`):

@@ -296,6 +296,16 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.52.1
     privileged: true
+    # ⚠️ KNOWN LIMITATION на VPS с Ubuntu 24.04 + Docker 28+:
+    # default storage driver — overlayfs (не overlay2). cAdvisor v0.52.1
+    # ищет read-write layer в /var/lib/docker/image/overlayfs/layerdb/mounts/
+    # — этого пути в overlayfs storage driver нет, контейнеры идентифицируются
+    # как cgroup id /system.slice/docker-<hash>.scope без useful `name` label.
+    # Recording rule container:memory:usage_bytes возвращает только root cgroup.
+    # Issue: https://github.com/google/cadvisor/issues/3450
+    # Mitigation: использовать host metrics (node-exporter) + docker stats SSH
+    # для per-container view. На overlay2 хостах cAdvisor работает штатно.
+    #
     # --docker_only=true — собирать метрики только Docker containers (через
     # docker.sock), игнорировать system cgroups (init.scope, system.slice).
     # Без этого container_memory/cpu метрики приходят с id="/system.slice/..."
