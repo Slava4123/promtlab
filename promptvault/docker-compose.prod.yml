@@ -251,17 +251,23 @@ services:
         max-file: "2"
 
   # postgres-exporter — pg_stat_* views для DB monitoring (connections, locks,
-  # slow queries, table sizes). Требует на managed Postgres user metrics_user
-  # с pg_monitor role:
-  #   CREATE USER metrics_user WITH PASSWORD '<password>';
-  #   GRANT pg_monitor TO metrics_user;
-  # Password в .env.prod как POSTGRES_EXPORTER_PASSWORD (gitignored).
+  # slow queries, table sizes).
+  #
+  # Использует gen_user (тот же что api), не отдельный metrics_user — managed
+  # Postgres Timeweb не даёт gen_user'у grant pg_monitor (требуется admin role
+  # доступный только через панель Timeweb). gen_user имеет CONNECT и read-access
+  # к application data, что покрывает default queries postgres-exporter.
+  # Security: exporter в Docker network internal (нет port mapping наружу).
+  # TODO: при возможности admin-доступа к Postgres — мигрировать на metrics_user
+  # с pg_monitor role (read-only, минимальные привилегии).
+  #
+  # sslmode=require вместо verify-full — postgres-exporter не имеет ca.crt
+  # mount-pattern совместимого с Go pq driver. Используем require (TLS
+  # encryption без cert verification), data всё равно идёт по TLS.
   postgres-exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
     environment:
-      - DATA_SOURCE_NAME=postgresql://metrics_user:${POSTGRES_EXPORTER_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?sslmode=${DATABASE_SSLMODE}
-    volumes:
-      - ./ca.crt:/app/ca.crt:ro
+      - DATA_SOURCE_NAME=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?sslmode=require
     networks:
       - app
     restart: unless-stopped
