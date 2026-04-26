@@ -1,0 +1,245 @@
+{
+  "annotations": {"list": []},
+  "description": "RED method (Rate, Errors, Duration) для HTTP запросов. Phase 16 Этап 1 observability. Использует http_requests_total + http_request_duration_seconds_bucket из middleware.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 0},
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_requests:rate5m{job=\"promptvault-api\"}", "legendFormat": "RPS", "refId": "A"}
+      ],
+      "title": "Запросов в секунду (5 мин)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 0.001},
+            {"color": "red", "value": 0.01}
+          ]},
+          "unit": "percentunit",
+          "max": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 0},
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_requests:5xx_ratio5m{job=\"promptvault-api\"}", "legendFormat": "5xx ratio", "refId": "A"}
+      ],
+      "title": "Доля 5xx ошибок (5 мин)",
+      "description": "Процент ответов 5xx. SLO target < 0.1%.",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 0.5},
+            {"color": "red", "value": 1.0}
+          ]},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_request_duration:p99_5m{job=\"promptvault-api\"}", "legendFormat": "p99", "refId": "A"}
+      ],
+      "title": "p99 latency (5 мин)",
+      "description": "99-й перцентиль latency. SLO target < 500ms.",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineInterpolation": "linear", "fillOpacity": 20, "stacking": {"mode": "none"}, "lineWidth": 2},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+      "id": 4,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_request_duration:p50_5m{job=\"promptvault-api\"}", "legendFormat": "p50", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_request_duration:p95_5m{job=\"promptvault-api\"}", "legendFormat": "p95", "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_request_duration:p99_5m{job=\"promptvault-api\"}", "legendFormat": "p99", "refId": "C"}
+      ],
+      "title": "Latency: p50 / p95 / p99",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineInterpolation": "linear", "fillOpacity": 30, "stacking": {"mode": "normal"}, "lineWidth": 1},
+          "unit": "reqps"
+        },
+        "overrides": [
+          {"matcher": {"id": "byRegexp", "options": ".*5..*"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]},
+          {"matcher": {"id": "byRegexp", "options": ".*4..*"}, "properties": [{"id": "color", "value": {"fixedColor": "yellow", "mode": "fixed"}}]},
+          {"matcher": {"id": "byRegexp", "options": ".*2..*"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]}
+        ]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+      "id": 5,
+      "options": {"legend": {"calcs": ["lastNotNull", "sum"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (status) (rate(http_requests_total{job=\"promptvault-api\"}[5m]))", "legendFormat": "{{status}}", "refId": "A"}
+      ],
+      "title": "Запросы по status code",
+      "description": "Stacked timeseries — 2xx (зелёный), 4xx (жёлтый), 5xx (красный). Удобно увидеть всплески ошибок.",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "bars", "fillOpacity": 80, "lineWidth": 1},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 13},
+      "id": 6,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}, "orientation": "horizontal"},
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "topk(10, job:http_request_duration:p99_5m_by_route{job=\"promptvault-api\"})", "legendFormat": "{{method}} {{path}}", "refId": "A", "instant": true, "format": "table"}
+      ],
+      "title": "Top 10 самых медленных endpoints (p99)",
+      "description": "Текущая снимка (instant). Помогает найти что оптимизировать в первую очередь.",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 12, "x": 0, "y": 21},
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "value"
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "http_requests_in_flight", "legendFormat": "in-flight", "refId": "A"}
+      ],
+      "title": "In-flight requests (concurrent)",
+      "description": "Количество одновременно обрабатываемых запросов. Если резко растёт — backend не успевает.",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "red", "value": null},
+            {"color": "green", "value": 1}
+          ]},
+          "mappings": [
+            {"options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}, "type": "value"}
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 21},
+      "id": 8,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "probe_success", "legendFormat": "{{instance}}", "refId": "A"}
+      ],
+      "title": "External uptime probes (blackbox)",
+      "description": "External HTTP probes на public endpoints. UP = доступен снаружи (включая SSL).",
+      "type": "stat"
+    }
+  ],
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["promtlab", "phase16", "performance", "red"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "ПромтЛаб — Производительность приложения",
+  "uid": "promtlab-app-performance",
+  "version": 1,
+  "weekStart": ""
+}

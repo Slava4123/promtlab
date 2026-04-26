@@ -1,0 +1,91 @@
+# Recording rules — pre-computed aggregations.
+# Naming: <level>:<metric>:<aggregation_window> (Prometheus standard).
+# Eval interval = 30s (global). Render dashboards 10x faster чем inline rate().
+#
+# Phase 16 Этап 1.3: HTTP RED method + system + DB precomputed.
+groups:
+  - name: http_red_method
+    interval: 30s
+    rules:
+      # Rate (R) — RPS overall.
+      - record: job:http_requests:rate5m
+        expr: sum by (job) (rate(http_requests_total[5m]))
+
+      # Rate per route + method для top-N slowest.
+      - record: job:http_requests:rate5m_by_route
+        expr: sum by (job, method, path) (rate(http_requests_total[5m]))
+
+      # Errors (E) — 5xx ratio.
+      - record: job:http_requests:5xx_ratio5m
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (job) (rate(http_requests_total[5m]))
+
+      # Errors per route — найти top buggy endpoints.
+      - record: job:http_requests:5xx_ratio5m_by_route
+        expr: |
+          sum by (job, method, path) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (job, method, path) (rate(http_requests_total[5m]))
+
+      # Duration (D) — quantile aggregations.
+      - record: job:http_request_duration:p50_5m
+        expr: |
+          histogram_quantile(0.50, sum by (job, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: job:http_request_duration:p95_5m
+        expr: |
+          histogram_quantile(0.95, sum by (job, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: job:http_request_duration:p99_5m
+        expr: |
+          histogram_quantile(0.99, sum by (job, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      # Per-route p99 для slow endpoints discovery.
+      - record: job:http_request_duration:p99_5m_by_route
+        expr: |
+          histogram_quantile(0.99, sum by (job, method, path, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+  - name: system_resources
+    interval: 30s
+    rules:
+      # Free memory ratio — node-exporter.
+      - record: instance:node_memory:available_ratio
+        expr: |
+          node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes
+
+      # Disk free ratio per mountpoint (excluding tmpfs/overlay).
+      - record: instance:node_filesystem:available_ratio
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+          /
+          node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+
+      # Container CPU rate — cAdvisor.
+      - record: container:cpu:usage_rate5m
+        expr: |
+          sum by (name) (rate(container_cpu_usage_seconds_total{name!=""}[5m]))
+
+      # Container memory usage in bytes.
+      - record: container:memory:usage_bytes
+        expr: |
+          sum by (name) (container_memory_usage_bytes{name!=""})
+
+  - name: database
+    interval: 30s
+    rules:
+      # Active DB connections.
+      - record: pg:connections:active
+        expr: |
+          sum(pg_stat_database_numbackends)
+
+      # Transactions per second by db.
+      - record: pg:transactions:rate5m
+        expr: |
+          sum by (datname) (rate(pg_stat_database_xact_commit[5m]) + rate(pg_stat_database_xact_rollback[5m]))
+
+      # DB size in bytes.
+      - record: pg:database:size_bytes
+        expr: |
+          pg_database_size_bytes
