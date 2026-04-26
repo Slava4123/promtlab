@@ -34,7 +34,7 @@ Loki, Tempo, SLO/SLA multi-burn-rate alerts). Финальный scope ниже.
 | Tempo | 2.6.0 | 127.0.0.1:3200 | 384M | Traces OTLP gRPC :4317, 7d retention |
 | node-exporter | v1.8.2 | — | 64M | Host CPU/RAM/Disk/Net/Load |
 | postgres-exporter | v0.16.0 | — | 64M | pg_stat_* metrics |
-| cAdvisor | v0.56.2 | — | 192M | Per-container metrics, cgroup v2 + Docker overlayfs |
+| cAdvisor | v0.55.1 | — | 192M | Per-container metrics, cgroup v2 + Docker overlayfs |
 | blackbox-exporter | v0.25.0 | — | 64M | External HTTP probes |
 
 ## Prometheus `/metrics`

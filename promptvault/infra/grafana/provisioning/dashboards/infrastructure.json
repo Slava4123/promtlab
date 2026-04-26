@@ -89,7 +89,7 @@
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container:memory:usage_bytes", "legendFormat": "{{name}}", "refId": "A"}
       ],
       "title": "Память по контейнерам",
-      "description": "Working set (исключая page cache) — то, что kernel учитывает при OOM kill. cAdvisor v0.54+ корректно экспортирует с label name на Docker overlayfs storage driver.",
+      "description": "Working set (исключая page cache) — то, что kernel учитывает при OOM kill. cAdvisor v0.55+ корректно экспортирует с label name на Docker overlayfs storage driver.",
       "type": "timeseries"
     },
     {
