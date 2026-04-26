@@ -53,7 +53,11 @@ func (l *InsightsComputeLoop) run() {
 }
 
 // compute — итерация по Max-юзерам через UserRepository.ListMaxUsers.
-// Если запрос фейлится, единственный slog.Error — loop продолжит завтра.
+// Для каждого: 1) personal scope; 2) для каждой команды, где он owner — team scope.
+// Если запрос ListMaxUsers фейлится — единственный slog.Error, loop продолжит завтра.
+//
+// Для MVP: один batch без пагинации. При росте Max-юзеров (>1000) — добавить
+// пагинацию и распределение по окну, чтобы не долбить БД одновременно.
 func (l *InsightsComputeLoop) compute() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -64,18 +68,39 @@ func (l *InsightsComputeLoop) compute() {
 		metrics.InsightsRefresh.WithLabelValues("error").Inc()
 		return
 	}
-	var okCount, failCount int
+	var okCount, failCount, teamOk, teamFail int
 	for _, uid := range ids {
+		// 1. Personal scope.
 		if cerr := l.svc.ComputeInsights(ctx, uid, nil); cerr != nil {
 			failCount++
 			metrics.InsightsRefresh.WithLabelValues("error").Inc()
+		} else {
+			okCount++
+			metrics.InsightsRefresh.WithLabelValues("success").Inc()
+		}
+
+		// 2. Team scope — только команды, где юзер owner.
+		teams, terr := l.teams.ListOwnedTeams(ctx, uid)
+		if terr != nil {
+			slog.WarnContext(ctx, "analytics.insights_loop.list_owned_teams_failed",
+				"user_id", uid, "error", terr)
+			metrics.InsightsTeamRun.WithLabelValues("error").Inc()
 			continue
 		}
-		okCount++
-		metrics.InsightsRefresh.WithLabelValues("success").Inc()
-		// Персональный scope посчитан. Для команд владельца — отдельный проход
-		// потребует TeamRepository.ListByOwnerID, который пока отсутствует;
-		// TODO: расширить, когда Max-юзер с командой реально запросит.
+		for _, team := range teams {
+			tid := team.ID
+			if cerr := l.svc.ComputeInsights(ctx, uid, &tid); cerr != nil {
+				slog.WarnContext(ctx, "analytics.insights_loop.team_compute_failed",
+					"user_id", uid, "team_id", tid, "error", cerr)
+				metrics.InsightsTeamRun.WithLabelValues("error").Inc()
+				teamFail++
+			} else {
+				metrics.InsightsTeamRun.WithLabelValues("success").Inc()
+				teamOk++
+			}
+		}
 	}
-	slog.Info("analytics.insights_loop.run", "ok", okCount, "failed", failCount, "total", len(ids))
+	slog.Info("analytics.insights_loop.run",
+		"ok", okCount, "failed", failCount, "total", len(ids),
+		"team_ok", teamOk, "team_failed", teamFail)
 }

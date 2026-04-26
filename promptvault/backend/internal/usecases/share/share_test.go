@@ -128,6 +128,7 @@ func (m *mockTeamRepo) ListByUserID(context.Context, uint) ([]models.Team, error
 func (m *mockTeamRepo) ListByUserIDWithRolesAndCounts(context.Context, uint) ([]models.TeamWithRoleAndCount, error) {
 	return nil, nil
 }
+func (m *mockTeamRepo) ListOwnedTeams(context.Context, uint) ([]models.Team, error) { return nil, nil }
 func (m *mockTeamRepo) Update(context.Context, *models.Team) error      { return nil }
 func (m *mockTeamRepo) Delete(context.Context, uint) error              { return nil }
 func (m *mockTeamRepo) UpdateMemberRole(context.Context, uint, uint, models.TeamRole) error {

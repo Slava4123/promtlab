@@ -13,6 +13,11 @@ type TeamRepository interface {
 	GetByID(ctx context.Context, id uint) (*models.Team, error)
 	ListByUserID(ctx context.Context, userID uint) ([]models.Team, error)
 	ListByUserIDWithRolesAndCounts(ctx context.Context, userID uint) ([]models.TeamWithRoleAndCount, error)
+
+	// ListOwnedTeams — команды, в которых userID имеет роль owner.
+	// Phase 15: используется InsightsComputeLoop для team-scope расчёта Smart Insights
+	// (только владелец считается заинтересованным в team-аналитике своих команд).
+	ListOwnedTeams(ctx context.Context, userID uint) ([]models.Team, error)
 	Update(ctx context.Context, team *models.Team) error
 	Delete(ctx context.Context, id uint) error
 	GetMember(ctx context.Context, teamID, userID uint) (*models.TeamMember, error)

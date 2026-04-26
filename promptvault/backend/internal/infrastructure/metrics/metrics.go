@@ -37,6 +37,14 @@ var (
 		Name: "analytics_cleanup_deleted_total",
 		Help: "Rows deleted by analytics retention cleanup, labelled by table.",
 	}, []string{"table"})
+
+	// InsightsTeamRun — итерации team-scope расчёта Smart Insights.
+	// Label result: success | error (получение списка команд или ComputeInsights упал).
+	// Phase 15: добавлено вместе с TeamRepository.ListOwnedTeams.
+	InsightsTeamRun = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "analytics_insights_loop_team_run_total",
+		Help: "Team-scope Smart Insights compute iterations, labelled by outcome.",
+	}, []string{"result"})
 )
 
 // init zero-инициализирует все ожидаемые label combinations CounterVec'ов.
@@ -58,4 +66,7 @@ func init() {
 	AnalyticsCleanupDeleted.WithLabelValues("team_activity").Add(0)
 	AnalyticsCleanupDeleted.WithLabelValues("share_views").Add(0)
 	AnalyticsCleanupDeleted.WithLabelValues("prompt_usage").Add(0)
+
+	InsightsTeamRun.WithLabelValues("success").Add(0)
+	InsightsTeamRun.WithLabelValues("error").Add(0)
 }

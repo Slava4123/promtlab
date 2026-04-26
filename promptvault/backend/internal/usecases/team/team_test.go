@@ -51,6 +51,9 @@ func (m *mockTeamRepo) ListByUserIDWithRolesAndCounts(ctx context.Context, userI
 	}
 	return args.Get(0).([]models.TeamWithRoleAndCount), args.Error(1)
 }
+func (m *mockTeamRepo) ListOwnedTeams(_ context.Context, _ uint) ([]models.Team, error) {
+	return nil, nil
+}
 func (m *mockTeamRepo) Update(ctx context.Context, team *models.Team) error {
 	return m.Called(ctx, team).Error(0)
 }

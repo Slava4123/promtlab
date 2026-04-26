@@ -66,6 +66,18 @@ func (r *teamRepo) ListByUserID(ctx context.Context, userID uint) ([]models.Team
 	return teams, err
 }
 
+// ListOwnedTeams — Phase 15. Подмножество ListByUserID с фильтром role='owner'.
+// Один SQL-запрос (детерминированный порядок по teams.id для тестируемости).
+func (r *teamRepo) ListOwnedTeams(ctx context.Context, userID uint) ([]models.Team, error) {
+	var teams []models.Team
+	err := r.db.WithContext(ctx).
+		Joins("JOIN team_members ON team_members.team_id = teams.id").
+		Where("team_members.user_id = ? AND team_members.role = ?", userID, models.RoleOwner).
+		Order("teams.id").
+		Find(&teams).Error
+	return teams, err
+}
+
 func (r *teamRepo) ListByUserIDWithRolesAndCounts(ctx context.Context, userID uint) ([]models.TeamWithRoleAndCount, error) {
 	var results []models.TeamWithRoleAndCount
 	err := r.db.WithContext(ctx).
