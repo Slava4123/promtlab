@@ -62,7 +62,7 @@
       },
       "pluginVersion": "11.3.0",
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_requests:5xx_ratio5m{job=\"promptvault-api\"}", "legendFormat": "5xx ratio", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_requests:5xx_ratio5m{job=\"promptvault-api\"} or vector(0)", "legendFormat": "5xx ratio", "refId": "A"}
       ],
       "title": "Доля 5xx ошибок (5 мин)",
       "description": "Процент ответов 5xx. SLO target < 0.1%.",
@@ -119,7 +119,7 @@
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_request_duration:p95_5m{job=\"promptvault-api\"}", "legendFormat": "p95", "refId": "B"},
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_request_duration:p99_5m{job=\"promptvault-api\"}", "legendFormat": "p99", "refId": "C"}
       ],
-      "title": "Latency: p50 / p95 / p99",
+      "title": "Задержка: p50 / p95 / p99",
       "type": "timeseries"
     },
     {
@@ -143,7 +143,7 @@
       "targets": [
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (status) (rate(http_requests_total{job=\"promptvault-api\"}[5m]))", "legendFormat": "{{status}}", "refId": "A"}
       ],
-      "title": "Запросы по status code",
+      "title": "Запросы по коду статуса",
       "description": "Stacked timeseries — 2xx (зелёный), 4xx (жёлтый), 5xx (красный). Удобно увидеть всплески ошибок.",
       "type": "timeseries"
     },
@@ -162,10 +162,10 @@
       "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}, "orientation": "horizontal"},
       "pluginVersion": "11.3.0",
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "topk(10, job:http_request_duration:p99_5m_by_route{job=\"promptvault-api\"})", "legendFormat": "{{method}} {{path}}", "refId": "A", "instant": true, "format": "table"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "topk(10, job:http_request_duration:p99_5m_by_route{job=\"promptvault-api\"})", "legendFormat": "{{method}} {{path}}", "refId": "A"}
       ],
-      "title": "Top 10 самых медленных endpoints (p99)",
-      "description": "Текущая снимка (instant). Помогает найти что оптимизировать в первую очередь.",
+      "title": "Топ-10 медленных endpoints (p99)",
+      "description": "Помогает найти что оптимизировать в первую очередь.",
       "type": "bargauge"
     },
     {
@@ -192,7 +192,7 @@
       "targets": [
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "http_requests_in_flight", "legendFormat": "in-flight", "refId": "A"}
       ],
-      "title": "In-flight requests (concurrent)",
+      "title": "Одновременных запросов (in-flight)",
       "description": "Количество одновременно обрабатываемых запросов. Если резко растёт — backend не успевает.",
       "type": "stat"
     },
@@ -206,7 +206,7 @@
             {"color": "green", "value": 1}
           ]},
           "mappings": [
-            {"options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}, "type": "value"}
+            {"options": {"0": {"text": "НЕДОСТУПЕН", "color": "red"}, "1": {"text": "ДОСТУПЕН", "color": "green"}}, "type": "value"}
           ]
         },
         "overrides": []
@@ -225,8 +225,8 @@
       "targets": [
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "probe_success", "legendFormat": "{{instance}}", "refId": "A"}
       ],
-      "title": "External uptime probes (blackbox)",
-      "description": "External HTTP probes на public endpoints. UP = доступен снаружи (включая SSL).",
+      "title": "Внешние uptime-пробы (blackbox)",
+      "description": "External HTTP probes на public endpoints. ДОСТУПЕН = endpoint работает снаружи (включая SSL).",
       "type": "stat"
     }
   ],

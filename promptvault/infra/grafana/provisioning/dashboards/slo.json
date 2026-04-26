@@ -27,10 +27,10 @@
       "id": 1,
       "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "justifyMode": "auto", "orientation": "auto"},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo:availability_30d{job=\"promptvault-api\"}", "legendFormat": "Доступность 30d", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo:availability_30d{job=\"promptvault-api\"} or (1 - (sum(rate(http_requests_total{job=\"promptvault-api\",status=~\"5..\"}[1h])) / sum(rate(http_requests_total{job=\"promptvault-api\"}[1h])))) or vector(1)", "legendFormat": "Доступность", "refId": "A"}
       ],
-      "title": "Availability SLO (target 99.9%)",
-      "description": "Доля успешных запросов за 30 дней. Target 99.9% = 43 мин downtime budget/мес.",
+      "title": "SLO доступности (цель 99.9%)",
+      "description": "Доля успешных запросов. 30d window если есть история, иначе fallback на 1h, иначе 100% (нет ошибок). Цель 99.9% = 43 мин downtime budget/мес.",
       "type": "stat"
     },
     {
@@ -53,10 +53,10 @@
       "id": 2,
       "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "justifyMode": "auto", "orientation": "auto"},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo:error_budget_remaining_30d{job=\"promptvault-api\"}", "legendFormat": "Budget remaining", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo:error_budget_remaining_30d{job=\"promptvault-api\"} or vector(100)", "legendFormat": "Остаток", "refId": "A"}
       ],
-      "title": "Error Budget остаток (30d)",
-      "description": "Сколько % ежемесячного error budget осталось. < 50% → пора замедлить рискованные deploys.",
+      "title": "Остаток Error Budget (30 дней)",
+      "description": "Сколько % ежемесячного error budget осталось. < 50% → пора замедлить рискованные deploys. Если нет 30d истории — показывает 100%.",
       "type": "stat"
     },
     {
@@ -78,10 +78,10 @@
       "id": 3,
       "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "justifyMode": "auto", "orientation": "auto"},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo:latency_p99_28d{job=\"promptvault-api\"}", "legendFormat": "p99 28d", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo:latency_p99_28d{job=\"promptvault-api\"} or job:http_request_duration:p99_5m{job=\"promptvault-api\"}", "legendFormat": "p99", "refId": "A"}
       ],
-      "title": "Latency p99 SLO (target 500ms)",
-      "description": "99-й перцентиль latency за 28 дней. Target < 500ms.",
+      "title": "p99 задержка (цель 500мс)",
+      "description": "99-й перцентиль latency за 28 дней (fallback на 5 мин если нет истории). Цель < 500ms.",
       "type": "stat"
     },
     {
@@ -97,12 +97,12 @@
       "id": 4,
       "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo_errors:ratio_rate1h{job=\"promptvault-api\"}", "legendFormat": "1h burn", "refId": "A"},
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo_errors:ratio_rate6h{job=\"promptvault-api\"}", "legendFormat": "6h burn", "refId": "B"},
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo_errors:ratio_rate3d{job=\"promptvault-api\"}", "legendFormat": "3d burn", "refId": "C"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo_errors:ratio_rate1h{job=\"promptvault-api\"} or vector(0)", "legendFormat": "1 час", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo_errors:ratio_rate6h{job=\"promptvault-api\"} or vector(0)", "legendFormat": "6 часов", "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo_errors:ratio_rate3d{job=\"promptvault-api\"} or vector(0)", "legendFormat": "3 дня", "refId": "C"}
       ],
-      "title": "Burn rate windows",
-      "description": "Multi-window error rate. Превышения thresholds (14.4x/6x/1x × 0.001) триггерят alerts.",
+      "title": "Скорость расхода Error Budget (по окнам)",
+      "description": "Error rate в нескольких временных окнах. Превышения thresholds (14.4×/6×/1× × 0.001) триггерят alerts. or vector(0) — fallback при отсутствии истории.",
       "type": "timeseries"
     },
     {
@@ -118,12 +118,12 @@
       "id": 5,
       "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_request_duration:p99_5m{job=\"promptvault-api\"}", "legendFormat": "p99 (5m)", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:http_request_duration:p99_5m{job=\"promptvault-api\"}", "legendFormat": "p99 (5 мин)", "refId": "A"}
       ],
       "thresholds": [
         {"colorMode": "critical", "op": "gt", "value": 0.5, "yaxis": "left"}
       ],
-      "title": "Latency p99 во времени",
+      "title": "p99 задержка во времени",
       "description": "Текущий p99 latency. Линия 500ms — SLO threshold.",
       "type": "timeseries"
     },
@@ -145,10 +145,10 @@
       "id": 6,
       "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo:error_budget_consumed_30d{job=\"promptvault-api\"}", "legendFormat": "% consumed (30d window)", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "job:slo:error_budget_consumed_30d{job=\"promptvault-api\"} or vector(0)", "legendFormat": "% израсходовано (30 дней)", "refId": "A"}
       ],
-      "title": "Error Budget consumed во времени",
-      "description": "Кривая накопленного расхода error budget. 100% = весь budget израсходован, нужно freeze deploys.",
+      "title": "Расход Error Budget во времени",
+      "description": "Кривая накопленного расхода error budget. 100% = весь budget израсходован, нужно freeze deploys. or vector(0) — fallback на 0 если нет истории.",
       "type": "timeseries"
     }
   ],

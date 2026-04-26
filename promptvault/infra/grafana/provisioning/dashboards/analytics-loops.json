@@ -290,7 +290,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(analytics_insights_refresh_total[5m])",
+          "expr": "rate(analytics_insights_refresh_total[5m]) or vector(0)",
           "legendFormat": "{{result}}",
           "refId": "A"
         }
@@ -381,7 +381,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(analytics_cleanup_deleted_total[5m])",
+          "expr": "rate(analytics_cleanup_deleted_total[5m]) or vector(0)",
           "legendFormat": "{{table}}",
           "refId": "A"
         }

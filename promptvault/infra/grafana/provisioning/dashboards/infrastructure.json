@@ -26,7 +26,7 @@
       "id": 1,
       "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "justifyMode": "auto", "orientation": "auto"},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "instance:node_memory:available_ratio", "legendFormat": "Free RAM", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "instance:node_memory:available_ratio", "legendFormat": "Свободно RAM", "refId": "A"}
       ],
       "title": "Свободная RAM (доля)",
       "type": "stat"
@@ -50,7 +50,7 @@
       "id": 2,
       "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "justifyMode": "auto", "orientation": "auto"},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "min(instance:node_filesystem:available_ratio{mountpoint=\"/\"})", "legendFormat": "Free disk /", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "min(instance:node_filesystem:available_ratio{mountpoint=\"/\"})", "legendFormat": "Свободно на /", "refId": "A"}
       ],
       "title": "Свободно на /",
       "type": "stat"
@@ -68,9 +68,9 @@
       "id": 3,
       "options": {"colorMode": "value", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "justifyMode": "auto", "orientation": "auto"},
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "node_load1", "legendFormat": "load1", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "node_load1", "legendFormat": "1 мин", "refId": "A"}
       ],
-      "title": "Load average (1 мин)",
+      "title": "Средняя нагрузка (load1)",
       "type": "stat"
     },
     {
@@ -125,7 +125,7 @@
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(node_network_receive_bytes_total{device!~\"lo|docker.+|veth.+|br-.+\"}[5m])", "legendFormat": "rx {{device}}", "refId": "A"},
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(node_network_transmit_bytes_total{device!~\"lo|docker.+|veth.+|br-.+\"}[5m])", "legendFormat": "tx {{device}}", "refId": "B"}
       ],
-      "title": "Сеть (host eth)",
+      "title": "Сеть (host)",
       "type": "timeseries"
     }
   ],
