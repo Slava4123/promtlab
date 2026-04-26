@@ -1,0 +1,3 @@
+DROP INDEX IF EXISTS idx_prompts_search_tsv;
+ALTER TABLE prompts DROP COLUMN IF EXISTS search_tsv;
+DROP TEXT SEARCH CONFIGURATION IF EXISTS russian_unaccent;

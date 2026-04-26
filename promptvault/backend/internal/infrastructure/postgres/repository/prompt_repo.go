@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
@@ -136,19 +137,67 @@ func (r *promptRepo) List(ctx context.Context, filter repo.PromptListFilter) ([]
 }
 
 func (r *promptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uint, query string, limit int) ([]models.Prompt, error) {
-	search := "%" + query + "%"
+	// Phase 15 W3: PostgreSQL FTS вместо ILIKE.
+	// websearch_to_tsquery — устойчивый к user input (кавычки, OR, минусы),
+	// не падает на спецсимволах в отличие от to_tsquery.
+	// Гибрид: search_tsv @@ q ИЛИ title %% query (pg_trgm для опечаток).
+	// ts_rank_cd с normalization=32 даёт 0..1 — складывается с trgm.similarity
+	// в weighted score (0.7/0.3).
 	var prompts []models.Prompt
-	q := r.db.WithContext(ctx)
+
+	// Сначала находим ID-шники по score (raw SQL для функций ts_rank_cd / similarity),
+	// затем GORM Find с Preload по этим ID — сохраняет relations и тип Prompt.
+	var ids []uint
+	scopeWhere := "user_id = ? AND team_id IS NULL"
+	scopeArgs := []any{userID}
 	if teamID != nil {
-		q = q.Where("team_id = ? AND (title ILIKE ? OR content ILIKE ?)", *teamID, search, search)
-	} else {
-		q = q.Where("user_id = ? AND team_id IS NULL AND (title ILIKE ? OR content ILIKE ?)", userID, search, search)
+		scopeWhere = "team_id = ?"
+		scopeArgs = []any{*teamID}
 	}
-	err := q.Preload("Tags").Preload("Collections").
-		Order("updated_at DESC").
-		Limit(limit).
-		Find(&prompts).Error
-	return prompts, err
+
+	rawArgs := append([]any{}, scopeArgs...)
+	rawArgs = append(rawArgs, query, query, query, query, limit)
+
+	rawSQL := `
+		SELECT id FROM prompts
+		WHERE ` + scopeWhere + ` AND deleted_at IS NULL
+		  AND (search_tsv @@ websearch_to_tsquery('russian_unaccent', ?) OR title %% ?)
+		ORDER BY (
+			ts_rank_cd(search_tsv, websearch_to_tsquery('russian_unaccent', ?), 32) * 0.7 +
+			COALESCE(similarity(title, ?), 0) * 0.3
+		) DESC, updated_at DESC
+		LIMIT ?`
+
+	if err := r.db.WithContext(ctx).Raw(rawSQL, rawArgs...).Scan(&ids).Error; err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return prompts, nil
+	}
+
+	// Сохраняем порядок из FTS (Postgres ORDER BY) — GORM Find делает SELECT IN
+	// с произвольным порядком, нужно явно сортировать через CASE.
+	if err := r.db.WithContext(ctx).
+		Preload("Tags").Preload("Collections").
+		Where("id IN ?", ids).
+		Order(orderByIDsClause(ids)).
+		Find(&prompts).Error; err != nil {
+		return nil, err
+	}
+	return prompts, nil
+}
+
+// orderByIDsClause возвращает CASE-выражение для сохранения порядка ids.
+// Альтернатива array_position(ARRAY[...], id) — но менее портабельно.
+func orderByIDsClause(ids []uint) string {
+	if len(ids) == 0 {
+		return "id"
+	}
+	parts := make([]string, 0, len(ids))
+	for i, id := range ids {
+		parts = append(parts, fmt.Sprintf("WHEN %d THEN %d", id, i))
+	}
+	return "CASE id " + strings.Join(parts, " ") + " END"
 }
 
 func (r *promptRepo) SuggestByPrefix(ctx context.Context, userID uint, teamID *uint, prefix string, limit int) ([]string, error) {
