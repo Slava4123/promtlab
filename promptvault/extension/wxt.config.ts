@@ -21,6 +21,9 @@ export default defineConfig({
       'https://www.perplexity.ai/*',
       'https://promtlabs.ru/*',
       'https://*.promtlabs.ru/*',
+      // GlitchTip endpoint для Sentry envelope (см. lib/sentry-envelope.ts).
+      // Если DSN указывает на другой хост — обновить здесь и пересобрать.
+      'https://glitchtip.promtlabs.ru/*',
     ],
     icons: {
       16: 'icon/16.png',

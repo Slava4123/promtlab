@@ -21,6 +21,7 @@ import {
 } from '../lib/api';
 import { ApiError } from '../lib/types';
 import { isSupportedHost, SUPPORTED_HOSTS_LIST } from '../lib/messages-helpers';
+import { initSentry, captureException, addBreadcrumb } from '../lib/sentry';
 import { clearLastInsert, getLastInsert, setLastInsert } from '../lib/storage';
 import type {
   BgError,
@@ -32,6 +33,12 @@ import type {
 } from '../lib/messages';
 
 export default defineBackground(() => {
+  initSentry({
+    enabled: import.meta.env.WXT_SENTRY_DSN ? true : false,
+    release: chrome.runtime.getManifest?.().version,
+    dsn: import.meta.env.WXT_SENTRY_DSN,
+  });
+
   chrome.sidePanel
     ?.setPanelBehavior?.({ openPanelOnActionClick: true })
     .catch((err) => console.warn('sidePanel.setPanelBehavior failed', err));
@@ -46,9 +53,18 @@ export default defineBackground(() => {
       _sender,
       sendResponse: (response: BgResponse) => void,
     ) => {
+      addBreadcrumb('bg.request', msg.type, undefined, 'info');
       handleRequest(msg)
         .then((data) => sendResponse({ ok: true, data }))
-        .catch((err: unknown) => sendResponse(toErrorResponse(err)));
+        .catch((err: unknown) => {
+          const resp = toErrorResponse(err);
+          // Логируем в Sentry только реально неожиданные ошибки (unknown).
+          // Известные коды (no_target, no_history, etc.) — нормальный flow.
+          if (!resp.ok && resp.error === 'unknown') {
+            captureException(err, { msgType: msg.type });
+          }
+          sendResponse(resp);
+        });
       return true;
     },
   );

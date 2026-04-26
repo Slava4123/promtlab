@@ -4,8 +4,9 @@ import { App } from '../../components/app';
 import { initSentry } from '../../lib/sentry';
 
 initSentry({
-  enabled: import.meta.env.VITE_SENTRY_ENABLED === 'true',
+  enabled: import.meta.env.WXT_SENTRY_DSN ? true : false,
   release: chrome.runtime.getManifest?.().version,
+  dsn: import.meta.env.WXT_SENTRY_DSN,
 });
 
 const root = document.getElementById('root');

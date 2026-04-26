@@ -1,8 +1,8 @@
-// Lightweight Sentry wrapper без @sentry/browser зависимости.
-// Для production можно заменить на полноценный Sentry SDK — интерфейс останется.
-//
-// Текущий подход: структурированный логгер + optional POST в GlitchTip endpoint,
-// только если задан VITE_SENTRY_DSN через env.
+// Lightweight Sentry/GlitchTip wrapper без @sentry/browser зависимости.
+// Используется реальный envelope POST через sentry-envelope.ts,
+// если задан WXT_SENTRY_DSN через env. Иначе — только локальный console.error.
+
+import { generateEventID, sendEnvelope } from './sentry-envelope';
 
 type Level = 'info' | 'warning' | 'error';
 
@@ -18,38 +18,62 @@ const MAX_BREADCRUMBS = 20;
 const breadcrumbs: Breadcrumb[] = [];
 
 let enabled = false;
+let dsn = '';
 let release = 'unknown';
 
-export function initSentry(opts: { enabled: boolean; release?: string }): void {
+export function initSentry(opts: { enabled: boolean; release?: string; dsn?: string }): void {
   enabled = opts.enabled;
   if (opts.release) release = opts.release;
+  if (opts.dsn) dsn = opts.dsn;
   if (!enabled) {
     console.info('[sentry] init skipped (disabled)');
     return;
   }
-  console.info('[sentry] init', { release });
+  if (!dsn) {
+    console.warn('[sentry] init: enabled but DSN missing — events will only print to console');
+  } else {
+    console.info('[sentry] init', { release, hasDSN: true });
+  }
 }
 
-export function addBreadcrumb(category: string, message: string, data?: Record<string, unknown>, level: Level = 'info'): void {
+export function addBreadcrumb(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+  level: Level = 'info',
+): void {
   breadcrumbs.push({ category, message, data, level, ts: Date.now() });
   if (breadcrumbs.length > MAX_BREADCRUMBS) breadcrumbs.shift();
 }
 
 export function captureException(err: unknown, context?: Record<string, unknown>): void {
   const payload = {
-    error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : String(err),
+    event_id: generateEventID(),
+    error:
+      err instanceof Error
+        ? { name: err.name, message: err.message, stack: err.stack }
+        : String(err),
     context: scrubPII(context ?? {}),
     breadcrumbs: breadcrumbs.map((b) => ({ ...b, data: scrubPII(b.data ?? {}) })),
     release,
     ts: Date.now(),
   };
-  if (enabled) {
-    console.error('[sentry]', payload);
-    // TODO: реальная отправка в GlitchTip через fetch на DSN endpoint.
-    // Для MVP — только структурированный лог; эти события видны в chrome://extensions service worker console.
-  } else {
+
+  if (!enabled) {
     console.error('[pv-error]', payload);
+    return;
   }
+
+  console.error('[sentry]', payload);
+  if (!dsn) return;
+
+  // Best-effort fire-and-forget. Ошибки fetch/rate-limit не пробрасываем —
+  // отправка телеметрии не должна ломать работу расширения.
+  void sendEnvelope(dsn, payload).then((result) => {
+    if (!result.sent) {
+      console.warn('[sentry] envelope not sent', result.reason);
+    }
+  });
 }
 
 /**
