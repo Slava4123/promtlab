@@ -367,6 +367,10 @@ services:
   # 7d retention. Auth disabled (Docker network internal).
   loki:
     image: grafana/loki:3.6.0
+    # user 0 — Loki image runs as 10001:10001 by default, но named volume
+    # принадлежит root → permission denied. root inside Docker network
+    # internal — security risk минимальный.
+    user: "0"
     command: -config.file=/etc/loki/config.yaml
     volumes:
       - ./infra/loki/loki-config.yaml:/etc/loki/config.yaml:ro

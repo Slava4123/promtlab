@@ -41,19 +41,17 @@ func Setup(ctx context.Context, cfg config.TelemetryConfig, environment, release
 		return func(context.Context) error { return nil }, nil
 	}
 
-	// Resource — identity сервиса в traces (service.name, version, environment).
-	res, err := resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName(serviceName),
-			semconv.ServiceVersion(release),
-			semconv.DeploymentEnvironment(environment),
-		),
+	// Resource — identity сервиса в traces. NewWithAttributes без merge
+	// с resource.Default() — иначе conflicting schema URLs (default использует
+	// новейший semconv schema, наш — v1.26.0, merge падает с error).
+	// Default attributes (host.name, process.*) не критичны для tracing —
+	// service.name достаточен для filter в Tempo/Grafana.
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName(serviceName),
+		semconv.ServiceVersion(release),
+		semconv.DeploymentEnvironment(environment),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("telemetry: resource: %w", err)
-	}
 
 	// OTLP gRPC exporter → Tempo (или OTel Collector в будущем).
 	exporter, err := otlptracegrpc.New(ctx,
