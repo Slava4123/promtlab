@@ -1,0 +1,139 @@
+# SLO recording rules + multi-burn-rate alerts (Phase 16 Этап 4).
+# Based on Google SRE Workbook Chapter 5 (Alerting on SLOs).
+#
+# SLO targets (PromtLab):
+#   - Availability: 99.9% / 30d (43 мин downtime budget per month)
+#   - Latency: p99 < 500ms / 28d
+#
+# Burn rate alert formula:
+#   burn_rate = (errors / total) / (1 - SLO_target)
+#   - 1h × 14.4x → critical (2% budget consumed in 1h)
+#   - 6h × 6x   → critical (5% budget consumed in 6h)
+#   - 3d × 1x   → warning (10% budget consumed in 3d)
+
+groups:
+  # === Recording rules — error rate by multiple windows ===
+  - name: slo_error_rate_windows
+    interval: 30s
+    rules:
+      - record: job:slo_errors:ratio_rate1h
+        expr: |
+          sum by (job) (rate(http_requests_total{job="promptvault-api",status=~"5.."}[1h]))
+          /
+          sum by (job) (rate(http_requests_total{job="promptvault-api"}[1h]))
+
+      - record: job:slo_errors:ratio_rate6h
+        expr: |
+          sum by (job) (rate(http_requests_total{job="promptvault-api",status=~"5.."}[6h]))
+          /
+          sum by (job) (rate(http_requests_total{job="promptvault-api"}[6h]))
+
+      - record: job:slo_errors:ratio_rate3d
+        expr: |
+          sum by (job) (rate(http_requests_total{job="promptvault-api",status=~"5.."}[3d]))
+          /
+          sum by (job) (rate(http_requests_total{job="promptvault-api"}[3d]))
+
+      - record: job:slo_errors:ratio_rate30d
+        expr: |
+          sum by (job) (rate(http_requests_total{job="promptvault-api",status=~"5.."}[30d]))
+          /
+          sum by (job) (rate(http_requests_total{job="promptvault-api"}[30d]))
+
+      # Availability = 1 - error_ratio (за 30d).
+      - record: job:slo:availability_30d
+        expr: |
+          1 - job:slo_errors:ratio_rate30d
+
+      # Error budget consumed = error_rate × 1000 (если SLO 99.9%).
+      # 1.0 = budget полностью израсходован, 0.0 = ничего не потрачено.
+      - record: job:slo:error_budget_consumed_30d
+        expr: |
+          job:slo_errors:ratio_rate30d * 1000
+
+      # Error budget remaining (%).
+      - record: job:slo:error_budget_remaining_30d
+        expr: |
+          (1 - job:slo_errors:ratio_rate30d * 1000) * 100
+
+  # === Recording rules — latency SLO ===
+  - name: slo_latency_windows
+    interval: 30s
+    rules:
+      - record: job:slo:latency_p99_28d
+        expr: |
+          histogram_quantile(0.99,
+            sum by (job, le) (rate(http_request_duration_seconds_bucket{job="promptvault-api"}[28d]))
+          )
+
+      # Доля requests с latency > 500ms (нарушение SLO).
+      - record: job:slo:latency_violation_ratio_5m
+        expr: |
+          sum by (job) (rate(http_request_duration_seconds_count{job="promptvault-api"}[5m]))
+          -
+          sum by (job) (rate(http_request_duration_seconds_bucket{job="promptvault-api",le="0.5"}[5m]))
+          /
+          sum by (job) (rate(http_request_duration_seconds_count{job="promptvault-api"}[5m]))
+
+  # === Multi-burn-rate alerts (availability) ===
+  - name: slo_alerts
+    interval: 30s
+    rules:
+      # Fast burn — 14.4x за 1 час → 2% budget consumed in 1h → P0.
+      - alert: HighErrorBurnRateFast
+        expr: job:slo_errors:ratio_rate1h > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "Высокий error rate: 14.4x burn (1h window)"
+          description: "Ошибки 5xx сжигают error budget в 14.4 раз быстрее допустимого. При текущем темпе 30-day budget закончится за 2 дня."
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/HighErrorRate.md"
+
+      # Slow burn — 6x за 6 часов → 5% budget consumed in 6h → P0.
+      - alert: HighErrorBurnRateSlow
+        expr: job:slo_errors:ratio_rate6h > (6 * 0.001)
+        for: 15m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "Устойчивый error rate: 6x burn (6h window)"
+          description: "Ошибки 5xx идут устойчиво выше budget'а уже 6 часов. 5% месячного budget'а уже потрачено."
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/HighErrorRate.md"
+
+      # Mild burn — 1x за 3 дня → 10% budget consumed in 3d → P1.
+      - alert: HighErrorBurnRateMild
+        expr: job:slo_errors:ratio_rate3d > (1 * 0.001)
+        for: 1h
+        labels:
+          severity: warning
+          slo: availability
+        annotations:
+          summary: "Постоянный фон ошибок: 10% budget potraчен за 3 дня"
+          description: "Долгосрочное превышение error rate. Не острая проблема, но требует attention."
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/HighErrorRate.md"
+
+      # Latency SLO violation (separate from availability).
+      - alert: HighLatencyP99
+        expr: job:http_request_duration:p99_5m{job="promptvault-api"} > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "p99 latency > 500ms 10+ минут подряд"
+          description: "Нарушение SLO latency. Investigate slow endpoints в Application Performance dashboard."
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/HighLatency.md"
+
+      # Instance down — blackbox external probe failure.
+      - alert: InstanceDown
+        expr: probe_success == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "External probe failure: {{ $labels.instance }} недоступен 5+ минут"
+          description: "Blackbox-exporter не может достучаться до {{ $labels.instance }}. Возможно DNS, SSL, или вся VPS упала."
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/InstanceDown.md"
