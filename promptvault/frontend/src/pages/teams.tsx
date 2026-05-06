@@ -1,10 +1,11 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Plus, Users, Pencil, Trash2, Loader2 } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "sonner"
 
 import { useTeams, useCreateTeam, useUpdateTeam, useDeleteTeam } from "@/hooks/use-teams"
+import { useQuotaStore } from "@/stores/quota-store"
 import { PageLayout } from "@/components/layout/page-layout"
 import { RoleBadge } from "@/components/teams/role-badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -32,6 +33,11 @@ export default function Teams() {
   const [editing, setEditing] = useState<Team | null>(null)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
+
+  // Закрываем форму, когда поверх всплывает QuotaExceededDialog (HTTP 402),
+  // иначе под ним остаётся «фантомный» Dialog с полями.
+  const quotaOpen = useQuotaStore((s) => s.open)
+  useEffect(() => { if (quotaOpen) setDialogOpen(false) }, [quotaOpen])
 
   const openCreate = () => {
     setEditing(null)

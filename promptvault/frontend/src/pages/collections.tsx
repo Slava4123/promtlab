@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Plus, FolderOpen, Pencil, Trash2, Loader2, FileText,
@@ -13,6 +13,7 @@ import { PageLayout } from "@/components/layout/page-layout"
 import { useCollections, useCreateCollection, useUpdateCollection, useDeleteCollection } from "@/hooks/use-collections"
 import type { Collection } from "@/api/types"
 import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useQuotaStore } from "@/stores/quota-store"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -73,6 +74,11 @@ export default function Collections() {
   const [description, setDescription] = useState("")
   const [color, setColor] = useState(COLORS[0].value)
   const [icon, setIcon] = useState("")
+
+  // Закрываем форму, когда поверх всплывает QuotaExceededDialog (HTTP 402),
+  // иначе под ним остаётся «фантомный» Dialog с полями.
+  const quotaOpen = useQuotaStore((s) => s.open)
+  useEffect(() => { if (quotaOpen) setDialogOpen(false) }, [quotaOpen])
 
   const openCreate = () => {
     setEditing(null)

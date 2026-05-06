@@ -112,6 +112,10 @@ export default function PromptEditor() {
     formState: { errors, isSubmitting },
   } = useForm<PromptForm>({
     resolver: zodResolver(promptSchema),
+    // defaultValues нужны, иначе при сабмите пустой формы content === undefined,
+    // и Zod падает на типе ДО min(1) — выводит fallback "Неверный ввод: ожидалось
+    // string, получено undefined" вместо нашего "Введите содержимое промпта".
+    defaultValues: { title: "", content: "", model: "" },
   })
 
   // Синхронизируем загруженные с сервера данные в локальное state формы.
@@ -332,7 +336,7 @@ export default function PromptEditor() {
                   value={field.value ?? ""}
                   onChange={field.onChange}
                   maxLength={MAX_PROMPT_CONTENT_LENGTH}
-                  placeholder="Введите текст промпта...&#10;&#10;Совет: будьте конкретны и используйте примеры для лучших результатов.&#10;Поддерживается Markdown: заголовки, таблицы, code-блоки, ссылки."
+                  placeholder="Введите текст промпта...&#10;&#10;Совет: будьте конкретны и используйте примеры для лучших результатов.&#10;Поддерживается Markdown: заголовки, таблицы, блоки кода, ссылки."
                   aria-invalid={!!errors.content}
                   aria-describedby={errors.content ? "content-error" : undefined}
                 />

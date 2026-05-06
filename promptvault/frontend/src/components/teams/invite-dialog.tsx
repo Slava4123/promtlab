@@ -3,6 +3,7 @@ import { Loader2, UserPlus } from "lucide-react"
 import { toast } from "sonner"
 import type { TeamRole } from "@/api/types"
 import { useSearchUsers } from "@/hooks/use-teams"
+import { useQuotaStore } from "@/stores/quota-store"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
@@ -24,6 +25,11 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300)
     return () => clearTimeout(timer)
   }, [query])
+
+  // Закрываем форму, когда поверх всплывает QuotaExceededDialog (HTTP 402),
+  // иначе под ним остаётся «фантомный» Dialog с полями.
+  const quotaOpen = useQuotaStore((s) => s.open)
+  useEffect(() => { if (quotaOpen && open) onClose() }, [quotaOpen, open, onClose])
 
   const { data: searchResults } = useSearchUsers(debouncedQuery)
 
@@ -60,13 +66,13 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
         </DialogHeader>
 
         <div className="space-y-2 relative">
-          <label className="text-[0.8rem] font-medium text-foreground">Email или @username</label>
+          <label className="text-[0.8rem] font-medium text-foreground">Email или @ник</label>
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="user@example.com или @username"
+            placeholder="user@example.com или @ник"
             autoFocus
             className="flex h-10 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-brand/40 focus:ring-3 focus:ring-brand/10"
             onFocus={() => setInputFocused(true)}

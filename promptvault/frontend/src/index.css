@@ -5,7 +5,13 @@
 
 @plugin "@tailwindcss/typography";
 
-@custom-variant dark (&:is(.dark *));
+/* Per Tailwind v4 dark-mode docs:
+   https://tailwindcss.com/docs/dark-mode#toggling-dark-mode-manually
+   Селектор &:where(.dark, .dark *) матчит И сам элемент с классом .dark
+   (т.е. <html class="dark">), И его потомков. Старый &:is(.dark *) ловил
+   только потомков — html сам оставался в light-палитре, что давало белый
+   overscroll/dvh-flicker на мобиле. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
     --font-heading: var(--font-sans);
@@ -183,9 +189,14 @@
     @apply ring-2 ring-ring/50 ring-offset-2 ring-offset-background rounded-md outline-none;
     }
   html {
-    @apply font-sans;
+    @apply bg-background font-sans;
     scroll-behavior: smooth;
     }
+  /* color-scheme сообщает браузеру тему — тогда системные UI (scrollbar,
+     overscroll-bounce, address-bar fade на iOS) рендерятся в нужной палитре,
+     а не белыми по дефолту. light/dark раздельно через тот же .dark toggle. */
+  :root { color-scheme: light; }
+  .dark { color-scheme: dark; }
 
   /* Custom scrollbar */
   ::-webkit-scrollbar {
@@ -264,7 +275,30 @@
   }
 }
 
-/* Sonner toast progress bar */
+/* Sonner toast progress bar + отключение pause-on-hover.
+ *
+ * Поведение по умолчанию sonner: при hover мышью на любом toast паузится dismiss-
+ * таймер ВСЕХ toast'ов в стопке. Это даёт время прочитать, но в нашем UX (короткие
+ * подтверждения «Промпт обновлён») не нужно — наоборот, мешает: мышь случайно
+ * попадает на toast, и он висит секундами.
+ *
+ * Решение: pointer-events: none на самом toast, чтобы sonner не получал
+ * pointer-enter/leave события. Sonner не понимает что курсор над toast'ом,
+ * pause не активируется, dismiss идёт ровно `duration` ms. CSS progress-bar
+ * синхронен по умолчанию (animation 4s linear).
+ *
+ * Pointer-events: auto возвращаем для close-button и actions внутри toast,
+ * чтобы их можно было нажать. Swipe-to-dismiss отключается (toast не реагирует
+ * на pointer move) — приемлемо, есть кнопка X.
+ */
+[data-sonner-toast] {
+  pointer-events: none;
+}
+[data-sonner-toast] [data-close-button],
+[data-sonner-toast] [data-button],
+[data-sonner-toast] button {
+  pointer-events: auto;
+}
 [data-sonner-toast]::before {
   content: '';
   position: absolute;
@@ -325,4 +359,13 @@
 ::view-transition-new(root) {
   animation-duration: var(--duration-fast);
   animation-timing-function: var(--ease-out);
+}
+
+/* xyflow: edgelabel-renderer контейнер по умолчанию имеет z-index: auto и в DOM
+ * стоит ПЕРЕД .react-flow__nodes. Это значит pills визуально под node'ами.
+ * Для Canvas цепочек нам нужно чтобы edge-label pills были ПОВЕРХ group-
+ * узлов — иначе SVG path, идущий к target group, проходит сквозь pill
+ * (потому что target node лежит выше pill в stacking order). */
+.react-flow__edgelabel-renderer {
+  z-index: 5;
 }
