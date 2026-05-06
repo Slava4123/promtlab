@@ -14,6 +14,9 @@ import { Badge } from "@/components/ui/badge"
 import { UpgradeGate } from "@/components/analytics/upgrade-gate"
 import { useBranding, useUpdateBranding } from "@/hooks/use-branding"
 import { ApiError } from "@/api/client"
+import type { LogoSource } from "@/api/branding"
+import { LogoUploader } from "./logo-uploader"
+import { ColorPalettePicker } from "./color-palette-picker"
 
 interface BrandingFormProps {
   slug: string
@@ -26,6 +29,8 @@ export function BrandingForm({ slug, planId }: BrandingFormProps) {
   const updateBranding = useUpdateBranding(slug)
 
   const [logoUrl, setLogoUrl] = useState("")
+  const [logoSource, setLogoSource] = useState<LogoSource>("url")
+  const [effectiveLogoUrl, setEffectiveLogoUrl] = useState<string>("")
   const [tagline, setTagline] = useState("")
   const [website, setWebsite] = useState("")
   const [primaryColor, setPrimaryColor] = useState("")
@@ -34,6 +39,8 @@ export function BrandingForm({ slug, planId }: BrandingFormProps) {
   useEffect(() => {
     if (data) {
       setLogoUrl(data.logo_url ?? "")
+      setLogoSource((data.logo_source as LogoSource) ?? "url")
+      setEffectiveLogoUrl(data.effective_logo_url ?? "")
       setTagline(data.tagline ?? "")
       setWebsite(data.website ?? "")
       setPrimaryColor(data.primary_color ?? "")
@@ -55,6 +62,7 @@ export function BrandingForm({ slug, planId }: BrandingFormProps) {
     try {
       await updateBranding.mutateAsync({
         logo_url: logoUrl,
+        logo_source: logoSource,
         tagline,
         website,
         primary_color: primaryColor,
@@ -85,15 +93,15 @@ export function BrandingForm({ slug, planId }: BrandingFormProps) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="logo_url">Логотип (URL)</Label>
-              <Input
-                id="logo_url"
-                type="url"
-                placeholder="https://cdn.example.com/logo.png"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
+              <Label>Логотип</Label>
+              <LogoUploader
+                slug={slug}
+                logoSource={logoSource}
+                logoUrl={logoUrl}
+                effectiveLogoUrl={effectiveLogoUrl}
+                onLogoUrlChange={setLogoUrl}
+                onSourceChange={(next) => setLogoSource(next)}
               />
-              <p className="text-xs text-muted-foreground">HTTPS-URL изображения. Рекомендуемый размер 200×60px.</p>
             </div>
 
             <div className="space-y-2">
@@ -121,25 +129,14 @@ export function BrandingForm({ slug, planId }: BrandingFormProps) {
 
             <div className="space-y-2">
               <Label htmlFor="primary_color">Основной цвет</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="primary_color"
-                  type="text"
-                  placeholder="#0066CC"
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="w-32"
-                  pattern="^#[0-9a-fA-F]{6}$"
-                />
-                {primaryColor && /^#[0-9a-fA-F]{6}$/.test(primaryColor) && (
-                  <div
-                    className="size-8 rounded-md border"
-                    style={{ backgroundColor: primaryColor }}
-                    aria-label="Превью цвета"
-                  />
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">Формат: #RRGGBB. Используется для акцентов на странице.</p>
+              <ColorPalettePicker
+                id="primary_color"
+                value={primaryColor}
+                onChange={setPrimaryColor}
+              />
+              <p className="text-xs text-muted-foreground">
+                Используется для акцентов на странице. Выберите из палитры или задайте свой #RRGGBB.
+              </p>
             </div>
 
             <Button type="submit" disabled={updateBranding.isPending}>

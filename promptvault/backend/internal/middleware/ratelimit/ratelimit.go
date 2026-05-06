@@ -5,10 +5,15 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+// strconvI — alias чтобы один импорт обслуживал несколько мест и не плодить
+// отдельный helper для int → string.
+func strconvI(i int) string { return strconv.Itoa(i) }
 
 // numShards — количество шардов для снижения lock contention под высоким
 // параллелизмом (P-9). 16 — разумный баланс: 16 × mutex + 16 × map overhead
@@ -168,7 +173,15 @@ func clientIP(r *http.Request, trustProxy bool) string {
 // ByUserID ограничивает по ID аутентифицированного пользователя (из context).
 // Должен применяться ПОСЛЕ auth middleware, который помещает userID в context.
 func ByUserID(rpm int, getUserID func(r *http.Request) uint) func(http.Handler) http.Handler {
-	rl := NewLimiter[uint](rpm, UintHash)
+	return ByUserIDWithWindow(rpm, time.Minute, getUserID)
+}
+
+// ByUserIDWithWindow — версия ByUserID с настраиваемым окном (например, 10/час
+// для тяжёлых endpoint'ов: upload файлов, expensive analytics refresh).
+// Retry-After в ответе округляется до секунд окна.
+func ByUserIDWithWindow(limit int, window time.Duration, getUserID func(r *http.Request) uint) func(http.Handler) http.Handler {
+	rl := NewLimiterWithWindow[uint](limit, window, UintHash)
+	retryAfter := strconvI(int(window.Seconds()))
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID := getUserID(r)
@@ -178,9 +191,9 @@ func ByUserID(rpm int, getUserID func(r *http.Request) uint) func(http.Handler) 
 			}
 			if !rl.Allow(userID) {
 				w.Header().Set("Content-Type", "application/json")
-				w.Header().Set("Retry-After", "60")
+				w.Header().Set("Retry-After", retryAfter)
 				w.WriteHeader(http.StatusTooManyRequests)
-				if _, err := w.Write([]byte(`{"error":"Слишком много запросов. Попробуйте через минуту"}`)); err != nil {
+				if _, err := w.Write([]byte(`{"error":"Слишком много запросов. Попробуйте позже"}`)); err != nil {
 					slog.Error("failed to write rate limit response", "error", err)
 				}
 				return

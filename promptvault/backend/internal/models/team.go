@@ -12,26 +12,40 @@ type Team struct {
 	Members     []TeamMember `json:"members,omitempty"`
 	// Phase 14: Branded share pages (Max-only). Все nullable — не возвращаем
 	// в publicах не-Max'ам.
-	BrandLogoURL      string    `gorm:"column:brand_logo_url;size:500" json:"brand_logo_url,omitempty"`
-	BrandTagline      string    `gorm:"column:brand_tagline;size:200" json:"brand_tagline,omitempty"`
-	BrandWebsite      string    `gorm:"column:brand_website;size:500" json:"brand_website,omitempty"`
-	BrandPrimaryColor string    `gorm:"column:brand_primary_color;size:7" json:"brand_primary_color,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	BrandLogoURL      string `gorm:"column:brand_logo_url;size:500" json:"brand_logo_url,omitempty"`
+	BrandTagline      string `gorm:"column:brand_tagline;size:200" json:"brand_tagline,omitempty"`
+	BrandWebsite      string `gorm:"column:brand_website;size:500" json:"brand_website,omitempty"`
+	BrandPrimaryColor string `gorm:"column:brand_primary_color;size:7" json:"brand_primary_color,omitempty"`
+	// Phase 16-X: дискриминатор источника логотипа. 'url' — внешний URL в
+	// BrandLogoURL; 'file' — bytea в team_logo_files; 'none' — логотипа нет.
+	// Default 'url' (миграция 000060) для backward compat.
+	BrandLogoSource string    `gorm:"column:brand_logo_source;size:8;not null;default:url" json:"brand_logo_source,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // BrandingInfo — DTO для публичного ответа /s/:token. Заполняется только
 // если owner команды на тарифе Max. nil в response если не Max.
+//
+// Phase 16-X: добавлены LogoSource/EffectiveLogoURL.
+//   - LogoSource дискриминирует, откуда брать картинку (url|file|none).
+//   - EffectiveLogoURL — готовая к подстановке в <img src> ссылка:
+//     для 'url' — это LogoURL; для 'file' — relative path к нашему GET endpoint;
+//     для 'none' — пустая строка. Frontend не делает выбор сам.
 type BrandingInfo struct {
-	LogoURL      string `json:"logo_url,omitempty"`
-	Tagline      string `json:"tagline,omitempty"`
-	Website      string `json:"website,omitempty"`
-	PrimaryColor string `json:"primary_color,omitempty"`
+	LogoURL          string `json:"logo_url,omitempty"`
+	LogoSource       string `json:"logo_source,omitempty"`
+	EffectiveLogoURL string `json:"effective_logo_url,omitempty"`
+	Tagline          string `json:"tagline,omitempty"`
+	Website          string `json:"website,omitempty"`
+	PrimaryColor     string `json:"primary_color,omitempty"`
 }
 
 // IsEmpty — true если ни одно поле не заполнено.
+// LogoSource не учитывается: дефолт 'url' с пустым LogoURL = «нет логотипа»,
+// что мы тоже трактуем как пустоту.
 func (b *BrandingInfo) IsEmpty() bool {
-	return b == nil || (b.LogoURL == "" && b.Tagline == "" && b.Website == "" && b.PrimaryColor == "")
+	return b == nil || (b.EffectiveLogoURL == "" && b.Tagline == "" && b.Website == "" && b.PrimaryColor == "")
 }
 
 type TeamRole string

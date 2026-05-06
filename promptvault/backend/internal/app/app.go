@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"promptvault/internal/infrastructure/email"
 	"promptvault/internal/infrastructure/postgres"
 	pgrepo "promptvault/internal/infrastructure/postgres/repository"
+	repo "promptvault/internal/interface/repository"
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/middleware/ratelimit"
 
@@ -24,6 +26,7 @@ import (
 	apikeyhttp "promptvault/internal/delivery/http/apikey"
 	authhttp "promptvault/internal/delivery/http/auth"
 	badgehttp "promptvault/internal/delivery/http/badge"
+	chainhttp "promptvault/internal/delivery/http/chain"
 	changeloghttp "promptvault/internal/delivery/http/changelog"
 	collhttp "promptvault/internal/delivery/http/collection"
 	feedbackhttp "promptvault/internal/delivery/http/feedback"
@@ -37,6 +40,7 @@ import (
 	oauthsrvhttp "promptvault/internal/delivery/http/oauth_server"
 	taghttp "promptvault/internal/delivery/http/tag"
 	teamhttp "promptvault/internal/delivery/http/team"
+	testcleanuphttp "promptvault/internal/delivery/http/testcleanup"
 	trashhttp "promptvault/internal/delivery/http/trash"
 	userhttp "promptvault/internal/delivery/http/user"
 	"promptvault/internal/infrastructure/payment"
@@ -51,6 +55,7 @@ import (
 	auditsvc "promptvault/internal/usecases/audit"
 	authuc "promptvault/internal/usecases/auth"
 	badgeuc "promptvault/internal/usecases/badge"
+	chainuc "promptvault/internal/usecases/chain"
 	changeloguc "promptvault/internal/usecases/changelog"
 	colluc "promptvault/internal/usecases/collection"
 	feedbackuc "promptvault/internal/usecases/feedback"
@@ -80,6 +85,7 @@ type App struct {
 	oauthHandler     *authhttp.OAuthHandler
 	promptHandler     *prompthttp.Handler
 	collectionHandler *collhttp.Handler
+	chainHandler      *chainhttp.Handler
 	tagHandler        *taghttp.Handler
 	searchHandler     *searchhttp.Handler
 	teamHandler       *teamhttp.Handler
@@ -102,8 +108,13 @@ type App struct {
 	teamActivityHandler  *teamhttp.ActivityHandler
 	// Phase 14 D
 	teamBrandingHandler  *teamhttp.BrandingHandler
+	// Phase 16-X: загрузка логотипа файлом (bytea storage)
+	teamLogoHandler      *teamhttp.LogoHandler
 	oauthServerHandler    *oauthsrvhttp.Handler
 	metadataHandler       *metadatahttp.Handler
+	// testCleanupHandler ненулевой только при cfg.Server.IsDev() — dev-only
+	// endpoint для Playwright per-test isolation. На проде nil → route не регистрируется.
+	testCleanupHandler    *testcleanuphttp.Handler
 	// Следующие поля используются в MountRoutes для admin-middleware chain:
 	userLookup adminmw.UserLookup
 	auditSvc   *auditsvc.Service
@@ -146,6 +157,11 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	teamRepo := pgrepo.NewTeamRepository(db)
 	teamSvc := teamuc.NewService(teamRepo, userRepo, quotaSvc)
 	teamSvc.SetEmail(emailSvc)
+
+	// Phase 16-X: bytea-хранилище логотипов команд. Включается всегда (нет
+	// runtime kill-switch — фича Max-only, RBAC покрыт в usecase).
+	teamLogoRepo := pgrepo.NewTeamLogoRepository(db)
+	teamSvc.SetLogoRepo(teamLogoRepo)
 
 	pinRepo := pgrepo.NewPinRepository(db)
 	streakRepo := pgrepo.NewStreakRepository(db)
@@ -211,9 +227,24 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 
 	// Phase B подключает analyticsSvc в MCP-server (ниже) и в HTTP handlers.
 
+	// CRON_FAST_DEV=true — ускоряет все ticker-loops до десятков секунд для QA-проверки
+	// что они тикают, отрабатывают и сбрасывают/обрабатывают записи. Только для dev.
+	// В prod переменная должна быть unset → дефолтные часы/сутки.
+	fastCron := cfg.Server.IsDev() && os.Getenv("CRON_FAST_DEV") == "true"
+	pick := func(prod, fast time.Duration) time.Duration {
+		if fastCron {
+			return fast
+		}
+		return prod
+	}
+	if fastCron {
+		slog.Warn("cron.fast_dev.enabled",
+			"warn", "CRON_FAST_DEV=true — все loops ускорены до десятков секунд (dev only)")
+	}
+
 	// Cleanup loops — ежесуточно. Retention: Free=30д, Pro=90д, Max=365д (per-plan в SQL).
-	activityCleanupLoop := analyticsuc.NewCleanupLoop(activityRepo, analyticsRepo, 24*time.Hour)
-	insightsLoop := analyticsuc.NewInsightsComputeLoop(analyticsSvc, userRepo, teamRepo, 24*time.Hour)
+	activityCleanupLoop := analyticsuc.NewCleanupLoop(activityRepo, analyticsRepo, pick(24*time.Hour, 1*time.Minute))
+	insightsLoop := analyticsuc.NewInsightsComputeLoop(analyticsSvc, userRepo, teamRepo, pick(24*time.Hour, 1*time.Minute))
 
 	promptSvc := promptuc.NewService(promptRepo, tagRepo, collectionRepo, versionRepo, teamRepo, pinRepo, streakSvc, badgeSvc, quotaSvc)
 	promptSvc.SetActivity(activitySvc)
@@ -222,14 +253,31 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	collectionSvc.SetActivity(activitySvc)
 	tagSvc := taguc.NewService(tagRepo, teamRepo)
 
+	// Phase 16: Prompt Chains. Feature flag CHAINS_ENABLED — если false, всё nil.
+	var chainSvc *chainuc.Service
+	var chainRepoForTrash repo.ChainRepository
+	if cfg.Chains.Enabled {
+		chainRepo := pgrepo.NewChainRepository(db)
+		chainSvc = chainuc.NewService(chainRepo, promptRepo, teamRepo, quotaSvc)
+		chainSvc.SetActivity(activitySvc)
+		chainRepoForTrash = chainRepo
+	}
+
 	// Subscription repos (нужны и для admin, и для subscription service)
 	subscriptionRepo := pgrepo.NewSubscriptionRepository(db)
 	paymentRepo := pgrepo.NewPaymentRepository(db)
 
 	// Admin usecase (AU1) — зависит от auth/audit/badge сервисов, поэтому
 	// собирается после promptSvc/collectionSvc, но до handlers.
+	// FeedbackRepository — единый экземпляр, нужен и user-submission usecase'у
+	// (создаётся ниже), и admin-сервису (для /admin/feedbacks).
+	feedbackRepo := pgrepo.NewFeedbackRepository(db)
+
 	adminSvc := adminuc.NewService(adminRepo, userRepo, auditSvc, authSvc, badgeSvc, planRepo, subscriptionRepo)
 	adminSvc.SetTierChangeNotifier(emailSvc, cfg.Server.FrontendURL)
+	// Wire-up через setter, чтобы не раздувать сигнатуру NewService — паттерн
+	// совпадает с SetTierChangeNotifier выше.
+	adminSvc.SetFeedbackRepository(feedbackRepo)
 	adminHealth := &adminHealthAdapter{repo: adminRepo}
 
 	// Search
@@ -238,6 +286,10 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	// Trash
 	trashRepo := pgrepo.NewTrashRepository(db)
 	trashSvc := trashuc.NewService(trashRepo, teamRepo)
+	if chainRepoForTrash != nil {
+		// Phase 16: блокируем hard-delete prompt'а, используемого в цепочке.
+		trashSvc.SetChains(chainRepoForTrash)
+	}
 
 	// User service — общий для HTTP-хендлера и MCP (whoami).
 	userSvc := useruc.NewService(userRepo)
@@ -282,6 +334,12 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			userSvc,
 			activitySvc,  // Phase 14 B.3
 			analyticsSvc, // Phase 14 B.3
+			func() mcpserver.ChainService {
+				if chainSvc == nil {
+					return nil
+				}
+				return chainSvc
+			}(), // Phase 16: nil если CHAINS_ENABLED=false
 			quotaSvc,
 			mcpserver.Options{
 				UserRPM:             60,
@@ -307,7 +365,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		paymentProvider, &cfg.Payment,
 	)
 
-	purgeLoop := trashuc.NewPurgeLoop(trashRepo, 1*time.Hour, 30)
+	purgeLoop := trashuc.NewPurgeLoop(trashRepo, pick(1*time.Hour, 1*time.Minute), 30)
 
 	// Email-уведомления для subscription loops. Если SMTP не сконфигурирован
 	// (Configured()=false), notifier=nil — loops сами пропускают отправку.
@@ -316,27 +374,26 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		subNotifier = subscriptionuc.NewEmailNotifier(emailSvc, cfg.Server.FrontendURL)
 	}
 
-	expirationLoop := subscriptionuc.NewExpirationLoop(subscriptionRepo, userRepo, subNotifier, 1*time.Hour)
+	expirationLoop := subscriptionuc.NewExpirationLoop(subscriptionRepo, userRepo, subNotifier, pick(1*time.Hour, 30*time.Second))
 	// renewalLoop пытается продлить подписки за 48ч до конца периода;
 	// если payment не настроен — Start() сам no-op'ит.
 	renewalLoop := subscriptionuc.NewRenewalLoop(
 		subscriptionRepo, planRepo, paymentRepo, userRepo,
 		paymentProvider, subNotifier, &cfg.Payment,
-		1*time.Hour, 48*time.Hour,
+		pick(1*time.Hour, 1*time.Minute), 48*time.Hour,
 	)
 	// reminderLoop — pre-expire напоминания для auto_renew=false подписок (M-5b).
 	// Тикер 6ч: окна 3/1 день ловятся с запасом, спама нет (stage-флаг).
-	reminderLoop := subscriptionuc.NewReminderLoop(subscriptionRepo, userRepo, subNotifier, 6*time.Hour)
+	reminderLoop := subscriptionuc.NewReminderLoop(subscriptionRepo, userRepo, subNotifier, pick(6*time.Hour, 1*time.Minute))
 
 	// reengagementLoop — письмо юзерам неактивным 14+ дней (M-5d). Раз в день.
-	reengagementLoop := engagementuc.NewReengagementLoop(userRepo, emailSvc, cfg.Server.FrontendURL, 24*time.Hour)
+	reengagementLoop := engagementuc.NewReengagementLoop(userRepo, emailSvc, cfg.Server.FrontendURL, pick(24*time.Hour, 2*time.Minute))
 
 	// streakReminderLoop — "не сломай серию" для юзеров со streak > 3 (M-16).
 	// Тик раз в день; внутри check today и skip если уже отправляли.
-	streakReminderLoop := engagementuc.NewStreakReminderLoop(streakRepo, userRepo, emailSvc, cfg.Server.FrontendURL, 24*time.Hour)
+	streakReminderLoop := engagementuc.NewStreakReminderLoop(streakRepo, userRepo, emailSvc, cfg.Server.FrontendURL, pick(24*time.Hour, 2*time.Minute))
 
-	// Feedback
-	feedbackRepo := pgrepo.NewFeedbackRepository(db)
+	// Feedback (repo создан выше для shared use с adminSvc)
 	feedbackSvc := feedbackuc.NewService(feedbackRepo)
 
 	// Changelog
@@ -374,7 +431,13 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			return h
 		}(),
 		collectionHandler: collhttp.NewHandler(collectionSvc),
-		tagHandler:        taghttp.NewHandler(tagSvc),
+		chainHandler: func() *chainhttp.Handler {
+			if chainSvc == nil {
+				return nil
+			}
+			return chainhttp.NewHandler(chainSvc)
+		}(),
+		tagHandler: taghttp.NewHandler(tagSvc),
 		searchHandler:     searchhttp.NewHandler(searchSvc),
 		teamHandler:       teamhttp.NewHandler(teamSvc),
 		userHandler:       userhttp.NewHandler(userSvc),
@@ -396,6 +459,8 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		teamActivityHandler: teamhttp.NewActivityHandler(teamSvc, activitySvc),
 		// Phase 14 D: team branding handler (GET/PUT /api/teams/:slug/branding)
 		teamBrandingHandler: teamhttp.NewBrandingHandler(teamSvc),
+		// Phase 16-X: file-upload логотипа (POST/DELETE/GET /api/teams/:slug/branding/logo)
+		teamLogoHandler:     teamhttp.NewLogoHandler(teamSvc),
 		oauthServerHandler: oauthsrvhttp.NewHandler(
 			oauthSrvSvc,
 			func(ctx context.Context, refreshToken string) (uint, error) {
@@ -415,6 +480,12 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			Issuer:         strings.TrimRight(cfg.Server.FrontendURL, "/"),
 			ResourceServer: canonicalResource,
 		}),
+		testCleanupHandler: func() *testcleanuphttp.Handler {
+			if cfg.Server.IsDev() {
+				return testcleanuphttp.NewHandler(db)
+			}
+			return nil
+		}(),
 		mcpServer:            mcpSrv,
 		expirationLoop:       expirationLoop,
 		renewalLoop:          renewalLoop,

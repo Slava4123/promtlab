@@ -47,6 +47,17 @@ func TooManyRequests(msg string) *AppError {
 	return &AppError{Code: http.StatusTooManyRequests, Message: msg}
 }
 
+// PayloadTooLarge — 413, для multipart upload'ов с превышением лимита размера.
+func PayloadTooLarge(msg string) *AppError {
+	return &AppError{Code: http.StatusRequestEntityTooLarge, Message: msg}
+}
+
+// UnsupportedMediaType — 415, для upload'ов с неподдерживаемым форматом
+// (например, SVG в whitelist'е image/png|jpeg|webp).
+func UnsupportedMediaType(msg string) *AppError {
+	return &AppError{Code: http.StatusUnsupportedMediaType, Message: msg}
+}
+
 func Internal(err error) *AppError {
 	return &AppError{Code: http.StatusInternalServerError, Message: "internal error", Err: err}
 }

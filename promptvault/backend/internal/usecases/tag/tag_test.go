@@ -79,6 +79,7 @@ func (m *mockTeamRepo) GetByID(_ context.Context, _ uint) (*models.Team, error) 
 func (m *mockTeamRepo) UpdateBranding(_ context.Context, _ uint, _, _, _, _ string) error {
 	return nil
 }
+func (m *mockTeamRepo) UpdateBrandLogoSource(_ context.Context, _ uint, _ string) error { return nil }
 func (m *mockTeamRepo) ListByUserID(ctx context.Context, userID uint) ([]models.Team, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {

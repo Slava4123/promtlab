@@ -37,6 +37,9 @@ func (m *mockTeamRepo) GetByID(ctx context.Context, id uint) (*models.Team, erro
 func (m *mockTeamRepo) UpdateBranding(ctx context.Context, teamID uint, logoURL, tagline, website, primaryColor string) error {
 	return m.Called(ctx, teamID, logoURL, tagline, website, primaryColor).Error(0)
 }
+func (m *mockTeamRepo) UpdateBrandLogoSource(ctx context.Context, teamID uint, source string) error {
+	return m.Called(ctx, teamID, source).Error(0)
+}
 func (m *mockTeamRepo) ListByUserID(ctx context.Context, userID uint) ([]models.Team, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {

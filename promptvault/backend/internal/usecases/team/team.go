@@ -20,6 +20,10 @@ type Service struct {
 	quotas *quotauc.Service
 	// activity — опциональный team activity feed (Phase 14).
 	activity *activityuc.Service
+	// logos — bytea-хранилище загруженных логотипов (Phase 16-X). Опциональный:
+	// если nil — UploadLogo/DeleteLogo возвращают ошибку, GetBranding отдаёт
+	// LogoSource='url' для всех команд (старое поведение).
+	logos repo.TeamLogoRepository
 }
 
 func NewService(teams repo.TeamRepository, users repo.UserRepository, quotas *quotauc.Service) *Service {
@@ -34,6 +38,12 @@ func (s *Service) SetEmail(email iservice.EmailSender) {
 // SetActivity подключает team_activity_log хуки (Phase 14).
 func (s *Service) SetActivity(activity *activityuc.Service) {
 	s.activity = activity
+}
+
+// SetLogoRepo подключает bytea-хранилище логотипов (Phase 16-X).
+// Без него UploadLogo/DeleteLogo возвращают ErrLogoStorageDisabled.
+func (s *Service) SetLogoRepo(logos repo.TeamLogoRepository) {
+	s.logos = logos
 }
 
 func (s *Service) Create(ctx context.Context, userID uint, input CreateInput) (*models.Team, error) {

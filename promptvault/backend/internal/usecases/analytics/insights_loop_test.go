@@ -126,6 +126,9 @@ func (f *fakeTeamsForLoop) AcceptInvitationTx(context.Context, uint, *models.Tea
 func (f *fakeTeamsForLoop) UpdateBranding(context.Context, uint, string, string, string, string) error {
 	panic("unused")
 }
+func (f *fakeTeamsForLoop) UpdateBrandLogoSource(context.Context, uint, string) error {
+	panic("unused")
+}
 
 // ===== Тесты =====
 

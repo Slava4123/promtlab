@@ -143,8 +143,8 @@ backend/internal/
 │       └── errors.go                       #   маппинг доменных ошибок → HTTP
 │       #
 │       # Актуальные фичи: admin, adminauth, apikey, auth, badge,
-│       # changelog, collection, feedback, prompt, search, share, starter,
-│       # streak, tag, team, trash, user
+│       # chain (Phase 16), changelog, collection, feedback, prompt,
+│       # search, share, starter, streak, tag, team, trash, user
 │
 ├── middleware/
 │   ├── auth/                               #   JWT + API-key middleware
@@ -227,6 +227,22 @@ backend/internal/
   - **M9 (analytics hot-path):** `Claims.PlanID` в JWT access-токене. `analytics.Service.lookupPlanID` читает из ctx через injected callback (`SetPlanFromCtx` в `app.go`), fallback на `users.GetByID` для legacy-JWT. Минус 1 DB-hit на каждый /api/analytics/* запрос.
   - **Search FTS:** `prompts.search_tsv` GENERATED STORED tsvector с `russian_unaccent` + english stemming. GIN-индекс. `websearch_to_tsquery` устойчив к user-input. Гибрид с pg_trgm `similarity(title::text, ?::text) > 0.3` для опечаток (НЕ оператор `%` — см. ADR 0004 про gotcha с varchar/text cast). Score в ORDER BY = `ts_rank_cd × 0.7 + similarity × 0.3`.
   - **Extension Sentry:** реальная отправка envelope NDJSON POST в GlitchTip (раньше только console). `WXT_SENTRY_DSN` в .env, host_permissions добавлены, rate-limit 10/min.
+- **Phase 16-X (Branding UX):** загрузка логотипа файлом (bytea в `team_logo_files`, миграция 000060) + visual color picker (12 brand-чипов из `lib/branding/colors.ts` + native `<input type="color">`, без новых JS-deps). API: `POST/DELETE /api/teams/:slug/branding/logo` (owner Max-only, ratelimit 10/час/userID), public `GET /api/teams/:slug/branding/logo` с ETag (sha256) + `Cache-Control: public, max-age=86400`. Magic-byte валидация через std `image.Decode` (PNG/JPEG) + `golang.org/x/image/webp`. Дискриминатор источника `teams.brand_logo_source ∈ {url, file, none}` — backward compat для существующих `brand_logo_url`. ADR 0006 фиксирует выбор bytea vs FS+nginx vs MinIO. Метрики `team_branding_logo_uploads_total{result}`, `team_branding_logo_size_bytes`, `team_branding_logo_serve_total{cache_hit}`. Runbook `docs/runbooks/TeamBrandingUploadErrors.md`.
+- **Phase 16 (Prompt Chains, dark launch):**
+  - Цепочка = упорядоченная последовательность шагов; output одного → input следующего. Run-mode wizard на фронте; LLM-вызов делает MCP-клиент или сам юзер (copy-paste). Принцип «без AI на нашей стороне» сохраняется (маржа 92%).
+  - **Schema (миграция 000053):** `prompt_chains`, `prompt_chain_steps`, `prompt_chain_executions`. `prompt_chain_steps.uq_prompt_chain_steps_position` — DEFERRABLE INITIALLY DEFERRED (для атомарного reorder в одной транзакции). `prompt_chain_executions.chain_snapshot JSONB` — заморозка структуры + контента промптов на момент Start (Edit во время Run не ломает execution).
+  - **Tier-лимиты:** Free 1 цепочка × 3 шага × 0 saved exec; Pro 5×10×10; Max 100×50×1000. Конкретные числа (паттерн 000046), не sentinel -1.
+  - **API:** `/api/chains` (CRUD + steps + reorder + executions), `/api/executions/:id` (read + advance). Status: `in_progress` → `completed`/`abandoned`. AdvanceStep пишет output под ключом `step_<id>` в `step_outputs JSONB`.
+  - **MCP (4 tools):** `list_chains`, `get_chain` (read), `start_chain_execution`, `advance_chain_step` (write, едят MCP-квоту). Loop: клиент сам вызывает LLM между Start и Advance. **Эксперимент** с Cursor/Claude Code на multi-step tool-loop — обязателен перед launch.
+  - **Feature flag:** `CHAINS_ENABLED` (env, default `false`) → backend nil-wires chainSvc/handler/MCP-tools, не регистрирует routes. `VITE_CHAINS_ENABLED` (frontend) → скрывает sidebar item «Цепочки» и не регистрирует роуты `/chains/*`. Включается одновременно после QA.
+  - **Frontend:** `pages/chains/{index,editor,run}.tsx`. Drag-drop через `@dnd-kit/core + @dnd-kit/sortable` (новые deps, проверены с React 19). Multi-step wizard через `useState<RunStep>`. Пункт меню `Link2` icon в `app-sidebar.tsx`.
+  - **Phase B (Conditional Chains, Max-only):** реализовано dark launch. Миграция 000054 (`step_type`, `conditions JSONB` + CHECK constraint). 7 matchers (`contains, not_contains, regex, equals, starts_with, ends_with, length_gt, length_lt`) + AND/OR/NOT с MaxConditionDepth=10. Cycle detection через DFS на graph branches (запрещает self-reference). ReDoS защита: Go RE2 + MaxRegexPatternLen=500. Tier-check: `quotas.IsMaxTierUser` (plan_id ∈ {max, max_yearly}); Pro юзер → 403. Frontend: JSON-textarea condition builder (visual editor — Phase 1 polish), badge «условный» в editor + run-wizard.
+  - **MCP server bump v1.4.0 → v1.5.0** (4 новых chains tools).
+  - **Pre-activation fixes:** `trashRepo.PurgeExpired`/`EmptyTrash` skip prompts с `id IN (SELECT prompt_id FROM prompt_chain_steps)` — иначе FK 23503. Prometheus counters: `chains_created_total{scope}`, `chain_executions_started_total`, `chain_executions_completed_total{status}`, `chain_conditional_evaluated_total{result}` (последний — legacy v1 DSL, не инкрементится; удалить отдельно).
+  - **Team RBAC (Wave team-aware):** `viewer = читатель + runner` — может Read/StartExecution/AdvanceStep (свой initiated), но **не** Create/Update/Delete/AddStep/RemoveStep/UpdateStep/MoveStep. `editor`/`owner` — полный write. Backend через `checkReadAccess` (read-only RBAC) и `checkEditAccess` (RequireEditor) в `chain.go:1010-1028`; `GetExecution` дополнительно делает initiator-only check (`exec.UserID != userID`) + актуальный `checkReadAccess` к chain (security fix: юзер выгнан из команды между Start и Advance → 403). Frontend hook `useCurrentTeamRole` в `pages/chains/index.tsx` и `editor.tsx` — viewer не видит «Создать»/«Удалить»/Save/Add/Remove/Move кнопки, лейбл «Редактор» на карточке заменяется на «Просмотр».
+  - **Fork tier-gate (справедливая модель):** для personal-цепочки проверяется `userID.plan_id ∈ {max, max_yearly}`; для team-цепочки — план **любого owner** команды (`isMaxTierForChain` в `chain.go`). Если хотя бы один owner на Max → все editor'ы команды могут добавлять fork (даже Pro/Free). Это поощряет owner'а апгрейдиться (его tier «дарит» команде feature). Frontend в team-mode оптимистично показывает кнопку «+ Развилка» enabled (бэк проверит и вернёт `ErrForkRequiresMax` если нужно).
+  - **Activity feed events** (Phase 14 wire-up): `chain.created`, `chain.updated`, `chain.deleted`, `chain.execution_started`, `chain.execution_completed` (`models.ActivityChain*` в `team_activity.go`). Записываются только для team-цепочек через `s.activity.LogSafe`. Step-level events намеренно НЕ трекаются (noisy для длинных цепочек).
+  - **Phase C (отложено):** 3 starter chains (PRD/Code Review/Контент) — отдельный мини-PR, требует расширения starter catalog. Task #17 (unit-тесты chain.Service) и task #18 (Playwright E2E) — тех.долг. MCP multi-step loop эксперимент с Cursor/Claude Code — обязателен ДО включения CHAINS_ENABLED=true в prod.
 
 ## Phase 15 dev-workflow gotchas (от QA findings)
 
@@ -235,6 +251,8 @@ backend/internal/
 - **pg_trgm `%`/`%%` оператор + GORM `Raw()`** — источник regressions. Использовать функцию `similarity(title::text, ?::text) > threshold` вместо оператора. См. ADR 0004.
 - **In-memory rate-limit** для destructive endpoints (e.g. `/insights/refresh` 1/час) хранится per-process. Сбрасывается через `docker compose restart api`, НЕ через DELETE из БД.
 - **Юнит-тесты с моками не ловят SQL-regressions** — для repository методов с raw SQL нужен integration test через testcontainers с реальной PG + extensions.
+- **`UsageChart` (analytics): chartConfig — per-instance prop, не module-scope.** Если новый график использует тот же `UsageChart`, передавайте `chartConfig={createUsageChartConfig("…label…")}` из `components/analytics/usage-chart-config.ts`. Без этого tooltip покажет дефолтный лейбл «Использования» — раньше было багом графика «Создание промптов по дням».
+- **Шаблонные `{{var}}` имеют идентичную грамматику на frontend (`lib/template/parse.ts`) и backend (`internal/template/template.go`)** — менять одну сторону без другой нельзя. Подсветка в редакторе использует тот же regex (`lib/codemirror/template-variable-highlight.ts`). Решение оставить custom-парсер вместо Mustache/Handlebars — см. ADR 0005.
 
 ## Документация (`docs/`)
 - `PLAN.md` — 12-фазный план разработки

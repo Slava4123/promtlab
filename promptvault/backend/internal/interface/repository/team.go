@@ -38,4 +38,9 @@ type TeamRepository interface {
 
 	// Phase 14 Branded share pages — точечный UPDATE brand_* полей.
 	UpdateBranding(ctx context.Context, teamID uint, logoURL, tagline, website, primaryColor string) error
+
+	// Phase 16-X — переключение источника логотипа (url|file|none) без затрагивания
+	// остальных brand-полей. Отдельный метод чтобы не ломать сигнатуру UpdateBranding,
+	// на которую завязаны существующие моки в branding_test.go.
+	UpdateBrandLogoSource(ctx context.Context, teamID uint, source string) error
 }

@@ -1,17 +1,18 @@
 package app
 
 import (
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"promptvault/internal/infrastructure/metrics"
+	adminmw "promptvault/internal/middleware/admin"
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/middleware/ipallowlist"
 	"promptvault/internal/middleware/ratelimit"
-	adminmw "promptvault/internal/middleware/admin"
 	sentrymw "promptvault/internal/middleware/sentry"
-	"log/slog"
 )
 
 func (a *App) MountRoutes(r chi.Router) {
@@ -24,6 +25,18 @@ func (a *App) MountRoutes(r chi.Router) {
 	trustProxy := a.cfg.Server.TrustProxy
 	byIP := func(rpm int) func(http.Handler) http.Handler {
 		return ratelimit.ByIP(rpm, trustProxy)
+	}
+	// byUser — per-user rate-limit для protected /api. Применяется ПОСЛЕ
+	// authMiddleware, иначе userID == 0 и middleware пропустит без учёта.
+	// Зачем не byIP: за CGNAT (мобильные операторы РФ) тысячи реальных юзеров
+	// идут с одного публичного IP — общий бюджет душит легитимный traffic.
+	// Per-user квота даёт каждому аутентифицированному юзеру независимый лимит,
+	// устойчивый к shared IP. Anti-scraping для unauth остаётся на byIP в public
+	// блоках (/p/, /s/, sitemap, OG, /api/teams/.../branding/logo Serve).
+	byUser := func(rpm int) func(http.Handler) http.Handler {
+		return ratelimit.ByUserID(rpm, func(req *http.Request) uint {
+			return authmw.GetUserID(req.Context())
+		})
 	}
 
 	// SEO endpoints (outside /api): /sitemap.xml для поисковиков. Rate-limit 60/IP —
@@ -89,6 +102,16 @@ func (a *App) MountRoutes(r chi.Router) {
 			r.Get("/", a.subscriptionHandler.ListPlans)
 		})
 
+		// dev-only — Playwright per-test cleanup. testCleanupHandler != nil только
+		// при cfg.Server.IsDev() (см. app.go). На проде route не существует — попытка
+		// вызова даст 404. Не требует auth: dev-стек изолирован, доступ к localhost
+		// только у разработчика; принимает только e2e-*@test.local emails.
+		if a.testCleanupHandler != nil {
+			r.Post("/test/cleanup", a.testCleanupHandler.Cleanup)
+			slog.Warn("test.cleanup.endpoint.enabled", "path", "/api/test/cleanup",
+				"warn", "DEV ONLY — должен быть выключен в prod (cfg.Server.IsDev=false)")
+		}
+
 		// public — share links (rate limited: 60 req/min per IP)
 		r.Route("/s", func(r chi.Router) {
 			r.Use(byIP(60))
@@ -110,6 +133,11 @@ func (a *App) MountRoutes(r chi.Router) {
 			r.Method(http.MethodGet, "/{slug}", http.HandlerFunc(a.seoHandler.OGImage))
 			r.Method(http.MethodHead, "/{slug}", http.HandlerFunc(a.seoHandler.OGImage))
 		})
+
+		// public — Phase 16-X логотип команды (bytea, отдача с ETag).
+		// 60 req/min/IP — типично для CDN-style ресурсов; ETag-cache 24h
+		// амортизирует основную нагрузку до 304 Not Modified без нашей участия.
+		r.With(byIP(60)).Get("/teams/{slug}/branding/logo", a.teamLogoHandler.Serve)
 
 		// public — webhooks. T-Bank шлёт 1-5 уведомлений за цикл платежа;
 		// 30 req/min per IP с запасом покрывает retry-поведение банка.
@@ -151,7 +179,10 @@ func (a *App) MountRoutes(r chi.Router) {
 			// ошибки внутри protected handlers атрибутировались к конкретному
 			// юзеру в GlitchTip UI. No-op если Sentry не инициализирован.
 			r.Use(sentrymw.UserContext)
-			r.Use(byIP(60))
+			// 120/мин/юзер — типичный dashboard mount = 8-12 запросов TanStack
+			// Query, плюс refetchOnWindowFocus и фоновый poll'инг (sub usage,
+			// invitations). 60 раньше резало легитимный traffic на 5-6 page-loads.
+			r.Use(byUser(120))
 			r.Get("/auth/me", a.authHandler.Me)
 			r.Post("/auth/set-password/initiate", a.authHandler.InitiateSetPassword)
 			r.Post("/auth/set-password/confirm", a.authHandler.ConfirmSetPassword)
@@ -206,6 +237,13 @@ func (a *App) MountRoutes(r chi.Router) {
 					r.Delete("/{id}/badges/{badge_id}", a.adminHandler.RevokeBadge)
 				})
 
+				r.Route("/feedbacks", func(r chi.Router) {
+					r.Get("/", a.adminHandler.ListFeedbacks)
+					r.Get("/{id}", a.adminHandler.GetFeedbackDetail)
+					r.Patch("/{id}/status", a.adminHandler.UpdateFeedbackStatus)
+					r.Delete("/{id}", a.adminHandler.DeleteFeedback)
+				})
+
 				r.Get("/audit", a.adminHandler.ListAudit)
 				r.Get("/health", a.adminHandler.Health)
 			})
@@ -221,6 +259,30 @@ func (a *App) MountRoutes(r chi.Router) {
 				r.Put("/{id}", a.collectionHandler.Update)
 				r.Delete("/{id}", a.collectionHandler.Delete)
 			})
+
+			// Phase 16: Prompt Chains. Регистрируем только если CHAINS_ENABLED=true
+			// (chainHandler == nil при выключенном feature flag).
+			if a.chainHandler != nil {
+				r.Route("/chains", func(r chi.Router) {
+					r.Get("/", a.chainHandler.List)
+					r.Post("/", a.chainHandler.Create)
+					r.Get("/{id}", a.chainHandler.GetByID)
+					r.Put("/{id}", a.chainHandler.Update)
+					r.Delete("/{id}", a.chainHandler.Delete)
+					r.Post("/{id}/steps", a.chainHandler.AddStep)
+					r.Put("/{id}/steps/{step_id}", a.chainHandler.UpdateStep)
+					r.Delete("/{id}/steps/{step_id}", a.chainHandler.RemoveStep)
+					r.Post("/{id}/steps/{step_id}/move-up", a.chainHandler.MoveStepUp)
+					r.Post("/{id}/steps/{step_id}/move-down", a.chainHandler.MoveStepDown)
+					r.Post("/{id}/reorder", a.chainHandler.ReorderSteps)
+					r.Post("/{id}/executions", a.chainHandler.StartExecution)
+					r.Get("/{id}/executions", a.chainHandler.ListExecutions)
+				})
+				r.Route("/executions", func(r chi.Router) {
+					r.Get("/{exec_id}", a.chainHandler.GetExecution)
+					r.Post("/{exec_id}/advance", a.chainHandler.AdvanceStep)
+				})
+			}
 
 			// Tags
 			r.Route("/tags", func(r chi.Router) {
@@ -238,8 +300,15 @@ func (a *App) MountRoutes(r chi.Router) {
 					r.Put("/", a.teamHandler.Update)
 					r.Delete("/", a.teamHandler.Delete)
 					r.Get("/activity", a.teamActivityHandler.List) // Phase 14 B.4
-				r.Get("/branding", a.teamBrandingHandler.Get)  // Phase 14 D
-				r.Put("/branding", a.teamBrandingHandler.Set)  // Phase 14 D
+					r.Get("/branding", a.teamBrandingHandler.Get) // Phase 14 D
+					r.Put("/branding", a.teamBrandingHandler.Set) // Phase 14 D
+					// Phase 16-X: file-upload логотипа. 10 запросов в час на юзера —
+					// upload защищён MaxBytesReader на handler-level + magic-byte
+					// валидацией в usecase, но дополнительная защита от DoS не лишняя.
+					r.With(ratelimit.ByUserIDWithWindow(10, time.Hour, func(req *http.Request) uint {
+						return authmw.GetUserID(req.Context())
+					})).Post("/branding/logo", a.teamLogoHandler.Upload)
+					r.Delete("/branding/logo", a.teamLogoHandler.Delete)
 					r.Put("/members/{userId}", a.teamHandler.UpdateMemberRole)
 					r.Delete("/members/{userId}", a.teamHandler.RemoveMember)
 					r.Post("/invitations", a.teamHandler.InviteMember)

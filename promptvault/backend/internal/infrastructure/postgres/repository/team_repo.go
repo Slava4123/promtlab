@@ -108,6 +108,14 @@ func (r *teamRepo) UpdateBranding(ctx context.Context, teamID uint, logoURL, tag
 		}).Error
 }
 
+// UpdateBrandLogoSource — Phase 16-X. Точечный UPDATE одной колонки.
+// Источник переключается атомарно вместе с upsert/delete файла на уровне usecase.
+func (r *teamRepo) UpdateBrandLogoSource(ctx context.Context, teamID uint, source string) error {
+	return r.db.WithContext(ctx).Model(&models.Team{}).
+		Where("id = ?", teamID).
+		Update("brand_logo_source", source).Error
+}
+
 func (r *teamRepo) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Удалить приглашения

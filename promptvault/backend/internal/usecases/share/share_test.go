@@ -124,6 +124,7 @@ func (m *mockTeamRepo) GetByID(context.Context, uint) (*models.Team, error)     
 func (m *mockTeamRepo) UpdateBranding(context.Context, uint, string, string, string, string) error {
 	return nil
 }
+func (m *mockTeamRepo) UpdateBrandLogoSource(context.Context, uint, string) error { return nil }
 func (m *mockTeamRepo) ListByUserID(context.Context, uint) ([]models.Team, error) { return nil, nil }
 func (m *mockTeamRepo) ListByUserIDWithRolesAndCounts(context.Context, uint) ([]models.TeamWithRoleAndCount, error) {
 	return nil, nil

@@ -27,6 +27,7 @@ func NewBrandingHandler(teams *teamuc.Service) *BrandingHandler {
 // BrandingRequest — тело PUT /branding.
 type BrandingRequest struct {
 	LogoURL      string `json:"logo_url" validate:"omitempty,max=500,startswith=https://"`
+	LogoSource   string `json:"logo_source" validate:"omitempty,oneof=url file none"`
 	Tagline      string `json:"tagline" validate:"omitempty,max=200"`
 	Website      string `json:"website" validate:"omitempty,max=500,startswith=https://"`
 	PrimaryColor string `json:"primary_color" validate:"omitempty,hexcolor"`
@@ -34,10 +35,12 @@ type BrandingRequest struct {
 
 // BrandingResponse — GET /branding и response после PUT.
 type BrandingResponse struct {
-	LogoURL      string `json:"logo_url,omitempty"`
-	Tagline      string `json:"tagline,omitempty"`
-	Website      string `json:"website,omitempty"`
-	PrimaryColor string `json:"primary_color,omitempty"`
+	LogoURL          string `json:"logo_url,omitempty"`
+	LogoSource       string `json:"logo_source,omitempty"`
+	EffectiveLogoURL string `json:"effective_logo_url,omitempty"`
+	Tagline          string `json:"tagline,omitempty"`
+	Website          string `json:"website,omitempty"`
+	PrimaryColor     string `json:"primary_color,omitempty"`
 }
 
 // Get — GET /api/teams/{slug}/branding. Доступен любому члену команды.
@@ -51,10 +54,12 @@ func (h *BrandingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.WriteOK(w, BrandingResponse{
-		LogoURL:      info.LogoURL,
-		Tagline:      info.Tagline,
-		Website:      info.Website,
-		PrimaryColor: info.PrimaryColor,
+		LogoURL:          info.LogoURL,
+		LogoSource:       info.LogoSource,
+		EffectiveLogoURL: info.EffectiveLogoURL,
+		Tagline:          info.Tagline,
+		Website:          info.Website,
+		PrimaryColor:     info.PrimaryColor,
 	})
 }
 
@@ -71,6 +76,7 @@ func (h *BrandingHandler) Set(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.teams.SetBranding(r.Context(), slug, userID, teamuc.BrandingInput{
 		LogoURL:      req.LogoURL,
+		LogoSource:   req.LogoSource,
 		Tagline:      req.Tagline,
 		Website:      req.Website,
 		PrimaryColor: req.PrimaryColor,
@@ -79,7 +85,21 @@ func (h *BrandingHandler) Set(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteOK(w, BrandingResponse(req))
+	// Re-fetch чтобы вернуть actual effective_logo_url (резолвинг зависит от
+	// LogoSource в БД, который мы могли только что переключить).
+	info, err := h.teams.GetBranding(r.Context(), slug, userID)
+	if err != nil {
+		respondBrandingError(w, r, err)
+		return
+	}
+	utils.WriteOK(w, BrandingResponse{
+		LogoURL:          info.LogoURL,
+		LogoSource:       info.LogoSource,
+		EffectiveLogoURL: info.EffectiveLogoURL,
+		Tagline:          info.Tagline,
+		Website:          info.Website,
+		PrimaryColor:     info.PrimaryColor,
+	})
 }
 
 func respondBrandingError(w http.ResponseWriter, r *http.Request, err error) {

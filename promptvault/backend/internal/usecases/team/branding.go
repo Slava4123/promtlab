@@ -12,8 +12,13 @@ import (
 
 // BrandingInput — входные параметры для SetBranding.
 // Все поля optional; пустая строка очищает предыдущее значение.
+//
+// Phase 16-X: LogoSource — пустая строка = «не трогать» (backward compat для
+// клиентов, которые не знают про источник). Конкретное значение ('url'|'file'|
+// 'none') пишется в teams.brand_logo_source отдельным UPDATE.
 type BrandingInput struct {
 	LogoURL      string
+	LogoSource   string
 	Tagline      string
 	Website      string
 	PrimaryColor string
@@ -63,7 +68,13 @@ func (s *Service) SetBranding(ctx context.Context, slug string, userID uint, inp
 		return ErrBrandingInvalidColor
 	}
 
-	return s.teams.UpdateBranding(ctx, team.ID, input.LogoURL, input.Tagline, input.Website, input.PrimaryColor)
+	if err := s.teams.UpdateBranding(ctx, team.ID, input.LogoURL, input.Tagline, input.Website, input.PrimaryColor); err != nil {
+		return err
+	}
+	if input.LogoSource != "" {
+		return s.teams.UpdateBrandLogoSource(ctx, team.ID, input.LogoSource)
+	}
+	return nil
 }
 
 func validateBrandingURL(url string) error {
@@ -86,12 +97,7 @@ func (s *Service) GetBranding(ctx context.Context, slug string, userID uint) (*m
 	if err != nil {
 		return nil, err
 	}
-	return &models.BrandingInfo{
-		LogoURL:      team.BrandLogoURL,
-		Tagline:      team.BrandTagline,
-		Website:      team.BrandWebsite,
-		PrimaryColor: team.BrandPrimaryColor,
-	}, nil
+	return buildBrandingInfo(team), nil
 }
 
 // GetBrandingForShare — для share usecase (public /s/:token).
@@ -110,14 +116,41 @@ func (s *Service) GetBrandingForShare(ctx context.Context, teamID uint) (*models
 	if !subscription.IsMax(owner.PlanID) {
 		return nil, nil
 	}
-	info := &models.BrandingInfo{
-		LogoURL:      team.BrandLogoURL,
-		Tagline:      team.BrandTagline,
-		Website:      team.BrandWebsite,
-		PrimaryColor: team.BrandPrimaryColor,
-	}
+	info := buildBrandingInfo(team)
 	if info.IsEmpty() {
 		return nil, nil
 	}
 	return info, nil
+}
+
+// buildBrandingInfo — единая точка резолвинга effective_logo_url.
+// Phase 16-X: фронт не должен выбирать между LogoURL и uploaded-file —
+// бэк отдаёт уже готовую ссылку в EffectiveLogoURL. LogoSource дублируется
+// для UI (показ режима «URL» / «файл» в форме).
+//
+// Контракт effective_logo_url:
+//   - source='url'  → BrandLogoURL (может быть пустой строкой = нет логотипа)
+//   - source='file' → relative path к нашему GET endpoint; кэш-bust через ETag
+//   - source='none' → пустая строка
+//
+// LogoSource по умолчанию = "url" (DB default из миграции 000060), даже если
+// сам BrandLogoURL пуст — это эквивалентно "нет логотипа" в URL-режиме.
+func buildBrandingInfo(team *models.Team) *models.BrandingInfo {
+	info := &models.BrandingInfo{
+		LogoURL:      team.BrandLogoURL,
+		LogoSource:   team.BrandLogoSource,
+		Tagline:      team.BrandTagline,
+		Website:      team.BrandWebsite,
+		PrimaryColor: team.BrandPrimaryColor,
+	}
+	if info.LogoSource == "" {
+		info.LogoSource = "url"
+	}
+	switch info.LogoSource {
+	case "file":
+		info.EffectiveLogoURL = "/api/teams/" + team.Slug + "/branding/logo"
+	case "url":
+		info.EffectiveLogoURL = team.BrandLogoURL
+	}
+	return info
 }

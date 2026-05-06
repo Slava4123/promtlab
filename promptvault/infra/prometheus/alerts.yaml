@@ -3,17 +3,17 @@ groups:
     interval: 5m
     rules:
       - alert: InsightsComputeLoopStalled
-        expr: increase(analytics_insights_refresh_total{result="success"}[25h]) == 0
+        expr: increase(analytics_insights_loop_runs_total[25h]) == 0
         for: 1h
         labels:
           severity: warning
         annotations:
-          summary: "InsightsComputeLoop не проработал 25+ часов"
-          description: "Нет успешных пересчётов Smart Insights. Проверить analytics.insights_loop.*"
+          summary: "InsightsComputeLoop не запускался 25+ часов"
+          description: "Loop не сделал ни одной итерации. Это поломка cron'а или контейнера, не false positive (counter инкрементится независимо от Max-юзеров)."
           runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/InsightsComputeLoopStalled.md"
 
       - alert: InsightsComputeLoopDead
-        expr: absent_over_time(analytics_insights_refresh_total{result="success"}[48h])
+        expr: absent_over_time(analytics_insights_loop_runs_total[48h])
         for: 1h
         labels:
           severity: critical
@@ -22,13 +22,27 @@ groups:
           description: "Метрика отсутствует 48ч+. Проверить контейнер api, cron InsightsComputeLoop, миграции БД. for: 1h страхует от false positive при первом старте Prometheus, у которого нет истории за 48h."
           runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/InsightsComputeLoopDead.md"
 
-      - alert: CleanupLoopStalled
-        expr: increase(analytics_cleanup_deleted_total[25h]) == 0
+      - alert: InsightsComputeLoopAllErrors
+        expr: |
+          increase(analytics_insights_loop_runs_total[25h]) > 0
+          and increase(analytics_insights_refresh_total{result="success"}[25h]) == 0
+          and increase(analytics_insights_refresh_total{result="error"}[25h]) > 0
         for: 1h
         labels:
           severity: warning
         annotations:
-          summary: "CleanupLoop не проработал 25+ часов"
+          summary: "InsightsComputeLoop работает, но все запуски падают"
+          description: "Loop запускается, Max-юзеры есть, но ComputeInsights возвращает ошибку для всех. Investigate analytics.insights_loop.* в логах."
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/InsightsComputeLoopStalled.md"
+
+      - alert: CleanupLoopStalled
+        expr: increase(analytics_cleanup_runs_total[25h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "CleanupLoop не запускался 25+ часов"
+          description: "Loop не сделал ни одной итерации (counter инкрементится независимо от того, удалено что-то или нет). Это поломка контейнера/cron'а."
           runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/CleanupLoopStalled.md"
 
       - alert: ShareQuotaIncrementLeak
@@ -40,3 +54,20 @@ groups:
           summary: "Revenue-leak: share quota increments fail"
           description: "Share-ссылки создаются, но daily quota counter не инкрементится."
           runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/ShareQuotaIncrementLeak.md"
+
+  - name: branding-logo
+    interval: 5m
+    rules:
+      - alert: TeamBrandingLogoUploadErrorRate
+        expr: |
+          sum(rate(team_branding_logo_uploads_total{result!="success"}[5m]))
+          /
+          clamp_min(sum(rate(team_branding_logo_uploads_total[5m])), 0.001)
+          > 0.20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Team branding logo upload error rate > 20%"
+          description: "Доля reject'ов upload'а логотипов выше 20% за 10 минут. Часто 'too_large'/'bad_format' = ок (юзеры пробуют), но скачок 'other' = регрессия в усесейзе или БД. Смотрите labels."
+          runbook_url: "https://github.com/Slava4123/promtlab/blob/main/promptvault/docs/runbooks/TeamBrandingUploadErrors.md"
