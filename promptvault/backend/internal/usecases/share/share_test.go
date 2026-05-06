@@ -3,6 +3,7 @@ package share
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -38,6 +39,9 @@ func (m *mockShareRepo) Deactivate(ctx context.Context, promptID uint) error {
 }
 func (m *mockShareRepo) IncrementViewCount(ctx context.Context, id uint) error {
 	return m.Called(ctx, id).Error(0)
+}
+func (m *mockShareRepo) CleanupExpired(_ context.Context, _ time.Duration) (int64, error) {
+	return 0, nil
 }
 
 type mockPromptRepo struct{ mock.Mock }

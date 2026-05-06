@@ -242,8 +242,13 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			"warn", "CRON_FAST_DEV=true — все loops ускорены до десятков секунд (dev only)")
 	}
 
+	// Phase 16-Y: shareLinkRepo нужен раньше — для cleanup loop (expired share-links).
+	// shareSvc использует тот же экземпляр репозитория ниже.
+	shareLinkRepo := pgrepo.NewShareLinkRepository(db)
+
 	// Cleanup loops — ежесуточно. Retention: Free=30д, Pro=90д, Max=365д (per-plan в SQL).
-	activityCleanupLoop := analyticsuc.NewCleanupLoop(activityRepo, analyticsRepo, pick(24*time.Hour, 1*time.Minute))
+	// Phase 16-Y: тот же loop чистит expired share-ссылки (grace 30d после expires_at).
+	activityCleanupLoop := analyticsuc.NewCleanupLoop(activityRepo, analyticsRepo, shareLinkRepo, pick(24*time.Hour, 1*time.Minute))
 	insightsLoop := analyticsuc.NewInsightsComputeLoop(analyticsSvc, userRepo, teamRepo, pick(24*time.Hour, 1*time.Minute))
 
 	promptSvc := promptuc.NewService(promptRepo, tagRepo, collectionRepo, versionRepo, teamRepo, pinRepo, streakSvc, badgeSvc, quotaSvc)
@@ -298,8 +303,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	apiKeyRepo := pgrepo.NewAPIKeyRepository(db)
 	apiKeySvc := apikeyuc.NewService(apiKeyRepo, cfg.MCP.MaxKeysPerUser)
 
-	// Share Links
-	shareLinkRepo := pgrepo.NewShareLinkRepository(db)
+	// Share Links (репозиторий создан выше для cleanup loop)
 	shareSvc := shareuc.NewService(shareLinkRepo, promptRepo, teamRepo, cfg.Server.FrontendURL, quotaSvc)
 	shareSvc.SetActivity(activitySvc)
 	// Phase 14 B.2: подключаем share_view_log write-path (Pro+ owner). Nil-safe.

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"promptvault/internal/models"
+	quotauc "promptvault/internal/usecases/quota"
 )
 
 // Регрессия на QA-баг: все тарифы показывали "undefined share-ссылок/день"
@@ -15,21 +16,22 @@ import (
 
 func TestNewPlanResponse_CopiesAllFields(t *testing.T) {
 	plan := models.SubscriptionPlan{
-		ID:              "pro",
-		Name:            "Pro",
-		PriceKop:        59900,
-		PeriodDays:      30,
-		MaxPrompts:      500,
-		MaxCollections:  100,
-		MaxTeams:        5,
-		MaxTeamMembers:  10,
-		MaxShareLinks:   50,
-		MaxDailyShares:  100,
-		MaxExtUsesDaily: 100,
-		MaxMCPUsesDaily: 100,
-		Features:        json.RawMessage(`["priority_support"]`),
-		SortOrder:       1,
-		IsActive:        true,
+		ID:                 "pro",
+		Name:               "Pro",
+		PriceKop:           59900,
+		PeriodDays:         30,
+		MaxPrompts:         500,
+		MaxCollections:     100,
+		MaxTeams:           5,
+		MaxTeamMembers:     10,
+		MaxExtUsesDaily:    100,
+		MaxMCPUsesDaily:    100,
+		MaxChains:          5,
+		MaxStepsPerChain:   10,
+		MaxSavedExecutions: 10,
+		Features:           json.RawMessage(`["priority_support"]`),
+		SortOrder:          1,
+		IsActive:           true,
 	}
 
 	resp := NewPlanResponse(plan)
@@ -42,21 +44,24 @@ func TestNewPlanResponse_CopiesAllFields(t *testing.T) {
 	assert.Equal(t, 100, resp.MaxCollections)
 	assert.Equal(t, 5, resp.MaxTeams)
 	assert.Equal(t, 10, resp.MaxTeamMembers)
-	assert.Equal(t, 50, resp.MaxShareLinks)
-	assert.Equal(t, 100, resp.MaxDailyShares, "MaxDailyShares обязателен — баг /pricing #1")
 	assert.Equal(t, 100, resp.MaxExtUsesDaily)
 	assert.Equal(t, 100, resp.MaxMCPUsesDaily)
+	assert.Equal(t, 5, resp.MaxChains, "MaxChains обязателен — Phase 16 dark launch")
+	assert.Equal(t, 10, resp.MaxStepsPerChain)
+	assert.Equal(t, 10, resp.MaxSavedExecutions)
 	assert.Equal(t, 1, resp.SortOrder)
 	assert.True(t, resp.IsActive, "IsActive обязателен для фильтрации на фронте — баг /pricing #1")
 }
 
 func TestNewPlanResponse_JSONContainsNewFields(t *testing.T) {
 	plan := models.SubscriptionPlan{
-		ID:              "max",
-		Name:            "Max",
-		MaxDailyShares:  1000,
-		IsActive:        true,
-		Features:        json.RawMessage(`[]`),
+		ID:                 "max",
+		Name:               "Max",
+		MaxChains:          100,
+		MaxStepsPerChain:   50,
+		MaxSavedExecutions: 1000,
+		IsActive:           true,
+		Features:           json.RawMessage(`[]`),
 	}
 
 	resp := NewPlanResponse(plan)
@@ -64,10 +69,37 @@ func TestNewPlanResponse_JSONContainsNewFields(t *testing.T) {
 	assert.NoError(t, err)
 
 	payload := string(raw)
-	// Frontend (pricing.tsx) ожидает эти ключи буквально. Если у DTO их не
-	// будет — plan.max_daily_shares === undefined и .toLocaleString упадёт.
-	assert.Contains(t, payload, `"max_daily_shares":1000`)
 	assert.Contains(t, payload, `"is_active":true`)
+	// Phase 16: chains-лимиты для /pricing под VITE_CHAINS_ENABLED.
+	assert.Contains(t, payload, `"max_chains":100`)
+	assert.Contains(t, payload, `"max_steps_per_chain":50`)
+	assert.Contains(t, payload, `"max_saved_executions":1000`)
+	// Phase 16-Y: max_share_links и max_daily_shares УДАЛЕНЫ — не должно быть
+	// в payload (фронт больше не показывает счётчики share-ссылок).
+	assert.NotContains(t, payload, `"max_share_links"`)
+	assert.NotContains(t, payload, `"max_daily_shares"`)
+}
+
+// Phase 16-Y: UsageResponse больше не содержит share_links и daily_shares_today.
+func TestNewUsageResponse_NoShareCounters(t *testing.T) {
+	summary := &quotauc.UsageSummary{
+		PlanID:       "pro",
+		Prompts:      quotauc.QuotaInfo{Used: 10, Limit: 500},
+		Collections:  quotauc.QuotaInfo{Used: 2, Limit: 100},
+		Teams:        quotauc.QuotaInfo{Used: 1, Limit: 5},
+		ExtUsesToday: quotauc.QuotaInfo{Used: 12, Limit: 100},
+		MCPUsesToday: quotauc.QuotaInfo{Used: 4, Limit: 100},
+		Chains:       quotauc.QuotaInfo{Used: 2, Limit: 5},
+	}
+
+	resp := NewUsageResponse(summary)
+	raw, err := json.Marshal(resp)
+	assert.NoError(t, err)
+
+	payload := string(raw)
+	assert.Contains(t, payload, `"chains":{"used":2,"limit":5}`)
+	assert.NotContains(t, payload, `"share_links"`)
+	assert.NotContains(t, payload, `"daily_shares_today"`)
 }
 
 func TestNewPlansResponse_ReturnsAllPlans(t *testing.T) {

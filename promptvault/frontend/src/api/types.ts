@@ -469,11 +469,15 @@ export interface Plan {
   max_collections: number
   max_teams: number
   max_team_members: number
-  max_share_links: number
-  /** Phase 14: Fixed-window лимит создаваемых share-ссылок в день (Free 10 / Pro 100 / Max 1000). */
-  max_daily_shares: number
+  // Phase 16-Y: max_share_links / max_daily_shares УДАЛЕНЫ. Share-ссылки
+  // живут по TTL (default 30 дней, до 1 года; Max — «без срока»). Анти-абуз
+  // покрывает общий per-user rate-limit на /api.
   max_ext_uses_daily: number
   max_mcp_uses_daily: number
+  /** Phase 16: tier-лимиты для Prompt Chains. Free 1/3/0, Pro 5/10/10, Max 100/50/1000. */
+  max_chains: number
+  max_steps_per_chain: number
+  max_saved_executions: number
   features: string[]
   sort_order: number
   is_active: boolean
@@ -503,13 +507,134 @@ export interface UsageSummary {
   prompts: QuotaInfo
   collections: QuotaInfo
   teams: QuotaInfo
-  share_links: QuotaInfo
-  /** Phase 14: fixed-window лимит создаваемых share-ссылок за сутки (UTC-полночь). */
-  daily_shares_today: QuotaInfo
+  // Phase 16-Y: share_links и daily_shares_today УДАЛЕНЫ — на share-ссылки
+  // больше нет квот, только TTL.
   ext_uses_today: QuotaInfo
   mcp_uses_today: QuotaInfo
+  /** Phase 16: общее количество цепочек (не soft-deleted). */
+  chains: QuotaInfo
 }
 
 export interface CheckoutResponse {
   payment_url: string
+}
+
+// --- Phase 16: Prompt Chains ---
+
+/** Источник значения переменной шага. var_name — для type=chain_var. */
+export interface VariableSource {
+  type: "manual" | "chain_var"
+  var_name?: string
+}
+
+export type VariableMapping = Record<string, VariableSource>
+
+export interface Chain {
+  id: number
+  user_id: number
+  team_id?: number
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+// Phase 16 v2 (Tree-canvas): manual fork с label-based branches.
+// Юзер сам выбирает ветку в run-mode по её Label.
+export type ChainStepType = "prompt" | "fork"
+
+export interface ConditionBranch {
+  /** Отображается юзеру как кнопка выбора пути в run-mode. ≤200 символов, уникален в шаге. */
+  label: string
+  /** id шага, на который перейти при выборе этой ветки. null = конец цепочки. */
+  next_step_id?: number | null
+}
+
+export interface ChainConditions {
+  branches: ConditionBranch[]
+}
+
+/** Облегчённое представление промпта внутри шага цепочки. */
+export interface ChainStepPromptSummary {
+  id: number
+  title: string
+  content: string
+}
+
+export interface ChainStep {
+  id: number
+  chain_id: number
+  position: number
+  /** prompt_id обязателен у prompt-шагов; у fork-шагов отсутствует (контейнер с ветками). */
+  prompt_id?: number | null
+  name: string
+  /** JSONB raw: парсится в VariableMapping на use-site через JSON.parse если string. */
+  variable_mapping: VariableMapping
+  manual_checkpoint: boolean
+  /** Phase 16 v2: 'prompt' | 'fork'. По умолчанию 'prompt'. */
+  step_type: ChainStepType
+  /** Только при step_type='fork'. */
+  conditions?: ChainConditions
+  /** Phase 16 v3: явный переход для prompt-шагов. null/undefined = конец ветки/цепочки.
+   *  Игнорируется для fork-шагов — у них переход через conditions.branches[chosen].next_step_id. */
+  next_step_id?: number | null
+  /** Preloaded prompt для отображения title в Canvas + content в hover-preview.
+   *  Может быть undefined если promпt soft-deleted. */
+  prompt?: ChainStepPromptSummary
+  created_at: string
+}
+
+export interface ChainDetail extends Chain {
+  steps: ChainStep[]
+}
+
+export interface ChainListResponse {
+  items: Chain[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** Снимок цепочки + контент промптов на момент StartExecution.
+ *  Используется фронтом для рендеринга текущего шага без обращения к /prompts. */
+export interface ChainSnapshot {
+  chain: Chain
+  steps: ChainStep[]
+  prompt_contents: Record<number, string>
+}
+
+export type ChainExecutionStatus = "in_progress" | "completed" | "abandoned"
+
+/** Компактная сводка execution для страницы истории — без больших JSONB-полей. */
+export interface ChainExecutionSummary {
+  id: number
+  chain_id: number
+  user_id: number
+  current_step: number
+  status: ChainExecutionStatus
+  started_at: string
+  completed_at?: string | null
+  updated_at: string
+}
+
+export interface ChainExecutionListResponse {
+  items: ChainExecutionSummary[]
+  limit: number
+}
+
+export interface ChainExecution {
+  id: number
+  chain_id: number
+  user_id: number
+  current_step: number
+  /** JSONB: значения chain-level переменных (initial_vars). */
+  variables: Record<string, string>
+  /** JSONB: накопленные outputs шагов. Ключ "step_<id>". */
+  step_outputs: Record<string, string>
+  /** JSONB: ChainSnapshot. На фронте парсится через JSON.parse при необходимости. */
+  chain_snapshot: ChainSnapshot
+  status: ChainExecutionStatus
+  started_at: string
+  completed_at?: string | null
+  updated_at: string
 }

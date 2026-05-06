@@ -11,7 +11,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 	activityuc "promptvault/internal/usecases/activity"
@@ -21,9 +20,14 @@ import (
 )
 
 const (
-	tokenPrefix     = "ps_"
-	tokenRandBytes  = 16 // 128 bits of entropy
+	tokenPrefix      = "ps_"
+	tokenRandBytes   = 16 // 128 bits of entropy
 	viewCountTimeout = 5 * time.Second
+	// DefaultShareTTL — срок жизни ссылки по умолчанию (Phase 16-Y).
+	// Аналог Notion/Figma: TTL по выбору юзера от 1ч до 1y; здесь дефолт 30 дней.
+	// Просрочка → 410 Gone в течение grace 30 дней, потом hard DELETE через
+	// cleanup loop в analytics.cleanup.
+	DefaultShareTTL = 30 * 24 * time.Hour
 )
 
 type Service struct {
@@ -111,28 +115,21 @@ func (s *Service) CreateOrGet(ctx context.Context, promptID, userID uint) (*Shar
 		return nil, false, err
 	}
 
-	// Проверка квот (только при создании новой).
-	// Phase 14: daily лимит создаваемых ссылок (fixed window UTC-полночь).
-	// Unchanged: total active cap (опциональный soft cap, -1 = unlimited).
-	if s.quotas != nil {
-		if err := s.quotas.CheckDailyShareCreation(ctx, userID); err != nil {
-			return nil, false, err
-		}
-		if err := s.quotas.CheckShareLinkQuota(ctx, userID); err != nil {
-			return nil, false, err
-		}
-	}
-
+	// Phase 16-Y: квот на share-ссылки больше нет (ни active-count, ни
+	// daily-create). Анти-абуз — общий per-user rate-limit на /api
+	// (byUser(120/min)). TTL по умолчанию = 30 дней (DefaultShareTTL).
 	token, err := generateToken()
 	if err != nil {
 		return nil, false, err
 	}
 
+	expiresAt := time.Now().Add(DefaultShareTTL)
 	link := &models.ShareLink{
-		PromptID: promptID,
-		UserID:   userID,
-		Token:    token,
-		IsActive: true,
+		PromptID:  promptID,
+		UserID:    userID,
+		Token:     token,
+		IsActive:  true,
+		ExpiresAt: &expiresAt,
 	}
 	if err := s.shares.Create(ctx, link); err != nil {
 		// Race condition: another request created a link between our check and insert.
@@ -141,16 +138,6 @@ func (s *Service) CreateOrGet(ctx context.Context, promptID, userID uint) (*Shar
 			return s.toInfo(existing), false, nil
 		}
 		return nil, false, err
-	}
-
-	// Increment daily counter AFTER successful INSERT. Best-effort: если инкремент
-	// fail'ит, это не откатывает создание (юзер получил ссылку, но счётчик
-	// недосчитал). Error-level + Prometheus counter — revenue-leak сигнал для SRE.
-	if s.quotas != nil {
-		if err := s.quotas.IncrementShareCreation(ctx, userID); err != nil {
-			slog.ErrorContext(ctx, "share.quota.increment_failed", "user_id", userID, "error", err)
-			metrics.ShareQuotaIncrementFailed.Inc()
-		}
 	}
 
 	// Activity feed hook (Phase 14) — только для team-промптов.
@@ -238,6 +225,13 @@ func (s *Service) GetPublicPrompt(ctx context.Context, token string, meta ViewMe
 	// Soft-deleted prompt: GORM preload returns zero-value struct.
 	if link.Prompt.ID == 0 {
 		return nil, ErrNotFound
+	}
+
+	// Phase 16-Y: TTL check. ExpiresAt=NULL означает «бессрочно» (Max-эксклюзив).
+	// Просрочка → 410 Gone (отдельный код для UX «ссылка истекла», не путать
+	// с 404 «не найдена» — последнее для несуществующих/revoked).
+	if link.ExpiresAt != nil && link.ExpiresAt.Before(time.Now()) {
+		return nil, ErrLinkExpired
 	}
 
 	// Async view count increment (best-effort, same pattern as apikey.UpdateLastUsed).

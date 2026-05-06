@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom"
-import { Copy, Check, ExternalLink, Loader2, Sparkles, BookOpen, Users, Zap } from "lucide-react"
+import { Copy, Check, ExternalLink, Loader2, Sparkles, BookOpen, Clock, Users, Zap } from "lucide-react"
 import { useState } from "react"
 import { toast, Toaster } from "sonner"
 
@@ -13,6 +13,31 @@ export default function SharedPrompt() {
   const { token } = useParams<{ token: string }>()
   const { data: prompt, isLoading, isError, error } = usePublicPrompt(token ?? "")
   const [copied, setCopied] = useState(false)
+
+  // Phase 16-Y: 410 Gone — ссылка существовала, но просрочена.
+  // Отдельная страница вместо generic 404, чтобы пользователь понял, что ссылка
+  // была валидной, и автор может выпустить новую.
+  const isExpired = error instanceof ApiError && error.status === 410
+  if (isExpired) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background px-4">
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10">
+            <Clock className="h-8 w-8 text-amber-400" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-foreground">Срок действия ссылки истёк</h1>
+            <p className="mt-2 max-w-sm text-muted-foreground">
+              Эта публичная ссылка больше недоступна. Попросите автора создать новую.
+            </p>
+          </div>
+        </div>
+        <Link to="/sign-up">
+          <Button size="lg">Создать свою библиотеку промптов</Button>
+        </Link>
+      </div>
+    )
+  }
 
   if (isLoading) {
     return (

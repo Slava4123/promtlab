@@ -52,8 +52,7 @@ export interface UsageSummary {
   prompts: QuotaInfo
   collections: QuotaInfo
   teams: QuotaInfo
-  share_links: QuotaInfo
-  daily_shares_today: QuotaInfo
+  // Phase 16-Y: share_links / daily_shares_today УДАЛЕНЫ — на share больше нет квот.
   ext_uses_today: QuotaInfo
   mcp_uses_today: QuotaInfo
 }
@@ -67,7 +66,9 @@ export interface Totals {
 }
 
 // ModelUsageRow — сегментация использований по AI-модели.
-// model === "" → "Без модели" (промпт без указанной model).
+// model === "" → "Модель не указана" (промпт, в котором при создании
+// не выбрана target-модель в редакторе). Backend агрегирует через
+// COALESCE(model_used,'') в analytics_repo.go.
 export interface ModelUsageRow {
   model: string
   uses: number

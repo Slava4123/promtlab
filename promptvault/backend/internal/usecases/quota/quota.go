@@ -113,20 +113,10 @@ func (s *Service) CheckTeamMemberQuota(ctx context.Context, teamID uint, ownerUs
 	return nil
 }
 
-func (s *Service) CheckShareLinkQuota(ctx context.Context, userID uint) error {
-	planID, plan, err := s.getPlan(ctx, userID)
-	if err != nil {
-		return err
-	}
-	used, err := s.quotas.CountActiveShareLinks(ctx, userID)
-	if err != nil {
-		return err
-	}
-	if !isWithinLimit(used, plan.MaxShareLinks) {
-		return newQuotaExceeded("share_links", planID, int(used), plan.MaxShareLinks, "публичных ссылок")
-	}
-	return nil
-}
+// Phase 16-Y: CheckShareLinkQuota и CheckDailyShareCreation удалены.
+// Share-ссылки теперь живут по TTL (миграция 000061), активный count и
+// daily-create счётчики не используются. Анти-абуз — общий per-user
+// rate-limit (byUser(120/min)) на уровне HTTP middleware.
 
 func (s *Service) CheckExtensionQuota(ctx context.Context, userID uint) error {
 	planID, plan, err := s.getPlan(ctx, userID)
@@ -158,31 +148,49 @@ func (s *Service) CheckMCPQuota(ctx context.Context, userID uint) error {
 	return nil
 }
 
-// CheckDailyShareCreation — Phase 14. Fixed-window счётчик создаваемых
-// share-ссылок за календарный день UTC. Семантика отличается от
-// CheckShareLinkQuota (total active, stateful): сюда попадает каждое
-// CREATE, даже если ссылка была сразу деактивирована. Re-activation
-// тоже считается (см. usecases/share).
-func (s *Service) CheckDailyShareCreation(ctx context.Context, userID uint) error {
+// CheckChainQuota — Phase 16. Проверяет лимит общего количества цепочек у юзера.
+// Считаются только не-soft-deleted (deleted_at IS NULL).
+func (s *Service) CheckChainQuota(ctx context.Context, userID uint) error {
 	planID, plan, err := s.getPlan(ctx, userID)
 	if err != nil {
 		return err
 	}
-	used, err := s.quotas.GetDailyUsage(ctx, userID, time.Now(), FeatureShareCreate)
+	used, err := s.quotas.CountChains(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if !isWithinLimit(int64(used), plan.MaxDailyShares) {
-		return newQuotaExceeded("daily_shares", planID, used, plan.MaxDailyShares, "публичных ссылок в день")
+	if !isWithinLimit(used, plan.MaxChains) {
+		return newQuotaExceeded("chains", planID, int(used), plan.MaxChains, "цепочек")
 	}
 	return nil
 }
 
-// IncrementShareCreation — best-effort инкремент дневного счётчика.
-// Вызывается ПОСЛЕ успешного INSERT в share_links. Если инкремент падает,
-// ссылка уже создана — это журналируется в usecases/share (slog.Warn).
-func (s *Service) IncrementShareCreation(ctx context.Context, userID uint) error {
-	return s.quotas.IncrementDailyUsage(ctx, userID, time.Now(), FeatureShareCreate)
+// IsMaxTierUser — Phase B (Conditional Chains). True если планы 'max' / 'max_yearly'.
+// Используется в chain.Service для гейта conditional шагов (Max-only фича).
+// Безопасный default false при ошибках чтения плана.
+func (s *Service) IsMaxTierUser(ctx context.Context, userID uint) bool {
+	planID, _, err := s.getPlan(ctx, userID)
+	if err != nil {
+		return false
+	}
+	return planID == "max" || planID == "max_yearly"
+}
+
+// CheckChainStepQuota — Phase 16. Лимит шагов внутри одной цепочки. Вызывается
+// перед AddStep. plan.MaxStepsPerChain действует на уровне chain, не user.
+func (s *Service) CheckChainStepQuota(ctx context.Context, userID uint, chainID uint) error {
+	planID, plan, err := s.getPlan(ctx, userID)
+	if err != nil {
+		return err
+	}
+	used, err := s.quotas.CountStepsByChain(ctx, chainID)
+	if err != nil {
+		return err
+	}
+	if !isWithinLimit(used, plan.MaxStepsPerChain) {
+		return newQuotaExceeded("chain_steps", planID, int(used), plan.MaxStepsPerChain, "шагов в цепочке")
+	}
+	return nil
 }
 
 func (s *Service) IncrementExtensionUsage(ctx context.Context, userID uint) error {
@@ -215,14 +223,6 @@ func (s *Service) GetUsageSummary(ctx context.Context, userID uint) (*UsageSumma
 	if err != nil {
 		return nil, err
 	}
-	shares, err := s.quotas.CountActiveShareLinks(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	dailyShares, err := s.quotas.GetDailyUsage(ctx, userID, now, FeatureShareCreate)
-	if err != nil {
-		return nil, err
-	}
 	extUsed, err := s.quotas.GetDailyUsage(ctx, userID, now, FeatureExtension)
 	if err != nil {
 		return nil, err
@@ -231,36 +231,39 @@ func (s *Service) GetUsageSummary(ctx context.Context, userID uint) (*UsageSumma
 	if err != nil {
 		return nil, err
 	}
+	chains, err := s.quotas.CountChains(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 
 	return &UsageSummary{
-		PlanID:           planID,
-		Prompts:          QuotaInfo{Used: int(prompts), Limit: plan.MaxPrompts},
-		Collections:      QuotaInfo{Used: int(collections), Limit: plan.MaxCollections},
-		Teams:            QuotaInfo{Used: int(teams), Limit: plan.MaxTeams},
-		ShareLinks:       QuotaInfo{Used: int(shares), Limit: plan.MaxShareLinks},
-		DailySharesToday: QuotaInfo{Used: dailyShares, Limit: plan.MaxDailyShares},
-		ExtUsesToday:     QuotaInfo{Used: extUsed, Limit: plan.MaxExtUsesDaily},
-		MCPUsesToday:     QuotaInfo{Used: mcpUsed, Limit: plan.MaxMCPUsesDaily},
+		PlanID:       planID,
+		Prompts:      QuotaInfo{Used: int(prompts), Limit: plan.MaxPrompts},
+		Collections:  QuotaInfo{Used: int(collections), Limit: plan.MaxCollections},
+		Teams:        QuotaInfo{Used: int(teams), Limit: plan.MaxTeams},
+		ExtUsesToday: QuotaInfo{Used: extUsed, Limit: plan.MaxExtUsesDaily},
+		MCPUsesToday: QuotaInfo{Used: mcpUsed, Limit: plan.MaxMCPUsesDaily},
+		Chains:       QuotaInfo{Used: int(chains), Limit: plan.MaxChains},
 	}, nil
 }
 
 // DowngradePreview — превышения лимитов целевого плана (M-10).
-// Учитываем только persistent-ресурсы: prompts, collections, teams, share_links.
-// MCP/extension — daily, сбросятся через день, downgrade не блокирует.
+// Phase 16-Y: OverShares убран — share-ссылки теперь живут по TTL без
+// active-count, downgrade на share не влияет (свежие ссылки на новом плане
+// получат default TTL 30d, существующие доживут свой срок).
 // Поле Over — абсолютное превышение (used - limit), 0 если в пределах.
 type DowngradePreview struct {
-	TargetPlanID  string `json:"target_plan_id"`
-	CurrentPlanID string `json:"current_plan_id"`
-	OverPrompts   int    `json:"over_prompts"`
-	OverCollections int  `json:"over_collections"`
-	OverTeams     int    `json:"over_teams"`
-	OverShares    int    `json:"over_shares"`
+	TargetPlanID    string `json:"target_plan_id"`
+	CurrentPlanID   string `json:"current_plan_id"`
+	OverPrompts     int    `json:"over_prompts"`
+	OverCollections int    `json:"over_collections"`
+	OverTeams       int    `json:"over_teams"`
 }
 
 // HasOverages возвращает true если хотя бы один ресурс превышает лимит target-плана.
 // Удобно для UI — не нужно разбирать каждое поле отдельно.
 func (p *DowngradePreview) HasOverages() bool {
-	return p.OverPrompts > 0 || p.OverCollections > 0 || p.OverTeams > 0 || p.OverShares > 0
+	return p.OverPrompts > 0 || p.OverCollections > 0 || p.OverTeams > 0
 }
 
 // GetDowngradePreview считает, сколько ресурсов у юзера превышает лимиты
@@ -288,10 +291,6 @@ func (s *Service) GetDowngradePreview(ctx context.Context, userID uint, targetPl
 	if err != nil {
 		return nil, err
 	}
-	shares, err := s.quotas.CountActiveShareLinks(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
 
 	over := func(used int64, limit int) int {
 		diff := int(used) - limit
@@ -307,6 +306,5 @@ func (s *Service) GetDowngradePreview(ctx context.Context, userID uint, targetPl
 		OverPrompts:     over(prompts, targetPlan.MaxPrompts),
 		OverCollections: over(collections, targetPlan.MaxCollections),
 		OverTeams:       over(teams, targetPlan.MaxTeams),
-		OverShares:      over(shares, targetPlan.MaxShareLinks),
 	}, nil
 }

@@ -42,6 +42,15 @@ const planDescriptions: Record<string, string> = {
 
 type Billing = "monthly" | "yearly"
 
+// Русское склонение для слова «сохранённый» — единственный/мн.ч. родительный.
+// 1 → сохранённый, 2-4 → сохранённых, 5+ / 11-14 → сохранённых.
+function plurExec(n: number): string {
+  const mod10 = n % 10, mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return "сохранённый"
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "сохранённых"
+  return "сохранённых"
+}
+
 // Форматируем число с разделителем разрядов (10 000, 1 000). Если поле
 // отсутствует в ответе backend'а (старый бинарник без свежих миграций) —
 // показываем «—» вместо краша через toLocaleString на undefined.
@@ -52,25 +61,40 @@ function formatNumber(value: number | undefined | null): string {
 
 function planFeatures(plan: Plan): string[] {
   const features: string[] = []
+  const base = basePlanId(plan.id)
   features.push(`До ${formatNumber(plan.max_prompts)} промптов`)
   features.push(`До ${formatNumber(plan.max_collections)} коллекций`)
   const teams = plan.max_teams ?? 0
   features.push(
     `${formatNumber(plan.max_teams)} ${teams === 1 ? "команда" : "команд"} (до ${formatNumber(plan.max_team_members)} участников)`,
   )
-  // Phase 14: daily create лимит (основной показатель использования share).
-  features.push(`${formatNumber(plan.max_daily_shares)} публичных ссылок/день`)
+  // Phase 16-Y: квот на share-ссылки больше нет — они живут по TTL (30 дней
+  // default, до 1 года). Анти-абуз — общий per-user rate-limit на /api.
+  features.push(`Публичные ссылки на промпты с TTL 30 дней`)
   features.push(`${formatNumber(plan.max_ext_uses_daily)} вставок/день (расширение)`)
   features.push(`${formatNumber(plan.max_mcp_uses_daily)} MCP-вызовов/день`)
+  // Phase 16: chains только при включённом флаге — синхронно с App.tsx и
+  // app-sidebar.tsx, чтобы dark launch не объявлял фичу заранее.
+  if (import.meta.env.VITE_CHAINS_ENABLED === "true") {
+    features.push(
+      `Цепочки: до ${formatNumber(plan.max_chains)} штук × ${formatNumber(plan.max_steps_per_chain)} шагов`,
+    )
+    if (plan.max_saved_executions > 0) {
+      const word = plurExec(plan.max_saved_executions)
+      features.push(`История запусков цепочек: ${formatNumber(plan.max_saved_executions)} ${word}`)
+    }
+    if (base === "max") {
+      features.push("Условные ветвления в цепочках")
+    }
+  }
   // Phase 14: retention аналитики и флагманские фичи.
-  const base = basePlanId(plan.id)
   if (base === "free") {
     features.push("Аналитика: 7 дней истории")
   } else if (base === "pro") {
-    features.push("Аналитика: 90 дней истории + CSV export")
+    features.push("Аналитика: 90 дней истории + экспорт в CSV")
     features.push("Активность команды и история промптов")
   } else if (base === "max") {
-    features.push("Аналитика: 365 дней истории + CSV export + API")
+    features.push("Аналитика: 365 дней истории + экспорт в CSV + API")
     features.push("Умные инсайты: забытые, популярные, дубликаты")
     features.push("Брендинг публичных ссылок (логотип команды)")
   }
@@ -92,8 +116,13 @@ function dailyPrice(priceKop: number, periodDays: number): number {
 }
 
 // ctaLabel — value-ориентированный CTA вместо generic "Перейти на Pro".
-function ctaLabel(plan: Plan): string {
-  if (plan.price_kop === 0) return "Остаться на Free"
+// Free карточка для Pro/Max юзера = downgrade («Перейти на Free»);
+// для Free юзера = no-op (кнопка disabled, текст «Текущий план», см. JSX),
+// fallback «Остаться на Free» — только если состояние неожиданное.
+function ctaLabel(plan: Plan, currentPlanId: PlanID): string {
+  if (plan.price_kop === 0) {
+    return currentPlanId === "free" ? "Остаться на Free" : "Перейти на Free"
+  }
   const perDay = dailyPrice(plan.price_kop, plan.period_days)
   return `Получить ${plan.name} за ${perDay}₽/день`
 }
@@ -128,15 +157,18 @@ export default function Pricing() {
   const [downgradeOpen, setDowngradeOpen] = useState(false)
   const downgradePreview = useDowngradePreview("free")
 
-  // Фильтруем планы под выбранный цикл: free всегда, платные — по period_days.
-  // 365 (yearly) vs 30 (monthly). Пороговое 300 на всякий случай (если когда-то
-  // появятся полугодовые — они будут monthly-like для этого UI).
+  // Фильтруем планы под выбранный цикл: free всегда, остальные — по суффиксу
+  // `_yearly` в ID. Раньше различали по period_days >= 300, но это ломалось
+  // в dev-режиме когда BILLING_FAST_DEV=true и period_days приходилось
+  // снижать до 1-2 для быстрых проверок expire/renewal — yearly-планы
+  // тогда не попадали ни в одну вкладку.
   const visiblePlans = useMemo(() => {
     if (!plans) return []
     const isYearly = billing === "yearly"
     return plans.filter((p) => {
       if (p.price_kop === 0) return true
-      return isYearly ? p.period_days >= 300 : p.period_days < 300
+      const planIsYearly = p.id.endsWith("_yearly")
+      return isYearly ? planIsYearly : !planIsYearly
     })
   }, [plans, billing])
 
@@ -328,12 +360,28 @@ export default function Pricing() {
                     ) : checkout.isPending || downgrade.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      ctaLabel(plan)
+                      ctaLabel(plan, currentPlanId)
                     )}
                   </button>
                 </div>
               )
             })}
+          </div>
+
+          <div className="mt-8 rounded-2xl border border-border bg-card/50 p-6">
+            <h2 className="mb-3 text-[0.95rem] font-semibold text-foreground">
+              Доступно во всех тарифах
+            </h2>
+            <ul className="grid gap-2 text-[0.8rem] text-muted-foreground sm:grid-cols-2">
+              <li>История версий промптов с откатом</li>
+              <li>Корзина: восстановление 30 дней</li>
+              <li>Поиск с поддержкой опечаток (русский + английский)</li>
+              <li>Серии активности и достижения</li>
+              <li>Импорт/экспорт промптов</li>
+              <li>Темы интерфейса (светлая/тёмная)</li>
+              <li>До 5 API-ключей с ограничением прав</li>
+              <li>Вход через GitHub, Google, Yandex</li>
+            </ul>
           </div>
 
           <div className="mt-8 rounded-2xl border border-border bg-card/50 p-6">

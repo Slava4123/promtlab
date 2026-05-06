@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom"
-import { AlertTriangle, ArrowRight, Loader2 } from "lucide-react"
+import { AlertTriangle, ArrowRight, Loader2, LifeBuoy, Trash2, type LucideIcon } from "lucide-react"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -14,62 +15,119 @@ import { useAuthStore } from "@/stores/auth-store"
 import { useCheckout } from "@/hooks/use-subscription"
 import { PlanBadge } from "./plan-badge"
 
-// Человеко-читаемое название ресурса для заголовка.
+// Человеко-читаемое название ресурса для заголовка диалога.
+// Должно покрывать ВСЕ quotaType, что отдаёт backend (см. quota.go newQuotaExceeded calls).
 const quotaLabels: Record<string, string> = {
   prompts: "промптов",
   collections: "коллекций",
   teams: "команд",
   team_members: "участников команды",
-  share_links: "публичных ссылок",
-  daily_shares: "публичных ссылок в день",
+  // Phase 16-Y: share_links / daily_shares УДАЛЕНЫ — share больше не имеет квот.
   ext_daily: "вставок через расширение на сегодня",
   mcp_daily: "MCP-вызовов на сегодня",
+  chains: "цепочек",
+  chain_steps: "шагов в цепочке",
 }
 
-// Per-quota value-prop: что юзер получит на Pro. Рекомендуем Pro (19₽/день).
-type QuotaBenefit = { headline: string; detail: string; targetPlan: "pro" | "max" }
+// Форма существительного для headline ("500 X на Pro"). Отличается от quotaLabel
+// тем что использует «в день», а не «на сегодня» — для headline это точнее.
+const quotaHeadlineNoun: Record<string, string> = {
+  prompts: "промптов",
+  collections: "коллекций",
+  teams: "команд",
+  team_members: "участников в команде",
+  ext_daily: "вставок в день через расширение",
+  mcp_daily: "MCP-вызовов в день",
+  chains: "цепочек",
+  chain_steps: "шагов в цепочке",
+}
 
-const quotaBenefits: Record<string, QuotaBenefit> = {
+// Per-resource данные: лимиты на Pro/Max и общая «выгода» в одну строку.
+// Числа выровнены с миграцией 000046_concrete_plan_limits. При изменении
+// миграции — обновить и здесь (или в будущем подтянуть через usePlans()).
+//
+// maxAction — что Max-юзер может сделать сам, чтобы вписаться в лимит.
+// Для дневных лимитов (daily_shares, ext_daily, mcp_daily) maxAction = null —
+// юзер ничего не может, счётчик сбросится в полночь UTC. В этом случае
+// primary-кнопка не показывается, остаётся только «Связаться с поддержкой».
+type ResourceMeta = {
+  proLimit: string
+  maxLimit: string
+  detail: string
+  maxAction: { label: string; href: string; icon: LucideIcon } | null
+}
+
+const resourceMeta: Record<string, ResourceMeta> = {
   prompts: {
-    headline: "500 промптов на Pro, безлимит на Max",
-    detail: "Храните всю библиотеку без ограничений — 19₽ в день.",
-    targetPlan: "pro",
+    proLimit: "500", maxLimit: "10 000",
+    detail: "Храните всю библиотеку без ограничений.",
+    maxAction: { label: "Удалить лишние промпты", href: "/dashboard", icon: Trash2 },
   },
   collections: {
-    headline: "Безлимитные коллекции на Pro",
-    detail: "Группируйте промпты как удобно — команды, клиенты, проекты.",
-    targetPlan: "pro",
+    proLimit: "100", maxLimit: "1 000",
+    detail: "Группируйте промпты по командам, клиентам, проектам.",
+    maxAction: { label: "Удалить лишние коллекции", href: "/collections", icon: Trash2 },
   },
   teams: {
-    headline: "5 команд на Pro, безлимит на Max",
+    proLimit: "5", maxLimit: "50",
     detail: "Разделяйте промпты между проектами и клиентами.",
-    targetPlan: "pro",
+    maxAction: { label: "Удалить лишние команды", href: "/teams", icon: Trash2 },
   },
   team_members: {
-    headline: "До 10 участников в команде на Pro",
-    detail: "Безлимит участников на Max — для агентств и студий.",
-    targetPlan: "pro",
+    proLimit: "10", maxLimit: "50",
+    detail: "Max подходит для агентств и студий с большими командами.",
+    maxAction: { label: "Открыть команды", href: "/teams", icon: ArrowRight },
   },
-  share_links: {
-    headline: "10 публичных ссылок на Pro",
-    detail: "Делитесь готовыми промптами — безлимит на Max.",
-    targetPlan: "pro",
-  },
-  daily_shares: {
-    headline: "100 публичных ссылок в день на Pro",
-    detail: "На Free — 10, на Max — 1000 в день.",
-    targetPlan: "pro",
-  },
+  // Phase 16-Y: share_links / daily_shares УДАЛЕНЫ — share больше не имеет
+  // квот, ссылки живут по TTL (30 дней default).
   ext_daily: {
-    headline: "30 вставок в день на Pro",
-    detail: "Вставляйте промпты в ChatGPT/Claude/Gemini без ограничений.",
-    targetPlan: "pro",
+    proLimit: "100", maxLimit: "500",
+    detail: "Вставляйте промпты прямо в ChatGPT, Claude, Gemini, Perplexity.",
+    maxAction: null,
   },
   mcp_daily: {
-    headline: "30 MCP-вызовов в день на Pro",
-    detail: "Подключите Claude Desktop / Cursor / Windsurf через MCP.",
-    targetPlan: "pro",
+    proLimit: "100", maxLimit: "500",
+    detail: "Используйте промпты в Claude Desktop, Cursor, Windsurf, Cline.",
+    maxAction: null,
   },
+  chains: {
+    proLimit: "5", maxLimit: "100",
+    detail: "Стройте многошаговые пайплайны и переиспользуйте их в любом AI-клиенте.",
+    maxAction: { label: "Удалить лишние цепочки", href: "/chains", icon: Trash2 },
+  },
+  chain_steps: {
+    proLimit: "10", maxLimit: "50",
+    detail: "Сложные сценарии — исследование → анализ → черновик → проверка без обрыва.",
+    maxAction: { label: "Открыть цепочки", href: "/chains", icon: ArrowRight },
+  },
+}
+
+const planCTA: Record<"pro" | "max", { label: string; pricePerDay: string }> = {
+  pro: { label: "Pro", pricePerDay: "20" },
+  max: { label: "Max", pricePerDay: "43" },
+}
+
+const SUPPORT_EMAIL = "slava0gpt@gmail.com"
+
+// pickTargetPlan — какой следующий тариф предлагать как апсейл.
+// null = юзер уже на Max, апселла нет — показываем «свяжитесь с поддержкой» CTA.
+function pickTargetPlan(currentPlan: string): "pro" | "max" | null {
+  if (currentPlan === "free") return "pro"
+  if (currentPlan === "pro" || currentPlan === "pro_yearly") return "max"
+  return null
+}
+
+// buildHeadline — динамический headline в карточке value-prop.
+// Free юзер: "500 X на Pro, 10 000 на Max" (полная вилка).
+// Pro юзер:  "10 000 X на Max" (без упоминания Pro — он уже там).
+// Max юзер:  null (карточка не показывается).
+function buildHeadline(quotaType: string, target: "pro" | "max" | null): string | null {
+  const meta = resourceMeta[quotaType]
+  if (!meta) return null
+  const noun = quotaHeadlineNoun[quotaType] ?? quotaType
+  if (target === "max") return `${meta.maxLimit} ${noun} на Max`
+  if (target === "pro") return `${meta.proLimit} ${noun} на Pro, ${meta.maxLimit} на Max`
+  return null
 }
 
 export function QuotaExceededDialog() {
@@ -78,10 +136,12 @@ export function QuotaExceededDialog() {
   const checkout = useCheckout()
   const planId = useAuthStore((s) => s.user?.plan_id ?? "free")
 
-  const resource = quotaType ? (quotaLabels[quotaType] ?? quotaType) : ""
-  const benefit = quotaType ? quotaBenefits[quotaType] : undefined
-  const targetPlan = benefit?.targetPlan ?? "pro"
+  const resourceLabel = quotaType ? (quotaLabels[quotaType] ?? quotaType) : ""
+  const target = pickTargetPlan(planId)
+  const meta = quotaType ? resourceMeta[quotaType] : undefined
+  const headline = quotaType ? buildHeadline(quotaType, target) : null
   const hasUsage = typeof used === "number" && typeof limit === "number" && limit > 0
+  const isMaxUser = target === null
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && dismiss()}>
@@ -91,10 +151,14 @@ export function QuotaExceededDialog() {
             <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
           </div>
           <DialogTitle className="text-center">
-            {hasUsage ? `Лимит ${resource}: ${used}/${limit}` : "Лимит исчерпан"}
+            {hasUsage ? `Лимит ${resourceLabel}: ${used}/${limit}` : "Лимит исчерпан"}
           </DialogTitle>
           <DialogDescription className="text-center">
-            {message || `Вы достигли лимита ${resource} на текущем плане.`}
+            {isMaxUser
+              ? meta?.maxAction
+                ? `Вы на тарифе Max — это потолок. Удалите лишнее или свяжитесь с поддержкой для расширения лимитов.`
+                : `Это дневной лимит — счётчик сбросится в полночь UTC. Если нужно больше прямо сейчас, свяжитесь с поддержкой.`
+              : (message || `Вы достигли лимита ${resourceLabel} на текущем плане.`)}
           </DialogDescription>
         </DialogHeader>
 
@@ -102,46 +166,89 @@ export function QuotaExceededDialog() {
           <PlanBadge planId={(plan as "free" | "pro" | "max" | undefined) ?? (planId as "free" | "pro" | "max")} />
         </div>
 
-        {benefit && (
+        {meta && headline && (
           <div
             className="rounded-lg border p-4"
             style={{
-              borderColor: targetPlan === "max" ? "#f59e0b50" : "#8b5cf650",
-              background: targetPlan === "max" ? "#f59e0b08" : "#8b5cf608",
+              borderColor: target === "max" ? "#f59e0b50" : "#8b5cf650",
+              background: target === "max" ? "#f59e0b08" : "#8b5cf608",
             }}
           >
-            <p className="mb-1 text-[0.85rem] font-semibold text-foreground">{benefit.headline}</p>
-            <p className="text-[0.78rem] text-muted-foreground">{benefit.detail}</p>
+            <p className="mb-1 text-[0.85rem] font-semibold text-foreground">{headline}</p>
+            <p className="text-[0.78rem] text-muted-foreground">{meta.detail}</p>
           </div>
         )}
 
         <DialogFooter className="flex-col gap-2 sm:flex-col">
-          <Button
-            className="w-full"
-            disabled={checkout.isPending}
-            onClick={() => {
-              dismiss()
-              // Пробуем прямой checkout для залогиненного юзера — меньше кликов до оплаты.
-              // Если нет auth (нет plan_id) — обычный редирект на pricing.
-              if (planId !== "free" || !planId) {
+          {target ? (
+            <Button
+              className="w-full gap-1.5"
+              disabled={checkout.isPending}
+              onClick={() => {
+                dismiss()
+                // Free юзер — direct checkout (меньше кликов до оплаты).
+                // Pro юзер апгрейдится на Max → ведём на /pricing где он
+                // увидит сравнение Pro/Max и сделает осознанный выбор.
+                if (planId === "free" || !planId) {
+                  checkout.mutate(target)
+                  return
+                }
                 navigate("/pricing")
-                return
-              }
-              checkout.mutate(targetPlan)
-            }}
-          >
-            {checkout.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                Получить {targetPlan === "max" ? "Max" : "Pro"} за {targetPlan === "max" ? "42" : "19"}₽/день
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </>
-            )}
-          </Button>
-          <Button variant="ghost" className="w-full" onClick={() => { dismiss(); navigate("/pricing") }}>
-            Сравнить тарифы
-          </Button>
+              }}
+            >
+              {checkout.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  {planId === "free" ? "Получить" : "Перейти на"} {planCTA[target].label} за {planCTA[target].pricePerDay}₽/день
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </>
+              )}
+            </Button>
+          ) : meta?.maxAction ? (
+            // Max юзер на count-based лимите — даём конкретное действие
+            // («Удалить лишние промпты», «Удалить лишние коллекции» и т.д.).
+            <Button
+              className="w-full gap-2"
+              onClick={() => { dismiss(); navigate(meta.maxAction!.href) }}
+            >
+              <meta.maxAction.icon className="h-4 w-4" />
+              {meta.maxAction.label}
+            </Button>
+          ) : null
+          /* Max юзер на daily-лимите (daily_shares/ext_daily/mcp_daily) — primary
+             кнопки нет, юзер не может ничего сделать сам, ждёт midnight UTC.
+             Остаётся только «Связаться с поддержкой» ниже. */
+          }
+
+          {isMaxUser ? (
+            // Без asChild + <a>: вложенный <a> ломал inline-flex кнопки и иконка
+            // съезжала над текстом. Делаем чистый Button + ручной open mailto +
+            // копируем email в буфер на случай отсутствия mail-клиента (типичный
+            // кейс на десктопе без default handler — иначе клик ничего не делал).
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={async () => {
+                const subject = encodeURIComponent("Запрос на расширение лимитов Max")
+                try {
+                  await navigator.clipboard.writeText(SUPPORT_EMAIL)
+                  toast.success("Email скопирован в буфер обмена", { description: SUPPORT_EMAIL })
+                } catch {
+                  toast.info("Напишите нам", { description: SUPPORT_EMAIL, duration: 8000 })
+                }
+                window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}`
+                dismiss()
+              }}
+            >
+              <LifeBuoy className="h-4 w-4" />
+              Связаться с поддержкой
+            </Button>
+          ) : (
+            <Button variant="ghost" className="w-full" onClick={() => { dismiss(); navigate("/pricing") }}>
+              Сравнить тарифы
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

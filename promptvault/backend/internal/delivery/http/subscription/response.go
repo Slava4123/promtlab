@@ -10,41 +10,43 @@ import (
 
 // PlanResponse — DTO тарифного плана для API.
 type PlanResponse struct {
-	ID              string          `json:"id"`
-	Name            string          `json:"name"`
-	PriceKop        int             `json:"price_kop"`
-	PeriodDays      int             `json:"period_days"`
-	MaxPrompts      int             `json:"max_prompts"`
-	MaxCollections  int             `json:"max_collections"`
-	MaxTeams        int             `json:"max_teams"`
-	MaxTeamMembers  int             `json:"max_team_members"`
-	MaxShareLinks   int             `json:"max_share_links"`
-	MaxDailyShares  int             `json:"max_daily_shares"`
-	MaxExtUsesDaily int             `json:"max_ext_uses_daily"`
-	MaxMCPUsesDaily int             `json:"max_mcp_uses_daily"`
-	Features        json.RawMessage `json:"features"`
-	SortOrder       int             `json:"sort_order"`
-	IsActive        bool            `json:"is_active"`
+	ID                 string          `json:"id"`
+	Name               string          `json:"name"`
+	PriceKop           int             `json:"price_kop"`
+	PeriodDays         int             `json:"period_days"`
+	MaxPrompts         int             `json:"max_prompts"`
+	MaxCollections     int             `json:"max_collections"`
+	MaxTeams           int             `json:"max_teams"`
+	MaxTeamMembers     int             `json:"max_team_members"`
+	MaxExtUsesDaily    int             `json:"max_ext_uses_daily"`
+	MaxMCPUsesDaily    int             `json:"max_mcp_uses_daily"`
+	MaxChains          int             `json:"max_chains"`
+	MaxStepsPerChain   int             `json:"max_steps_per_chain"`
+	MaxSavedExecutions int             `json:"max_saved_executions"`
+	Features           json.RawMessage `json:"features"`
+	SortOrder          int             `json:"sort_order"`
+	IsActive           bool            `json:"is_active"`
 }
 
 // NewPlanResponse конвертирует модель плана в DTO.
 func NewPlanResponse(p models.SubscriptionPlan) PlanResponse {
 	return PlanResponse{
-		ID:              p.ID,
-		Name:            p.Name,
-		PriceKop:        p.PriceKop,
-		PeriodDays:      p.PeriodDays,
-		MaxPrompts:      p.MaxPrompts,
-		MaxCollections:  p.MaxCollections,
-		MaxTeams:        p.MaxTeams,
-		MaxTeamMembers:  p.MaxTeamMembers,
-		MaxShareLinks:   p.MaxShareLinks,
-		MaxDailyShares:  p.MaxDailyShares,
-		MaxExtUsesDaily: p.MaxExtUsesDaily,
-		MaxMCPUsesDaily: p.MaxMCPUsesDaily,
-		Features:        p.Features,
-		SortOrder:       p.SortOrder,
-		IsActive:        p.IsActive,
+		ID:                 p.ID,
+		Name:               p.Name,
+		PriceKop:           p.PriceKop,
+		PeriodDays:         p.PeriodDays,
+		MaxPrompts:         p.MaxPrompts,
+		MaxCollections:     p.MaxCollections,
+		MaxTeams:           p.MaxTeams,
+		MaxTeamMembers:     p.MaxTeamMembers,
+		MaxExtUsesDaily:    p.MaxExtUsesDaily,
+		MaxMCPUsesDaily:    p.MaxMCPUsesDaily,
+		MaxChains:          p.MaxChains,
+		MaxStepsPerChain:   p.MaxStepsPerChain,
+		MaxSavedExecutions: p.MaxSavedExecutions,
+		Features:           p.Features,
+		SortOrder:          p.SortOrder,
+		IsActive:           p.IsActive,
 	}
 }
 
@@ -104,14 +106,16 @@ type CheckoutResponse struct {
 }
 
 // UsageResponse — DTO сводки использования для API.
+// Phase 16-Y: ShareLinks и DailySharesToday убраны — share-ссылки теперь
+// живут по TTL, без active-count и без daily-create счётчика.
 type UsageResponse struct {
-	PlanID       string             `json:"plan_id"`
-	Prompts      quotauc.QuotaInfo  `json:"prompts"`
-	Collections  quotauc.QuotaInfo  `json:"collections"`
-	Teams        quotauc.QuotaInfo  `json:"teams"`
-	ShareLinks   quotauc.QuotaInfo  `json:"share_links"`
-	ExtUsesToday quotauc.QuotaInfo  `json:"ext_uses_today"`
-	MCPUsesToday quotauc.QuotaInfo  `json:"mcp_uses_today"`
+	PlanID       string            `json:"plan_id"`
+	Prompts      quotauc.QuotaInfo `json:"prompts"`
+	Collections  quotauc.QuotaInfo `json:"collections"`
+	Teams        quotauc.QuotaInfo `json:"teams"`
+	ExtUsesToday quotauc.QuotaInfo `json:"ext_uses_today"`
+	MCPUsesToday quotauc.QuotaInfo `json:"mcp_uses_today"`
+	Chains       quotauc.QuotaInfo `json:"chains"`
 }
 
 // NewUsageResponse конвертирует UsageSummary в DTO.
@@ -121,8 +125,8 @@ func NewUsageResponse(s *quotauc.UsageSummary) UsageResponse {
 		Prompts:      s.Prompts,
 		Collections:  s.Collections,
 		Teams:        s.Teams,
-		ShareLinks:   s.ShareLinks,
 		ExtUsesToday: s.ExtUsesToday,
 		MCPUsesToday: s.MCPUsesToday,
+		Chains:       s.Chains,
 	}
 }

@@ -17,13 +17,17 @@ type SubscriptionPlan struct {
 	MaxCollections       int             `gorm:"not null;default:3" json:"max_collections"`
 	MaxTeams             int             `gorm:"not null;default:1" json:"max_teams"`
 	MaxTeamMembers       int             `gorm:"not null;default:3" json:"max_team_members"`
-	MaxShareLinks        int             `gorm:"not null;default:2" json:"max_share_links"`
-	// MaxDailyShares — лимит на СОЗДАНИЕ публичных шар-ссылок в день.
-	// Phase 14, миграция 000044. Считается через daily_feature_usage
-	// с feature_type='share_create'. Free=10, Pro=100, Max=1000.
-	MaxDailyShares       int             `gorm:"not null;default:10" json:"max_daily_shares"`
+	// Phase 16-Y: max_share_links / max_daily_shares УДАЛЕНЫ (миграция 000061).
+	// Share-ссылки теперь живут по TTL (default 30d, до 1y user-configurable;
+	// Max-юзер может выбрать «без срока»). Анти-абуз — общий per-user rate-limit
+	// в routes.go (byUser(120/min)). Аналогично Notion/Figma — без active-count.
 	MaxExtUsesDaily      int             `gorm:"not null;default:5" json:"max_ext_uses_daily"`
 	MaxMCPUsesDaily      int             `gorm:"column:max_mcp_uses_daily;not null;default:5" json:"max_mcp_uses_daily"`
+	// Phase 16 (Prompt Chains): tier-лимиты для цепочек.
+	// Free=1/3/0, Pro=5/10/10, Max=100/50/1000 (паттерн 000046: конкретные числа, не sentinel).
+	MaxChains            int             `gorm:"not null;default:0" json:"max_chains"`
+	MaxStepsPerChain     int             `gorm:"not null;default:0" json:"max_steps_per_chain"`
+	MaxSavedExecutions   int             `gorm:"not null;default:0" json:"max_saved_executions"`
 	Features             json.RawMessage `gorm:"type:jsonb;not null;default:'[]'" json:"features"`
 	SortOrder            int             `gorm:"not null;default:0" json:"sort_order"`
 	IsActive             bool            `gorm:"not null;default:true" json:"is_active"`

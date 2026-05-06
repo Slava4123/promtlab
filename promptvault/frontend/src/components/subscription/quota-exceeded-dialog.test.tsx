@@ -38,16 +38,13 @@ describe("QuotaExceededDialog localization", () => {
   })
 
   // Известные backend-ключи: prompts, collections, teams, team_members,
-  // share_links (legacy), daily_shares (Phase 14), ext_daily, mcp_daily.
-  // Если бэкенд добавит новый feature_type, этот список нужно расширить —
-  // вместе с quotaLabels в самом компоненте.
+  // ext_daily, mcp_daily, chains, chain_steps. Phase 16-Y: share_links и
+  // daily_shares УДАЛЕНЫ — на share-ссылки больше нет квот (TTL вместо).
   const cases: Array<{ quotaType: string; expectSubstring: string }> = [
     { quotaType: "prompts", expectSubstring: "Лимит промптов" },
     { quotaType: "collections", expectSubstring: "Лимит коллекций" },
     { quotaType: "teams", expectSubstring: "Лимит команд" },
     { quotaType: "team_members", expectSubstring: "Лимит участников команды" },
-    { quotaType: "share_links", expectSubstring: "Лимит публичных ссылок" },
-    { quotaType: "daily_shares", expectSubstring: "Лимит публичных ссылок в день" },
     { quotaType: "ext_daily", expectSubstring: "Лимит вставок" },
     { quotaType: "mcp_daily", expectSubstring: "Лимит MCP-вызовов" },
   ]

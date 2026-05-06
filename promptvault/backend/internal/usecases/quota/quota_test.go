@@ -84,6 +84,8 @@ type fakeQuotaRepo struct {
 	teamsOwned   int64
 	shareLinks   int64
 	teamMembers  int
+	chains       int64
+	stepsByChain map[uint]int64
 	dailyUsage   map[string]int // feature_type → count
 	totalUsage   map[string]int
 	incrementErr error
@@ -123,6 +125,12 @@ func (r *fakeQuotaRepo) IncrementDailyUsage(_ context.Context, userID uint, date
 	}
 	r.incrementLog = append(r.incrementLog, incCall{userID: userID, date: date, feature: feature})
 	return nil
+}
+func (r *fakeQuotaRepo) CountChains(context.Context, uint) (int64, error) {
+	return r.chains, nil
+}
+func (r *fakeQuotaRepo) CountStepsByChain(_ context.Context, chainID uint) (int64, error) {
+	return r.stepsByChain[chainID], nil
 }
 
 // --- helpers ---
@@ -231,7 +239,6 @@ func TestGetUsageSummary_ReturnsAllCounters(t *testing.T) {
 		MaxPrompts:      50,
 		MaxCollections:  3,
 		MaxTeams:        1,
-		MaxShareLinks:   2,
 		MaxExtUsesDaily: 5,
 		MaxMCPUsesDaily: 5,
 	}
@@ -239,7 +246,6 @@ func TestGetUsageSummary_ReturnsAllCounters(t *testing.T) {
 		prompts:     12,
 		collections: 2,
 		teamsOwned:  1,
-		shareLinks:  0,
 		dailyUsage:  map[string]int{FeatureExtension: 1, FeatureMCP: 0},
 	}
 	svc := newService(user, plan, q)

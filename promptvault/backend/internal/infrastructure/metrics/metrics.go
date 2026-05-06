@@ -130,6 +130,7 @@ func init() {
 	AnalyticsCleanupDeleted.WithLabelValues("team_activity").Add(0)
 	AnalyticsCleanupDeleted.WithLabelValues("share_views").Add(0)
 	AnalyticsCleanupDeleted.WithLabelValues("prompt_usage").Add(0)
+	AnalyticsCleanupDeleted.WithLabelValues("share_links_expired").Add(0)
 
 	InsightsTeamRun.WithLabelValues("success").Add(0)
 	InsightsTeamRun.WithLabelValues("error").Add(0)

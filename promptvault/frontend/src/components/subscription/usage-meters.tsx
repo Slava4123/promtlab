@@ -11,7 +11,7 @@ const resourceConfig: Record<string, { label: string; type: "total" | "daily" | 
   prompts: { label: "Промпты", type: "total" },
   collections: { label: "Коллекции", type: "total" },
   teams: { label: "Команды", type: "total" },
-  share_links: { label: "Публичные ссылки", type: "active" },
+  // Phase 16-Y: share_links убран — на share-ссылки больше нет квот.
   ext_uses_today: { label: "Расширение", type: "daily" },
   mcp_uses_today: { label: "MCP", type: "daily" },
 }

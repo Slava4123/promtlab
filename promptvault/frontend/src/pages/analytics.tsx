@@ -5,8 +5,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthStore } from "@/stores/auth-store"
 import { usePersonalAnalytics, useInsights } from "@/hooks/use-analytics"
 import { computeDelta, downloadAnalyticsCSV, formatRange, type AnalyticsRange } from "@/api/analytics"
+import { pluralizeRu } from "@/lib/pluralize"
 import { MetricCard } from "@/components/analytics/metric-card"
 import { UsageChart } from "@/components/analytics/usage-chart"
+import { createUsageChartConfig } from "@/components/analytics/usage-chart-config"
 import { TopPromptsTable } from "@/components/analytics/top-prompts-table"
 import { QuotaProgress } from "@/components/analytics/quota-progress"
 import { RangePicker } from "@/components/analytics/range-picker"
@@ -14,6 +16,11 @@ import { UpgradeGate } from "@/components/analytics/upgrade-gate"
 import { InsightsPanel } from "@/components/analytics/insights-panel"
 import { ModelSegmentationChart } from "@/components/analytics/model-segmentation-chart"
 import { toast } from "sonner"
+
+// Per-instance chartConfig: лейбл tooltip должен соответствовать смыслу графика.
+// Без явного config все инстансы UsageChart используют дефолтный "Использования",
+// что давало неверный tooltip на графике создания промптов.
+const CREATED_PER_DAY_CONFIG = createUsageChartConfig("Создано")
 
 // Phase 14 C.2: /analytics — личный dashboard.
 // Уровни доступа:
@@ -117,14 +124,22 @@ export default function AnalyticsPage() {
             <MetricCard
               title="Топ-промпт"
               value={data.top_prompts[0]?.uses.toLocaleString("ru") ?? "—"}
-              subtitle={data.top_prompts[0]?.title ?? "—"}
+              subtitle={
+                data.top_prompts[0]
+                  ? `${pluralizeRu(data.top_prompts[0].uses, "использование", "использования", "использований")} · ${data.top_prompts[0].title}`
+                  : "Нет использованных промптов"
+              }
             />
           </div>
 
           {/* Графики */}
           <div className="grid gap-4 lg:grid-cols-2">
             <UsageChart title="Использование по дням" data={data.usage_per_day} />
-            <UsageChart title="Создание промптов по дням" data={data.prompts_created_per_day} />
+            <UsageChart
+              title="Создание промптов по дням"
+              data={data.prompts_created_per_day}
+              chartConfig={CREATED_PER_DAY_CONFIG}
+            />
           </div>
 
           {/* Топ-таблицы */}
@@ -142,13 +157,10 @@ export default function AnalyticsPage() {
 
           {/* Квоты */}
           {data.quotas ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <QuotaProgress title="Промпты" quota={data.quotas.prompts} />
               <QuotaProgress title="Коллекции" quota={data.quotas.collections} />
-              <QuotaProgress
-                title="Публичных ссылок сегодня"
-                quota={data.quotas.daily_shares_today}
-              />
+              {/* Phase 16-Y: блок share-ссылок убран — на share больше нет квот. */}
               <QuotaProgress title="MCP-вызовов сегодня" quota={data.quotas.mcp_uses_today} />
             </div>
           ) : null}

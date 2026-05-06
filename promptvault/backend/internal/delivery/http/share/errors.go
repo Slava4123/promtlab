@@ -21,6 +21,11 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 		httperr.Respond(w, httperr.NotFound(err.Error()))
 	case errors.Is(err, shareuc.ErrPromptNotFound):
 		httperr.Respond(w, httperr.NotFound(err.Error()))
+	case errors.Is(err, shareuc.ErrLinkExpired):
+		// 410 Gone — ссылка существовала, но просрочена. Frontend по этому
+		// коду рендерит специальную страницу «срок действия истёк», без
+		// generic 404 «не найдена».
+		httperr.Respond(w, &httperr.AppError{Code: http.StatusGone, Message: err.Error()})
 	case errors.Is(err, shareuc.ErrForbidden):
 		httperr.Respond(w, httperr.Forbidden(err.Error()))
 	case errors.Is(err, shareuc.ErrViewerReadOnly):
