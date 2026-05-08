@@ -29,6 +29,13 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { UserMenu } from "@/components/layout/user-menu"
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog"
 import { useAuthStore } from "@/stores/auth-store"
@@ -167,56 +174,48 @@ export function AppSidebar() {
       <SidebarContent>
         <div className="px-2.5 space-y-0.5">
 
-          {/* Workspace Switcher */}
-          <div className="relative px-1 pb-2">
-            <button
-              onClick={() => setSwitcherOpen(!switcherOpen)}
-              className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border px-2 py-1.5 text-[0.78rem] font-medium transition-colors hover:bg-sidebar-accent"
-            >
-              {teamSlug ? (
-                <Users className="h-3.5 w-3.5 text-violet-400" />
-              ) : (
-                <User className="h-3.5 w-3.5 text-muted-foreground" />
-              )}
-              <span className="flex-1 truncate text-left text-sidebar-foreground">
-                {currentTeamName || "Личное пространство"}
-              </span>
-              <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${switcherOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {switcherOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setSwitcherOpen(false)} />
-                <div
-                  className="absolute left-1 right-1 top-10 z-50 rounded-xl py-1 shadow-xl border border-border bg-popover"
-                >
-                  <button
-                    onClick={handleSwitchToPersonal}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          {/* Workspace Switcher — MJ-33: Base UI Menu вместо custom popover.
+              Дает focus-trap, role=menu, ARIA + клавиатурную навигацию (Up/Down/Esc/Enter)
+              «бесплатно». Раньше custom div'ы открывались по `switcherOpen`
+              state и не имели focus-trap'а / правильных ARIA-ролей. */}
+          <div className="px-1 pb-2">
+            <DropdownMenu open={switcherOpen} onOpenChange={setSwitcherOpen}>
+              <DropdownMenuTrigger
+                className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border px-2 py-1.5 text-[0.78rem] font-medium transition-colors hover:bg-sidebar-accent"
+              >
+                {teamSlug ? (
+                  <Users className="h-3.5 w-3.5 text-violet-400" />
+                ) : (
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+                <span className="flex-1 truncate text-left text-sidebar-foreground">
+                  {currentTeamName || "Личное пространство"}
+                </span>
+                <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${switcherOpen ? "rotate-180" : ""}`} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                sideOffset={4}
+                className="w-[var(--anchor-width)] min-w-[var(--anchor-width)]"
+              >
+                <DropdownMenuItem onClick={handleSwitchToPersonal}>
+                  <User className="h-3.5 w-3.5" />
+                  <span className="flex-1">Личное пространство</span>
+                  {!teamSlug && <Check className="h-3 w-3 text-violet-400" />}
+                </DropdownMenuItem>
+                {teams && teams.length > 0 && <DropdownMenuSeparator />}
+                {teams?.map((t) => (
+                  <DropdownMenuItem
+                    key={t.id}
+                    onClick={() => handleSwitchToTeam(t.slug, t.id, t.name)}
                   >
-                    <User className="h-3.5 w-3.5" />
-                    <span className="flex-1 text-left">Личное пространство</span>
-                    {!teamSlug && <Check className="h-3 w-3 text-violet-400" />}
-                  </button>
-                  {teams && teams.length > 0 && (
-                    <>
-                      <div className="mx-3 my-1 border-t border-border" />
-                      {teams.map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => handleSwitchToTeam(t.slug, t.id, t.name)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                        >
-                          <Users className="h-3.5 w-3.5 text-violet-400/50" />
-                          <span className="flex-1 text-left">{t.name}</span>
-                          {teamSlug === t.slug && <Check className="h-3 w-3 text-violet-400" />}
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+                    <Users className="h-3.5 w-3.5 text-violet-400/50" />
+                    <span className="flex-1">{t.name}</span>
+                    {teamSlug === t.slug && <Check className="h-3 w-3 text-violet-400" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <p className="px-2.5 pb-1.5 pt-2 text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">Главное</p>

@@ -36,6 +36,7 @@ type toolHandlers struct {
 	users       UserService
 	activity    ActivityService    // Phase 14 B.3: nil до передачи в NewMCPServer
 	analytics   AnalyticsService   // Phase 14 B.3
+	chains      ChainService       // Phase 16: nil отключает chain-tools
 	quotas      *quotauc.Service
 	cache       *listCache // P-11: TTL cache для list_collections/list_tags
 	notifier    *notifier  // C-1: рассылка resources/updated подписчикам
@@ -695,12 +696,17 @@ func (t *toolHandlers) listPrompts(ctx context.Context, _ *sdkmcp.CallToolReques
 	}
 	if len(prompts) == pageSize {
 		last := prompts[len(prompts)-1]
+		// MN-24: encodeCursor errors теперь логируются. Раньше silent
+		// `if err == nil` приводил к тихой потере pagination — клиент
+		// не получал next_cursor, но успешно завершал «полный» список.
 		next, err := encodeCursor(cursorData{
 			Lid: last.ID,
 			Lts: last.UpdatedAt,
 			Fh:  filterHash(filter),
 		})
-		if err == nil {
+		if err != nil {
+			slog.Warn("mcp.list_prompts.encode_cursor_failed", "error", err)
+		} else {
 			payload["next_cursor"] = next
 		}
 	}

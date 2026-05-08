@@ -377,7 +377,11 @@ func (s *Service) issueTokenPair(
 		return nil, fmt.Errorf("store refresh: %w", err)
 	}
 
-	_ = s.clients.UpdateLastUsed(ctx, clientID)
+	// MN-19: best-effort обновление last_used_at; silent failure заменён
+	// на slog.Warn — DB outage не блокирует token issue, но мы должны знать.
+	if err := s.clients.UpdateLastUsed(ctx, clientID); err != nil {
+		slog.Warn("oauth.client.update_last_used_failed", "client_id", clientID, "error", err)
+	}
 
 	slog.Info("oauth.token.exchanged",
 		"client_id", clientID,

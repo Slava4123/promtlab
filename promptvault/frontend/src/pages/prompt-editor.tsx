@@ -42,6 +42,10 @@ import {
 } from "@/lib/constants"
 import type { Prompt } from "@/api/types"
 
+// MJ-31/36: collection_ids/tag_ids/is_public/change_note теперь в RHF.
+// Раньше они жили в `useState` — formState.isDirty был неполным, reset()
+// не сбрасывал их при refetch existing prompt'а. Теперь все form values
+// через Controller, useForm({ values }) для синхронизации с server data.
 const promptSchema = z.object({
   title: z.string().min(1, "Введите название").max(MAX_PROMPT_TITLE_LENGTH),
   content: z
@@ -49,6 +53,10 @@ const promptSchema = z.object({
     .min(1, "Введите содержимое промпта")
     .max(MAX_PROMPT_CONTENT_LENGTH, `Максимум ${MAX_PROMPT_CONTENT_LENGTH.toLocaleString("ru-RU")} символов`),
   model: z.string().max(100).optional(),
+  collection_ids: z.array(z.number()),
+  tag_ids: z.array(z.number()),
+  is_public: z.boolean(),
+  change_note: z.string().max(500),
 })
 
 type PromptForm = z.infer<typeof promptSchema>
@@ -86,10 +94,6 @@ export default function PromptEditor() {
   const updatePrompt = useUpdatePrompt()
   const incrementUsage = useIncrementUsage()
   const deletePrompt = useDeletePrompt()
-  const [collectionIds, setCollectionIds] = useState<number[]>(preselectedCollectionId ? [preselectedCollectionId] : [])
-  const [tagIds, setTagIds] = useState<number[]>([])
-  const [changeNote, setChangeNote] = useState("")
-  const [isPublic, setIsPublic] = useState(false)
   const [usePromptModal, setUsePromptModal] = useState<Prompt | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -115,32 +119,61 @@ export default function PromptEditor() {
     // defaultValues нужны, иначе при сабмите пустой формы content === undefined,
     // и Zod падает на типе ДО min(1) — выводит fallback "Неверный ввод: ожидалось
     // string, получено undefined" вместо нашего "Введите содержимое промпта".
-    defaultValues: { title: "", content: "", model: "" },
+    // MJ-31/36: defaultValues для всех новых полей (collection_ids/tag_ids/
+    // is_public/change_note) — иначе RHF держит их undefined до Controller's
+    // onChange, и formState.isDirty неверно срабатывает на initial render.
+    defaultValues: {
+      title: "",
+      content: "",
+      model: "",
+      collection_ids: preselectedCollectionId ? [preselectedCollectionId] : [],
+      tag_ids: [],
+      is_public: false,
+      change_note: "",
+    },
   })
 
-  // Синхронизируем загруженные с сервера данные в локальное state формы.
-  // Это legitimate sync external async data (prompt приходит от TanStack Query).
+  // MJ-31: useEffect+reset заменён на synchronization через ref-based diff
+  // — `existing` reference меняется на каждый refetch, и всякий refetch
+  // wipe'ал unsaved edits. Теперь сравниваем ID prev vs current.
+  const prevExistingId = useRef<number | undefined>(undefined)
   useEffect(() => {
-    if (existing) {
-      reset({
-        title: existing.title,
-        content: existing.content,
-        model: existing.model || "",
-      })
-      setCollectionIds(existing.collections?.map(c => c.id) || [])
-      setTagIds(existing.tags?.map(t => t.id) || [])
-      setIsPublic(existing.is_public ?? false)
-    }
+    if (!existing) return
+    if (prevExistingId.current === existing.id) return
+    prevExistingId.current = existing.id
+    reset({
+      title: existing.title,
+      content: existing.content,
+      model: existing.model || "",
+      collection_ids: existing.collections?.map(c => c.id) || [],
+      tag_ids: existing.tags?.map(t => t.id) || [],
+      is_public: existing.is_public ?? false,
+      change_note: "",
+    })
   }, [existing, reset])
 
   const onSubmit = useCallback(async (data: PromptForm) => {
     try {
+      const { collection_ids, tag_ids, is_public, change_note, ...rest } = data
       if (isEdit) {
-        await updatePrompt.mutateAsync({ id: promptId, ...data, change_note: changeNote || undefined, collection_ids: collectionIds, tag_ids: tagIds, is_public: isPublic })
-        setChangeNote("")
+        await updatePrompt.mutateAsync({
+          id: promptId,
+          ...rest,
+          change_note: change_note || undefined,
+          collection_ids,
+          tag_ids,
+          is_public,
+        })
+        setValue("change_note", "")
         toast.success("Промпт обновлён")
       } else {
-        const created = await createPrompt.mutateAsync({ ...data, team_id: teamId, collection_ids: collectionIds, tag_ids: tagIds, is_public: isPublic })
+        const created = await createPrompt.mutateAsync({
+          ...rest,
+          team_id: teamId,
+          collection_ids,
+          tag_ids,
+          is_public,
+        })
         toast.success("Промпт создан")
         navigate(`/prompts/${created.id}`, { replace: true })
         return
@@ -148,7 +181,7 @@ export default function PromptEditor() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ошибка сохранения")
     }
-  }, [isEdit, updatePrompt, promptId, changeNote, collectionIds, tagIds, isPublic, createPrompt, teamId, navigate])
+  }, [isEdit, updatePrompt, promptId, createPrompt, teamId, navigate, setValue])
 
   // Keep a stable ref to onSubmit so the Ctrl+Enter effect doesn't re-subscribe every render.
   // Ref обновляется в useEffect, чтобы не мутировать .current во время рендера (react-hooks/refs).
@@ -374,14 +407,28 @@ export default function PromptEditor() {
                 <InfoTooltip ariaLabel="Что такое коллекции?">
                   Группировка промптов по темам — например «Код-ревью», «Маркетинг». Один промпт может быть в нескольких коллекциях одновременно.
                 </InfoTooltip>
-                {collectionIds.length > 0 && (
-                  <span className="ml-auto text-[0.7rem] text-violet-400">{collectionIds.length} выбрано</span>
-                )}
+                <Controller
+                  name="collection_ids"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      {field.value.length > 0 && (
+                        <span className="ml-auto text-[0.7rem] text-violet-400">{field.value.length} выбрано</span>
+                      )}
+                    </>
+                  )}
+                />
               </label>
-              <CollectionsCombobox
-                collections={collections}
-                value={collectionIds}
-                onChange={setCollectionIds}
+              <Controller
+                name="collection_ids"
+                control={control}
+                render={({ field }) => (
+                  <CollectionsCombobox
+                    collections={collections}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                )}
               />
             </div>
           </div>
@@ -396,59 +443,82 @@ export default function PromptEditor() {
                 Метки для фильтрации и поиска по библиотеке. В отличие от коллекций — плоские, без иерархии. Удобно для кросс-категорий: «срочно», «черновик», «en».
               </InfoTooltip>
             </label>
-            <TagInput selectedTagIds={tagIds} onChange={setTagIds} />
+            <Controller
+              name="tag_ids"
+              control={control}
+              render={({ field }) => (
+                <TagInput selectedTagIds={field.value} onChange={field.onChange} />
+              )}
+            />
           </div>
 
           {/* Публичный доступ — slug генерится backend'ом по id после INSERT,
               на create-форме URL ещё неизвестен → показываем общий placeholder. */}
-          <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 text-sm">
-            <input
-              type="checkbox"
-              checked={isPublic}
-              onChange={(e) => setIsPublic(e.target.checked)}
-              className="mt-0.5 h-4 w-4 cursor-pointer accent-brand"
-            />
-            <span className="flex-1">
-              <span className="font-medium text-foreground">Публичный промпт</span>
-              <span className="ml-2 text-muted-foreground">
-                {isPublic
-                  ? existing?.slug
-                    ? `Доступен по ссылке /p/${existing.slug}`
-                    : "Будет доступен по публичной ссылке после сохранения"
-                  : "Только вы видите этот промпт"}
-              </span>
-            </span>
-          </label>
+          <Controller
+            name="is_public"
+            control={control}
+            render={({ field }) => (
+              <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={field.value}
+                  onChange={(e) => field.onChange(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer accent-brand"
+                />
+                <span className="flex-1">
+                  <span className="font-medium text-foreground">Публичный промпт</span>
+                  <span className="ml-2 text-muted-foreground">
+                    {field.value
+                      ? existing?.slug
+                        ? `Доступен по ссылке /p/${existing.slug}`
+                        : "Будет доступен по публичной ссылке после сохранения"
+                      : "Только вы видите этот промпт"}
+                  </span>
+                </span>
+              </label>
+            )}
+          />
 
           {/* Заметка к изменению (collapsible, X-4) — скрываем по умолчанию, большинство
               юзеров не описывают каждое изменение, и поле занимает визуальный вес зря. */}
-          {isEdit && !noteExpanded && !changeNote && (
-            <button
-              type="button"
-              onClick={() => setNoteExpanded(true)}
-              className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground underline underline-offset-4 hover:text-foreground"
-            >
-              <History className="h-3 w-3" />
-              Добавить заметку к изменению
-            </button>
-          )}
-          {isEdit && (noteExpanded || changeNote) && (
-            <div className="space-y-2">
-              <label htmlFor="change_note" className="flex items-center gap-1.5 text-[0.8rem] font-medium text-foreground">
-                <History className="h-3 w-3 text-violet-400/60" />
-                Заметка к изменению
-                <span className="text-muted-foreground">(необяз.)</span>
-              </label>
-              <input
-                id="change_note"
-                value={changeNote}
-                onChange={(e) => setChangeNote(e.target.value)}
-                maxLength={MAX_CHANGE_NOTE_LENGTH}
-                placeholder="Что изменилось? Например: улучшил формулировку"
-                className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
-              />
-            </div>
-          )}
+          <Controller
+            name="change_note"
+            control={control}
+            render={({ field }) => {
+              const expanded = noteExpanded || !!field.value
+              return (
+                <>
+                  {isEdit && !expanded && (
+                    <button
+                      type="button"
+                      onClick={() => setNoteExpanded(true)}
+                      className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                    >
+                      <History className="h-3 w-3" />
+                      Добавить заметку к изменению
+                    </button>
+                  )}
+                  {isEdit && expanded && (
+                    <div className="space-y-2">
+                      <label htmlFor="change_note" className="flex items-center gap-1.5 text-[0.8rem] font-medium text-foreground">
+                        <History className="h-3 w-3 text-violet-400/60" />
+                        Заметка к изменению
+                        <span className="text-muted-foreground">(необяз.)</span>
+                      </label>
+                      <input
+                        id="change_note"
+                        value={field.value}
+                        onChange={field.onChange}
+                        maxLength={MAX_CHANGE_NOTE_LENGTH}
+                        placeholder="Что изменилось? Например: улучшил формулировку"
+                        className="flex h-11 w-full rounded-lg border border-border bg-background px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-violet-500/40 focus:ring-3 focus:ring-violet-500/10"
+                      />
+                    </div>
+                  )}
+                </>
+              )
+            }}
+          />
         </div>
 
         {/* Подсказка */}

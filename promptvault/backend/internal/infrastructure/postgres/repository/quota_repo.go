@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -68,7 +69,9 @@ func (r *quotaRepo) GetDailyUsage(ctx context.Context, userID uint, date time.Ti
 		Where("user_id = ? AND usage_date = ? AND feature_type = ?", userID, date.Format("2006-01-02"), featureType).
 		First(&usage).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		// MN-25: errors.Is вместо bare == — на случай wrapping через
+		// fmt.Errorf("scope: %w", err) в будущих рефакторах.
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
 		}
 		return 0, err
@@ -94,4 +97,22 @@ func (r *quotaRepo) IncrementDailyUsage(ctx context.Context, userID uint, date t
 		 DO UPDATE SET count = daily_feature_usage.count + 1`,
 		userID, date.Format("2006-01-02"), featureType,
 	).Error
+}
+
+func (r *quotaRepo) CountChains(ctx context.Context, userID uint) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&models.PromptChain{}).
+		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Count(&count).Error
+	return count, err
+}
+
+func (r *quotaRepo) CountStepsByChain(ctx context.Context, chainID uint) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&models.PromptChainStep{}).
+		Where("chain_id = ?", chainID).
+		Count(&count).Error
+	return count, err
 }

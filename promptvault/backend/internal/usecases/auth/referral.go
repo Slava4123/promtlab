@@ -28,7 +28,14 @@ func WithReferredBy(ctx context.Context, code string) context.Context {
 }
 
 func referredByFromCtx(ctx context.Context) string {
-	v, _ := ctx.Value(ctxReferredByKey).(string)
+	// MN-23: explicit ok-check на type assertion. Если ctxReferredByKey
+	// случайно reassigned типу (refactor), то bare `_` тихо возвращает
+	// пустую строку — реферал теряется без сигнала. Здесь нет panic
+	// риска (assertion на string), но make it explicit.
+	v, ok := ctx.Value(ctxReferredByKey).(string)
+	if !ok {
+		return ""
+	}
 	return v
 }
 
