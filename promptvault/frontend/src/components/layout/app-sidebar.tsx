@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom"
 import {
   FileText,
   FolderOpen,
+  Link2,
   Users,
   Settings,
   Lock,
@@ -43,9 +44,13 @@ interface NavItem {
   path: string
 }
 
+// Phase 16: feature flag — VITE_CHAINS_ENABLED управляет видимостью пункта меню.
+const chainsEnabled = import.meta.env.VITE_CHAINS_ENABLED === "true"
+
 const mainNav: NavItem[] = [
   { title: "Промпты", icon: FileText, path: "/dashboard" },
   { title: "Коллекции", icon: FolderOpen, path: "/collections" },
+  ...(chainsEnabled ? [{ title: "Цепочки", icon: Link2, path: "/chains" }] : []),
   { title: "Команды", icon: Users, path: "/teams" },
   { title: "История", icon: Clock, path: "/history" },
   { title: "Аналитика", icon: BarChart3, path: "/analytics" },
@@ -330,7 +335,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-3">
         <FeedbackDialog />
         <UserMenu />
-        <div className="flex items-center justify-center gap-2 pt-1 text-[0.6rem] text-muted-foreground/40">
+        <div className="flex items-center justify-center gap-2 pt-1 text-[0.6rem] text-muted-foreground">
           <button onClick={() => go("/legal/terms")} className="hover:text-muted-foreground transition-colors">Условия</button>
           <span>&middot;</span>
           <button onClick={() => go("/legal/privacy")} className="hover:text-muted-foreground transition-colors">Конфиденциальность</button>

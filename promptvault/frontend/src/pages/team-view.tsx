@@ -323,7 +323,7 @@ export default function TeamView() {
 
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Отмена</Button>
-            <Button variant="brand" size="sm" onClick={handleUpdate} disabled={!editName.trim()}>
+            <Button variant="brand" size="sm" onClick={handleUpdate} disabled={!editName.trim() || updateTeam.isPending}>
               {updateTeam.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Сохранить
             </Button>

@@ -2,7 +2,14 @@ import { Navigate, Outlet, useLocation } from "react-router-dom"
 import { useAuthStore } from "@/stores/auth-store"
 
 export default function ProtectedRoute() {
-  const { isAuthenticated, isLoading, user, sessionError, restoreSession } = useAuthStore()
+  // MJ-30: per-slice selectors — без них любое изменение auth-store (login
+  // progress, изменение user.has_unread_changelog и т.п.) вызовет ре-рендер
+  // ProtectedRoute и всех его детей.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const isLoading = useAuthStore((s) => s.isLoading)
+  const user = useAuthStore((s) => s.user)
+  const sessionError = useAuthStore((s) => s.sessionError)
+  const restoreSession = useAuthStore((s) => s.restoreSession)
   const location = useLocation()
 
   if (isLoading) {

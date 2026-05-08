@@ -2,7 +2,10 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // SubscriptionPlan — тарифный план (free/pro/max). Хранится в БД,
@@ -96,6 +99,33 @@ type Subscription struct {
 
 	Plan SubscriptionPlan `gorm:"foreignKey:PlanID" json:"plan,omitzero"`
 }
+
+// Validate проверяет инварианты Subscription.
+//
+// MJ-27: до этого fix'а инварианты держались только в комментариях,
+// БД CHECK constraints добавлены 000059 только для paused. Теперь
+// валидация на app-уровне через GORM BeforeSave hook — fail-fast при
+// попытке записать «гибридное» состояние.
+func (s *Subscription) Validate() error {
+	if s.Status == SubStatusPaused {
+		if s.PausedAt == nil {
+			return fmt.Errorf("subscription: paused status requires paused_at")
+		}
+		if s.PausedUntil == nil {
+			return fmt.Errorf("subscription: paused status requires paused_until")
+		}
+	}
+	if s.RenewalAttempts < 0 || s.RenewalAttempts > 3 {
+		return fmt.Errorf("subscription: renewal_attempts must be in [0,3], got %d", s.RenewalAttempts)
+	}
+	if s.PreExpireStage < 0 || s.PreExpireStage > 2 {
+		return fmt.Errorf("subscription: pre_expire_stage must be in [0,2], got %d", s.PreExpireStage)
+	}
+	return nil
+}
+
+// BeforeSave — GORM hook, вызывает Validate перед каждым INSERT/UPDATE.
+func (s *Subscription) BeforeSave(_ *gorm.DB) error { return s.Validate() }
 
 // SubscriptionCancellation — запись об отмене подписки с причиной (M-6b exit survey).
 // Append-only — если юзер после Resume снова Cancel, создаётся новая запись.

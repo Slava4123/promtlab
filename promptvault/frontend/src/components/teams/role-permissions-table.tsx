@@ -108,7 +108,7 @@ export function RolePermissionsTable({ highlight, compact = false }: RolePermiss
                   {p.allowed[r] ? (
                     <Check className="mx-auto h-3.5 w-3.5 text-emerald-500" aria-label="разрешено" />
                   ) : (
-                    <X className="mx-auto h-3.5 w-3.5 text-muted-foreground/40" aria-label="запрещено" />
+                    <X className="mx-auto h-3.5 w-3.5 text-muted-foreground" aria-label="запрещено" />
                   )}
                 </td>
               ))}

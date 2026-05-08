@@ -160,7 +160,7 @@ export default function SignIn() {
         </div>
         <form onSubmit={onTOTPSubmit} className="space-y-4">
           {error && (
-            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <div role="alert" aria-live="assertive" className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -266,7 +266,7 @@ export default function SignIn() {
       {/* Форма */}
       <form onSubmit={handleSubmit(onSubmit)} noValidate onChange={() => error && setError("")} className="space-y-4">
         {error && (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div role="alert" aria-live="assertive" className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         )}

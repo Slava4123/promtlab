@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Loader2, MailCheck } from "lucide-react"
 
@@ -16,11 +16,13 @@ export default function VerifyEmail() {
   const emailFromQuery = searchParams.get("email") || ""
   const fetchMe = useAuthStore((s) => s.fetchMe)
 
-  const [code, setCode] = useState(["", "", "", "", "", ""])
+  // MJ-37: единый input вместо 6 раздельных. autoComplete="one-time-code"
+  // включает iOS/Android SMS autofill (web.dev/sms-otp-form). 6 раздельных
+  // input'ов ломали этот UX — браузер не понимает куда вставлять код.
+  const [code, setCode] = useState("")
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [cooldown, setCooldown] = useState(60)
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -28,44 +30,22 @@ export default function VerifyEmail() {
     return () => clearTimeout(timer)
   }, [cooldown])
 
-  const handleChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return
-
-    const newCode = [...code]
-    newCode[index] = value.slice(-1)
-    setCode(newCode)
-
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus()
-    }
-  }
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !code[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus()
-    }
-  }
-
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault()
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6)
-    if (pasted.length === 6) {
-      setCode(pasted.split(""))
-      inputRefs.current[5]?.focus()
-    }
+  const handleChange = (value: string) => {
+    // Только цифры, до 6 символов; iOS SMS autofill вставит сразу 6.
+    const digits = value.replace(/\D/g, "").slice(0, 6)
+    setCode(digits)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const fullCode = code.join("")
-    if (fullCode.length !== 6) return
+    if (code.length !== 6) return
 
     setError("")
     setIsSubmitting(true)
     try {
       const data = await api<AuthResponse>("/auth/verify-email", {
         method: "POST",
-        body: JSON.stringify({ email: emailFromQuery, code: fullCode }),
+        body: JSON.stringify({ email: emailFromQuery, code }),
       })
       setTokens(data.tokens)
       await fetchMe()
@@ -107,31 +87,30 @@ export default function VerifyEmail() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-center text-sm text-destructive">
+          <div role="alert" aria-live="assertive" className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-center text-sm text-destructive">
             {error}
           </div>
         )}
 
-        <div className="flex justify-center gap-2" onPaste={handlePaste}>
-          {code.map((digit, i) => (
-            <Input
-              key={i}
-              ref={(el) => { inputRefs.current[i] = el }}
-              type="text"
-              inputMode="numeric"
-              maxLength={1}
-              value={digit}
-              onChange={(e) => handleChange(i, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(i, e)}
-              className="h-12 w-11 text-center text-lg font-semibold border-border bg-background focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
-            />
-          ))}
+        <div className="flex justify-center">
+          <Input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            value={code}
+            onChange={(e) => handleChange(e.target.value)}
+            placeholder="000000"
+            className="h-12 w-48 text-center text-2xl font-mono font-semibold tracking-[0.5em] border-border bg-background focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+            autoFocus
+          />
         </div>
 
         <Button
           type="submit"
           className="h-10 w-full bg-violet-600 text-white hover:bg-violet-500 active:bg-violet-700"
-          disabled={isSubmitting || code.join("").length !== 6}
+          disabled={isSubmitting || code.length !== 6}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isSubmitting ? "Проверка..." : "Подтвердить"}

@@ -281,7 +281,7 @@ export default function Collections() {
 
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>Отмена</Button>
-            <Button variant="brand" size="sm" onClick={handleSave} disabled={!name.trim()}>
+            <Button variant="brand" size="sm" onClick={handleSave} disabled={!name.trim() || createCollection.isPending || updateCollection.isPending}>
               {(createCollection.isPending || updateCollection.isPending) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {editing ? "Сохранить" : "Создать"}
             </Button>

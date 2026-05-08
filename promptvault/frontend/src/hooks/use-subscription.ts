@@ -44,6 +44,11 @@ export function usePlans() {
   return useQuery({
     queryKey: ["plans"],
     queryFn: fetchPlans,
+    // MJ-24: планы меняются редко (релиз новой ценовой структуры), но
+    // /api/plans в дефолтном 5min staleTime инвалидируется на каждое
+    // переключение страницы. 1 час — разумный баланс между свежестью
+    // и нагрузкой на /api/plans от админ-навигации.
+    staleTime: 60 * 60_000,
   })
 }
 

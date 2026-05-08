@@ -205,7 +205,7 @@ export default function Teams() {
               variant="brand"
               size="sm"
               onClick={handleSave}
-              disabled={!name.trim()}
+              disabled={!name.trim() || createTeam.isPending || updateTeam.isPending}
             >
               {(createTeam.isPending || updateTeam.isPending) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {editing ? "Сохранить" : "Создать"}

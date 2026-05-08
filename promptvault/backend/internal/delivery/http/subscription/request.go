@@ -1,8 +1,12 @@
 package subscription
 
 // CheckoutRequest — body POST /api/subscription/checkout.
+//
+// MJ-25: добавлен `oneof` validator. Раньше любой произвольный plan_id
+// проходил до plans.GetByID и возвращал 500/404 вместо 400 BadRequest.
+// Теперь invalid plan отсекается на уровне HTTP-валидации.
 type CheckoutRequest struct {
-	PlanID string `json:"plan_id" validate:"required"`
+	PlanID string `json:"plan_id" validate:"required,oneof=free pro max pro_yearly max_yearly"`
 }
 
 // AutoRenewRequest — body POST /api/subscription/auto-renew.
