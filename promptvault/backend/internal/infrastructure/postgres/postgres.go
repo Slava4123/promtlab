@@ -63,7 +63,7 @@ func Connect(cfg config.DatabaseConfig, isDev bool) (*gorm.DB, error) {
 
 	maxOpen := cfg.MaxOpenConns
 	if maxOpen == 0 {
-		maxOpen = 25
+		maxOpen = 15 // CR-12: было 25, см. defaults в loader.go
 	}
 	maxIdle := cfg.MaxIdleConns
 	if maxIdle == 0 {
@@ -72,7 +72,12 @@ func Connect(cfg config.DatabaseConfig, isDev bool) (*gorm.DB, error) {
 
 	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetMaxIdleConns(maxIdle)
-	sqlDB.SetConnMaxLifetime(time.Hour)
+	// CR-12: SetConnMaxLifetime короче (30m вместо 1h) + добавлен
+	// SetConnMaxIdleTime — освобождать idle connections, чтобы при пиковой
+	// нагрузке (background loops + analytics + webhook'и одновременно)
+	// pool не упирался в стенку.
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 
 	return db, nil
 }

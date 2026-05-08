@@ -815,6 +815,12 @@ func (s *Service) StartExecution(ctx context.Context, chainID, userID uint, init
 		return nil, ErrEmptyChain
 	}
 
+	// CR-11: N+1 fix. GetByIDWithSteps делает Preload("Steps.Prompt"),
+	// поэтому промпты уже подгружены — раньше тут шёл per-step
+	// `s.prompts.GetByID()` (51 query на цепочке из 50 шагов × 3 SELECT'а
+	// внутри = ~150 round-trips на один Start). Теперь читаем preloaded.
+	// Если step.Prompt == nil (soft-delete после Preload или missing FK)
+	// — fallback на GetByID для корректной диагностики ErrPromptNotFound.
 	promptContents := make(map[uint]string, len(c.Steps))
 	for _, step := range c.Steps {
 		if step.PromptID == nil {
@@ -823,6 +829,11 @@ func (s *Service) StartExecution(ctx context.Context, chainID, userID uint, init
 		if _, ok := promptContents[*step.PromptID]; ok {
 			continue
 		}
+		if step.Prompt != nil && step.Prompt.ID != 0 {
+			promptContents[*step.PromptID] = step.Prompt.Content
+			continue
+		}
+		// Fallback: prompt не preloaded или soft-deleted — proverим явно.
 		p, err := s.prompts.GetByID(ctx, *step.PromptID)
 		if err != nil {
 			if errors.Is(err, repo.ErrNotFound) {

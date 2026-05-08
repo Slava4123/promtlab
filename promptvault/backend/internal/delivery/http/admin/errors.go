@@ -38,6 +38,15 @@ func respondError(w http.ResponseWriter, err error) {
 			Code:    http.StatusServiceUnavailable,
 			Message: err.Error(),
 		})
+	case errors.Is(err, adminuc.ErrFeedbackNotFound):
+		httperr.Respond(w, httperr.NotFound(err.Error()))
+	case errors.Is(err, adminuc.ErrInvalidFeedbackStatus):
+		httperr.Respond(w, httperr.BadRequest(err.Error()))
+	case errors.Is(err, adminuc.ErrFeedbackUnavailable):
+		httperr.Respond(w, &httperr.AppError{
+			Code:    http.StatusServiceUnavailable,
+			Message: err.Error(),
+		})
 	case errors.Is(err, adminauthuc.ErrInvalidCode),
 		errors.Is(err, adminauthuc.ErrTOTPNotEnrolled):
 		// Sudo mode validation failure — возвращаем 422 Unprocessable Entity,
@@ -46,6 +55,13 @@ func respondError(w http.ResponseWriter, err error) {
 		// приводит к двойному запросу. См. BUG #1 из QA отчёта.
 		httperr.Respond(w, &httperr.AppError{
 			Code:    http.StatusUnprocessableEntity,
+			Message: err.Error(),
+		})
+	case errors.Is(err, adminauthuc.ErrTOTPRateLimited):
+		// CR-14: brute-force защита. 429 + Retry-After ~180s
+		// (5 attempts / 15 min = ~3 min cooldown в среднем).
+		httperr.Respond(w, &httperr.AppError{
+			Code:    http.StatusTooManyRequests,
 			Message: err.Error(),
 		})
 	default:

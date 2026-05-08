@@ -290,10 +290,16 @@ func (s *Service) RefreshToken(ctx context.Context, in RefreshTokenInput) (*Toke
 		return nil, ErrInvalidGrant
 	}
 	if oldToken.RevokedAt != nil {
-		// Replay detected — revoke whole chain.
+		// Replay detected — revoke whole chain (RFC 6749 §10.4 + OAuth 2.0
+		// Security BCP). MJ-5: error revoke не игнорируем silent — если
+		// revoke упал, атакующий продолжит использовать токены, юзер не
+		// узнает. Log it so SRE может escalate.
 		slog.Error("oauth.refresh.replay_detected",
 			"token_id", oldToken.ID, "client_id", oldToken.ClientID, "user_id", oldToken.UserID)
-		_ = s.tokens.RevokeChain(ctx, oldToken.ID)
+		if err := s.tokens.RevokeChain(ctx, oldToken.ID); err != nil {
+			slog.Error("oauth.refresh.revoke_chain_failed",
+				"token_id", oldToken.ID, "user_id", oldToken.UserID, "error", err)
+		}
 		return nil, ErrInvalidGrant
 	}
 	if time.Now().After(oldToken.ExpiresAt) {

@@ -135,7 +135,11 @@ func defaults() map[string]any {
 			"name":           "promptvault",
 			"sslmode":        "disable",
 			"sslrootcert":    "",
-			"max_open_conns": 25,
+			// CR-12: понижено с 25 до 15. На VPS 4GB PostgreSQL тратит
+			// ~10MB RAM на active connection (до 50MB при крупном sort/hash);
+			// 25 conns × 10-50MB вкупе с GlitchTip web+worker через ту же PG
+			// рискуют OOM. См. Brandur «Postgres Connection Heuristics».
+			"max_open_conns": 15,
 			"max_idle_conns": 5,
 		},
 		"jwt": map[string]any{

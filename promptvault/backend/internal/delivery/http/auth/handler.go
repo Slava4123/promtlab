@@ -26,6 +26,11 @@ type Handler struct {
 	secureCookies bool
 }
 
+// usernameRe — допустимый формат username (латинские буквы, цифры, _).
+// MJ-7: pre-compiled file-level вместо regexp.MatchString с silent error
+// swallow в каждом handler-вызове.
+var usernameRe = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+
 // NewHandler — adminauthSvc может быть nil для тестов без admin flow;
 // в production всегда передаётся из app.New.
 func NewHandler(authSvc *authuc.Service, adminauthSvc *adminauthuc.Service, changelogSvc *changeloguc.Service, secureCookies bool) *Handler {
@@ -68,7 +73,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Username != "" {
-		if matched, _ := regexp.MatchString(`^[a-zA-Z0-9_]+$`, req.Username); !matched {
+		if !usernameRe.MatchString(req.Username) {
 			httperr.Respond(w, httperr.BadRequest("Никнейм может содержать только латинские буквы, цифры и _"))
 			return
 		}
@@ -234,6 +239,12 @@ func (h *Handler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 			httperr.Respond(w, httperr.Unauthorized("неверный код"))
 		case adminauthuc.ErrTOTPNotEnrolled:
 			httperr.Respond(w, httperr.Conflict("TOTP не настроен"))
+		case adminauthuc.ErrTOTPRateLimited:
+			// CR-14: 5 неудачных попыток / 15 мин per-user.
+			httperr.Respond(w, &httperr.AppError{
+				Code:    http.StatusTooManyRequests,
+				Message: err.Error(),
+			})
 		default:
 			httperr.Respond(w, httperr.Internal(err))
 		}
@@ -393,7 +404,7 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Username != nil && *req.Username != "" {
-		if matched, _ := regexp.MatchString(`^[a-zA-Z0-9_]+$`, *req.Username); !matched {
+		if !usernameRe.MatchString(*req.Username) {
 			httperr.Respond(w, httperr.BadRequest("Никнейм может содержать только латинские буквы, цифры и _"))
 			return
 		}

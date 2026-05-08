@@ -27,6 +27,12 @@ func respondError(w http.ResponseWriter, err error) {
 			Code:    http.StatusUnprocessableEntity,
 			Message: err.Error(),
 		})
+	case errors.Is(err, adminauthuc.ErrTOTPRateLimited):
+		// CR-14: brute-force защита (5 попыток / 15 мин на per-user базе).
+		httperr.Respond(w, &httperr.AppError{
+			Code:    http.StatusTooManyRequests,
+			Message: err.Error(),
+		})
 	case errors.Is(err, adminauthuc.ErrTOTPAlreadyConfirmed):
 		httperr.Respond(w, httperr.Conflict(err.Error()))
 	case errors.Is(err, adminauthuc.ErrGenerateFailed):

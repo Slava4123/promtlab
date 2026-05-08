@@ -12,10 +12,20 @@ import (
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/middleware/ipallowlist"
 	"promptvault/internal/middleware/ratelimit"
+	"promptvault/internal/middleware/secheaders"
 	sentrymw "promptvault/internal/middleware/sentry"
 )
 
 func (a *App) MountRoutes(r chi.Router) {
+	// MJ-12: security headers для всех ответов. HSTS включается только в
+	// prod (HTTPS обязателен для Strict-Transport-Security). X-Frame-Options:
+	// DENY, X-Content-Type-Options: nosniff, Referrer-Policy — всегда.
+	r.Use(secheaders.New(secheaders.Options{
+		HSTS:                  a.cfg.Server.IsProd(),
+		HSTSMaxAge:            31536000, // 1 год
+		HSTSIncludeSubdomains: true,
+	}))
+
 	// Protected routes принимают и JWT (SPA), и API-ключ `pvlt_*` (Chrome Extension, MCP-клиенты).
 	// Префикс токена определяет путь валидации.
 	authMiddleware := authmw.CombinedAuth(a.tokenValidator, a.apiKeyValidator)
@@ -224,7 +234,7 @@ func (a *App) MountRoutes(r chi.Router) {
 			// в handler через adminauth.Service.Verify, не middleware.
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(adminmw.RequireAdmin(a.userLookup))
-				r.Use(adminmw.AdminAuditContext)
+				r.Use(adminmw.AdminAuditContext(a.cfg.Server.TrustProxy))
 
 				r.Route("/users", func(r chi.Router) {
 					r.Get("/", a.adminHandler.ListUsers)

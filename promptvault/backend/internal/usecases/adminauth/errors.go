@@ -19,4 +19,11 @@ var (
 
 	// ErrGenerateFailed — низкоуровневая ошибка генерации TOTP secret (rare).
 	ErrGenerateFailed = errors.New("не удалось сгенерировать TOTP secret")
+
+	// ErrTOTPRateLimited — слишком много неудачных попыток подряд.
+	// CR-14: per-user rate limiter (5 попыток / 15 мин) защищает от
+	// distributed brute-force vs admin-юзера. RFC 6238 §5.2 рекомендует
+	// throttling в 10 attempts max. Возвращается из Verify — delivery
+	// слой маппит в HTTP 429 + Retry-After. Audit-log lockout event.
+	ErrTOTPRateLimited = errors.New("слишком много попыток — попробуйте позже")
 )

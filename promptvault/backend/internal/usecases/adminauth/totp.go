@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/time/rate"
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
@@ -28,10 +31,37 @@ const Issuer = "PromptVault"
 type Service struct {
 	totps repo.TOTPRepository
 	users repo.UserRepository
+
+	// CR-14: per-userID brute-force throttling. Без этого distributed
+	// botnet может попытаться 1M вариаций × N IP за час и попасть в hit
+	// (~1% при 100 botах). RFC 6238 §5.2 рекомендует throttling. Sync.Map
+	// — read-heavy концepция (каждый Verify читает; писатели редкие).
+	verifyLimiters sync.Map // map[uint]*rate.Limiter
 }
 
 func NewService(totps repo.TOTPRepository, users repo.UserRepository) *Service {
 	return &Service{totps: totps, users: users}
+}
+
+// totpVerifyRate — лимит попыток TOTP/backup-code на per-user базе.
+//   - 5 попыток в окне 15 минут (rate=5/(15*60s)).
+//   - Burst=5 — позволяет короткую серию проверок при первом вводе.
+//
+// При превышении Verify возвращает ErrTOTPRateLimited, который delivery
+// слой маппит в HTTP 429 + Retry-After.
+const (
+	totpVerifyBurst   = 5
+	totpVerifyWindow  = 15 * time.Minute
+)
+
+// limiterFor возвращает per-user limiter, создавая его при первом обращении.
+func (s *Service) limiterFor(userID uint) *rate.Limiter {
+	if v, ok := s.verifyLimiters.Load(userID); ok {
+		return v.(*rate.Limiter)
+	}
+	lim := rate.NewLimiter(rate.Every(totpVerifyWindow/totpVerifyBurst), totpVerifyBurst)
+	actual, _ := s.verifyLimiters.LoadOrStore(userID, lim)
+	return actual.(*rate.Limiter)
 }
 
 // Enroll генерирует новый TOTP secret + backup codes для юзера.
@@ -112,7 +142,16 @@ func (s *Service) ConfirmEnrollment(ctx context.Context, userID uint, code strin
 // сначала TOTP (дешёво), потом backup (итерация по bcrypt-хешам).
 // Возвращает VerifyResult с флагом UsedBackupCode и count оставшихся backup кодов.
 // При неверном коде — ErrInvalidCode.
+//
+// CR-14: brute-force защита через per-userID rate limiter (5 попыток / 15 мин).
+// При превышении возвращается ErrTOTPRateLimited (HTTP 429). Лимитер не
+// расходуется при успешной проверке — чтобы юзер, который ввёл код правильно
+// после 1-2 попыток, не блокировался.
 func (s *Service) Verify(ctx context.Context, userID uint, code string) (*VerifyResult, error) {
+	if !s.limiterFor(userID).Allow() {
+		slog.Warn("adminauth.verify.rate_limited", "user_id", userID)
+		return nil, ErrTOTPRateLimited
+	}
 	t, err := s.totps.GetByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, repo.ErrNotFound) {

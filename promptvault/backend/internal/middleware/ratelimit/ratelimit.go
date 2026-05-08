@@ -186,7 +186,16 @@ func ByUserIDWithWindow(limit int, window time.Duration, getUserID func(r *http.
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID := getUserID(r)
 			if userID == 0 {
-				next.ServeHTTP(w, r)
+				// MJ-10: раньше шёл next.ServeHTTP — anonymous/expired-token
+				// запросы делили один глобальный bucket (или вообще проходили
+				// без учёта). Теперь явный 401 — если authmw пропустил такой
+				// запрос на protected endpoint, это bug, и rate-limit должен
+				// fail-closed, а не пропускать.
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				if _, err := w.Write([]byte(`{"error":"Не авторизовано"}`)); err != nil {
+					slog.Error("failed to write 401 from ratelimit", "error", err)
+				}
 				return
 			}
 			if !rl.Allow(userID) {
