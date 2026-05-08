@@ -1,8 +1,18 @@
 import { lazy, Suspense, useEffect } from "react"
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { QueryClient, QueryCache, QueryClientProvider } from "@tanstack/react-query"
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { Loader2 } from "lucide-react"
+
+// MJ-18: ReactQueryDevtools должен быть подключён ТОЛЬКО в dev (~37-40 KB
+// gzip иначе попадает в production bundle бесполезным грузом). React.lazy
+// + import.meta.env.DEV gating вырезается tree-shaker'ом из prod build'а.
+const ReactQueryDevtools = import.meta.env.DEV
+  ? lazy(() =>
+      import("@tanstack/react-query-devtools").then((m) => ({
+        default: m.ReactQueryDevtools,
+      })),
+    )
+  : () => null
 
 import { ErrorBoundary } from "@/components/error-boundary"
 import { useAuthStore } from "@/stores/auth-store"
@@ -30,6 +40,11 @@ const Dashboard = lazy(() => import("@/pages/dashboard"))
 const PromptEditor = lazy(() => import("@/pages/prompt-editor"))
 const Collections = lazy(() => import("@/pages/collections"))
 const CollectionView = lazy(() => import("@/pages/collection-view"))
+const Chains = lazy(() => import("@/pages/chains"))
+const ChainEditor = lazy(() => import("@/pages/chains/editor"))
+const ChainRun = lazy(() => import("@/pages/chains/run"))
+const ChainRuns = lazy(() => import("@/pages/chains/runs"))
+const ChainCanvas = lazy(() => import("@/pages/chains/canvas"))
 const Versions = lazy(() => import("@/pages/versions"))
 const PromptAnalytics = lazy(() => import("@/pages/prompt-analytics"))
 // /settings/* — nested routes. Layout — lazy (грузится один раз при заходе),
@@ -66,6 +81,7 @@ const AdminUserDetail = lazy(() => import("@/pages/admin/user-detail"))
 const AdminAuditLog = lazy(() => import("@/pages/admin/audit-log"))
 const AdminHealth = lazy(() => import("@/pages/admin/health"))
 const AdminTOTPEnroll = lazy(() => import("@/pages/admin/totp-enroll"))
+const AdminFeedbacks = lazy(() => import("@/pages/admin/feedbacks"))
 const ExtensionPrivacy = lazy(() => import("@/pages/legal/extension-privacy"))
 const Terms = lazy(() => import("@/pages/legal/terms"))
 const Privacy = lazy(() => import("@/pages/legal/privacy"))
@@ -145,6 +161,17 @@ function AppRoutes() {
           <Route path="/prompts/:id/analytics" element={<Suspense fallback={<PageFallback />}><PromptAnalytics /></Suspense>} />
           <Route path="/collections" element={<Suspense fallback={<PageFallback />}><Collections /></Suspense>} />
           <Route path="/collections/:id" element={<Suspense fallback={<PageFallback />}><CollectionView /></Suspense>} />
+          {/* Phase 16: routes только при VITE_CHAINS_ENABLED=true. */}
+          {import.meta.env.VITE_CHAINS_ENABLED === "true" && (
+            <>
+              <Route path="/chains" element={<Suspense fallback={<PageFallback />}><Chains /></Suspense>} />
+              <Route path="/chains/new" element={<Suspense fallback={<PageFallback />}><ChainEditor /></Suspense>} />
+              <Route path="/chains/:id/edit" element={<Suspense fallback={<PageFallback />}><ChainEditor /></Suspense>} />
+              <Route path="/chains/:id/run" element={<Suspense fallback={<PageFallback />}><ChainRun /></Suspense>} />
+              <Route path="/chains/:id/runs" element={<Suspense fallback={<PageFallback />}><ChainRuns /></Suspense>} />
+              <Route path="/chains/:id/canvas" element={<Suspense fallback={<PageFallback />}><ChainCanvas /></Suspense>} />
+            </>
+          )}
           <Route path="/teams" element={<Suspense fallback={<PageFallback />}><Teams /></Suspense>} />
           <Route path="/teams/:slug" element={<Suspense fallback={<PageFallback />}><TeamView /></Suspense>} />
           <Route path="/teams/:slug/analytics" element={<Suspense fallback={<PageFallback />}><TeamAnalytics /></Suspense>} />
@@ -176,6 +203,7 @@ function AppRoutes() {
             <Route index element={<Suspense fallback={<PageFallback />}><AdminUsers /></Suspense>} />
             <Route path="users" element={<Suspense fallback={<PageFallback />}><AdminUsers /></Suspense>} />
             <Route path="users/:id" element={<Suspense fallback={<PageFallback />}><AdminUserDetail /></Suspense>} />
+            <Route path="feedbacks" element={<Suspense fallback={<PageFallback />}><AdminFeedbacks /></Suspense>} />
             <Route path="audit" element={<Suspense fallback={<PageFallback />}><AdminAuditLog /></Suspense>} />
             <Route path="health" element={<Suspense fallback={<PageFallback />}><AdminHealth /></Suspense>} />
             <Route path="totp" element={<Suspense fallback={<PageFallback />}><AdminTOTPEnroll /></Suspense>} />
@@ -193,7 +221,9 @@ export default function App() {
         <BrowserRouter>
           <AppRoutes />
         </BrowserRouter>
-        <ReactQueryDevtools initialIsOpen={false} />
+        <Suspense fallback={null}>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </Suspense>
       </QueryClientProvider>
     </ErrorBoundary>
   )

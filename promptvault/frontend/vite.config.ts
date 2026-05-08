@@ -75,6 +75,12 @@ export default defineConfig({
           if (id.includes("/react-diff-viewer-continued/") || id.includes("/diff/")) {
             return "vendor-diff"
           }
+          // MJ-16: recharts (~347 KB) попадал на page-чанк usage-chart-*.js
+          // и тянулся каждой analytics-страницей. Выносим в vendor-charts —
+          // browser кеш экономит ~300 KB при повторных визитах.
+          if (id.includes("/recharts/") || id.includes("/d3-")) {
+            return "vendor-charts"
+          }
           return undefined
         },
       },
@@ -85,5 +91,9 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
     css: false,
+    // MJ-2: vitest run по умолчанию подхватывал tests/e2e/*.spec.ts
+    // (Playwright-спеки), что давало 4 false-failure'а в CI/dev test-runner.
+    // Явно исключаем, чтобы Playwright и Vitest не пересекались.
+    exclude: ["node_modules/**", "tests/e2e/**", "**/playwright/**", "dist/**"],
   },
 })

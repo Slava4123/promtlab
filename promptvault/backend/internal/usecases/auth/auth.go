@@ -20,6 +20,12 @@ import (
 	"promptvault/internal/models"
 )
 
+// bcryptCost — стоимость bcrypt хеширования паролей. Phase 3 MJ-13:
+// поднято с DefaultCost=10 до 12 (OWASP 2024+ recommends ≥12). Modern
+// GPU крекают bcrypt-10 на ~100k attempts/sec; cost=12 = 4× медленнее.
+// Каждый +1 удваивает время — потолок 12 для UX (login-flow ~200ms).
+const bcryptCost = 12
+
 type Service struct {
 	users           repo.UserRepository
 	linkedAccounts  repo.LinkedAccountRepository
@@ -117,7 +123,7 @@ func (s *Service) Register(ctx context.Context, userEmail, password, name, usern
 			return nil, &EmailTakenError{}
 		}
 		// Email не подтверждён — обновим данные и переотправим код
-		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +150,7 @@ func (s *Service) Register(ctx context.Context, userEmail, password, name, usern
 		return existing, nil
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +356,7 @@ func (s *Service) ConfirmSetPassword(ctx context.Context, userID uint, code, pas
 		return err
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
 		return err
 	}
@@ -453,7 +459,7 @@ func (s *Service) ResetPassword(ctx context.Context, userEmail, code, newPasswor
 		return err
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcryptCost)
 	if err != nil {
 		return err
 	}
@@ -592,7 +598,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID uint, oldPassword, 
 		return ErrWrongPassword
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcryptCost)
 	if err != nil {
 		return err
 	}

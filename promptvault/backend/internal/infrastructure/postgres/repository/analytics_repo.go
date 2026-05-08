@@ -409,8 +409,21 @@ func (r *analyticsRepo) MostEditedPrompts(ctx context.Context, userID uint, team
 }
 
 // PossibleDuplicates — пары похожих промптов через pg_trgm.similarity().
-// Защита от O(n²): WHERE a.updated_at >= NOW() - INTERVAL '30 days' ограничивает
-// candidate pool, threshold и LIMIT режут выхлоп.
+//
+// CR-13: до фикса join'или prompts a × prompts b ON a.id < b.id, фильтруя
+// `a.updated_at >= NOW() - INTERVAL '30 days'` ТОЛЬКО на стороне `a`. У
+// Max-юзера с 5000 промптов из них 1000 обновлены за 30 дней — JOIN
+// порождал ~5,000,000 пар × similarity() на каждой. На 4GB VPS PG мог
+// закипеть, плюс ежесуточный batch-burst через InsightsComputeLoop.
+//
+// Сейчас: candidate-pool в CTE `cand` (filter user/team/30d/deleted сразу),
+// потом self-join только в этом set. На реалистичной нагрузке (1000
+// активных промптов) это ~500K пар вместо 5M.
+//
+// Дополнительно: caller (InsightsComputeLoop) должен передать ctx с
+// statement_timeout (e.g. context.WithTimeout(parent, 30*time.Second)),
+// чтобы кейс с 10K активных промптов не повесил соединение.
+//
 // a.id < b.id избавляет от симметричных дубликатов (A-B и B-A).
 func (r *analyticsRepo) PossibleDuplicates(ctx context.Context, userID uint, teamID *uint, threshold float32, limit int) ([]repo.DuplicatePair, error) {
 	if limit < 1 || limit > 50 {
@@ -419,29 +432,33 @@ func (r *analyticsRepo) PossibleDuplicates(ctx context.Context, userID uint, tea
 	if threshold <= 0 || threshold > 1 {
 		threshold = 0.8
 	}
-	teamFilter := "a.team_id IS NULL AND b.team_id IS NULL"
-	args := []any{userID, userID}
+	candTeamFilter := "team_id IS NULL"
+	candArgs := []any{userID}
 	if teamID != nil {
-		teamFilter = "a.team_id = ? AND b.team_id = ?"
-		args = append(args, *teamID, *teamID)
+		candTeamFilter = "team_id = ?"
+		candArgs = append(candArgs, *teamID)
 	}
 	query := `
+WITH cand AS (
+    SELECT id, title, content
+    FROM prompts
+    WHERE user_id = ?
+      AND ` + candTeamFilter + `
+      AND deleted_at IS NULL
+      AND updated_at >= NOW() - INTERVAL '30 days'
+)
 SELECT a.id AS prompt_a_id, a.title AS prompt_a_title,
        b.id AS prompt_b_id, b.title AS prompt_b_title,
        similarity(a.content, b.content) AS similarity
-FROM prompts a
-JOIN prompts b ON a.id < b.id
-WHERE a.user_id = ? AND b.user_id = ?
-  AND a.deleted_at IS NULL AND b.deleted_at IS NULL
-  AND ` + teamFilter + `
-  AND a.updated_at >= NOW() - INTERVAL '30 days'
-  AND similarity(a.content, b.content) >= ?
+FROM cand a
+JOIN cand b ON a.id < b.id
+WHERE similarity(a.content, b.content) >= ?
 ORDER BY similarity DESC
 LIMIT ?`
-	args = append(args, threshold, limit)
+	candArgs = append(candArgs, threshold, limit)
 
 	var rows []repo.DuplicatePair
-	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&rows).Error
+	err := r.db.WithContext(ctx).Raw(query, candArgs...).Scan(&rows).Error
 	return rows, err
 }
 
