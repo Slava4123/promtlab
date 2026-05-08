@@ -1,7 +1,11 @@
 import { lazy, Suspense, useEffect } from "react"
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
-import { QueryClient, QueryCache, QueryClientProvider } from "@tanstack/react-query"
+import { QueryClientProvider } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
+
+// queryClient — singleton, экспортирован из lib/query-client.ts чтобы
+// auth-store мог его очистить при logout (MJ-9 data leak fix).
+import { queryClient } from "@/lib/query-client"
 
 // MJ-18: ReactQueryDevtools должен быть подключён ТОЛЬКО в dev (~37-40 KB
 // gzip иначе попадает в production bundle бесполезным грузом). React.lazy
@@ -18,8 +22,6 @@ import { ErrorBoundary } from "@/components/error-boundary"
 import { useAuthStore } from "@/stores/auth-store"
 import ProtectedRoute from "@/components/auth/protected-route"
 import AppLayout from "@/components/layout/app-layout"
-import { ApiError } from "@/api/client"
-import { captureException } from "@/lib/sentry"
 import { captureReferralFromURL } from "@/lib/referral"
 
 // Eager-loaded (public, lightweight)
@@ -95,32 +97,7 @@ function PageFallback() {
   )
 }
 
-const queryClient = new QueryClient({
-  // Captures query errors в Sentry на уровне cache — ловит все failed queries
-  // централизованно, без необходимости добавлять обработчики в каждый хук.
-  // Только 5xx (ApiError) + non-ApiError (network errors) отправляются,
-  // 4xx пропускаются как expected user errors.
-  queryCache: new QueryCache({
-    onError: (error, query) => {
-      const isApiError = error instanceof ApiError
-      if (isApiError && error.status < 500) {
-        return
-      }
-      captureException(error, {
-        tags: {
-          query_key: JSON.stringify(query.queryKey),
-          source: "tanstack_query",
-        },
-      })
-    },
-  }),
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      staleTime: 5 * 60 * 1000,
-    },
-  },
-})
+// queryClient вынесен в @/lib/query-client.ts — см. import выше.
 
 function AppRoutes() {
   const restoreSession = useAuthStore((s) => s.restoreSession)

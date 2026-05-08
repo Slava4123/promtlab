@@ -142,7 +142,12 @@ func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) er
 	}
 	orderID := fmt.Sprintf("renew_%d_%s", sub.UserID, idemKey[:12])
 
-	providerData, _ := json.Marshal(PaymentProviderData{PlanID: plan.ID, Renewal: "true"})
+	// MJ-15/MN-20: явная обработка json.Marshal — теоретически невозможна
+	// для plain struct, но molchaet bug если кто-то добавит unsupported тип.
+	providerData, err := json.Marshal(PaymentProviderData{PlanID: plan.ID, Renewal: "true"})
+	if err != nil {
+		return fmt.Errorf("marshal provider data: %w", err)
+	}
 	pay := &models.Payment{
 		UserID:         sub.UserID,
 		SubscriptionID: &sub.ID,

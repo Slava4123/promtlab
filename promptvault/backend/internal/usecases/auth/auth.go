@@ -443,8 +443,20 @@ func emailSuffix(email string) string {
 	return ""
 }
 
-// ResetPassword — проверяет код и устанавливает новый пароль
+// ResetPassword — проверяет код и устанавливает новый пароль.
+//
+// MJ-11: constant-time defer (200ms minimum) защищает от email enumeration
+// через timing — раньше «no such email» возвращался моментально, а валидный
+// email тратил время на verifications.GetByUserID + bcrypt. Атакующий мог
+// перебирать почты и по разнице времени узнавать какие зарегистрированы.
 func (s *Service) ResetPassword(ctx context.Context, userEmail, code, newPassword string) error {
+	defer func(start time.Time) {
+		elapsed := time.Since(start)
+		if elapsed < 200*time.Millisecond {
+			time.Sleep(200*time.Millisecond - elapsed)
+		}
+	}(time.Now())
+
 	user, err := s.users.GetByEmail(ctx, userEmail)
 	if err != nil {
 		return ErrInvalidCode

@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	iservice "promptvault/internal/interface/service"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
@@ -202,6 +204,11 @@ func (s *Service) IncrementMCPUsage(ctx context.Context, userID uint) error {
 }
 
 // GetUsageSummary возвращает полную сводку использования для /api/subscription/usage.
+//
+// MJ-20: 6 SELECT'ов идут параллельно через errgroup вместо sequential.
+// Раньше: 6 round-trip'ов serializable; на VPS PG локально ~1-2ms каждый
+// = +6-12ms baseline на каждый /api/subscription/usage запрос. Теперь
+// параллельно — общий latency = max(individual), не sum.
 func (s *Service) GetUsageSummary(ctx context.Context, userID uint) (*UsageSummary, error) {
 	planID, plan, err := s.getPlan(ctx, userID)
 	if err != nil {
@@ -210,29 +217,36 @@ func (s *Service) GetUsageSummary(ctx context.Context, userID uint) (*UsageSumma
 
 	now := time.Now()
 
-	prompts, err := s.quotas.CountPrompts(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	collections, err := s.quotas.CountCollections(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	teams, err := s.quotas.CountTeamsOwned(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	extUsed, err := s.quotas.GetDailyUsage(ctx, userID, now, FeatureExtension)
-	if err != nil {
-		return nil, err
-	}
-	mcpUsed, err := s.quotas.GetDailyUsage(ctx, userID, now, FeatureMCP)
-	if err != nil {
-		return nil, err
-	}
-	chains, err := s.quotas.CountChains(ctx, userID)
-	if err != nil {
+	var (
+		prompts, collections, teams, chains int64
+		extUsed, mcpUsed                    int
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		prompts, err = s.quotas.CountPrompts(gctx, userID)
+		return
+	})
+	g.Go(func() (err error) {
+		collections, err = s.quotas.CountCollections(gctx, userID)
+		return
+	})
+	g.Go(func() (err error) {
+		teams, err = s.quotas.CountTeamsOwned(gctx, userID)
+		return
+	})
+	g.Go(func() (err error) {
+		extUsed, err = s.quotas.GetDailyUsage(gctx, userID, now, FeatureExtension)
+		return
+	})
+	g.Go(func() (err error) {
+		mcpUsed, err = s.quotas.GetDailyUsage(gctx, userID, now, FeatureMCP)
+		return
+	})
+	g.Go(func() (err error) {
+		chains, err = s.quotas.CountChains(gctx, userID)
+		return
+	})
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 

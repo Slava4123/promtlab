@@ -18,6 +18,7 @@ interface QuotaState {
   plan: string | null
   show: (payload: QuotaPayload) => void
   dismiss: () => void
+  clear: () => void
 }
 
 export const useQuotaStore = create<QuotaState>()(
@@ -39,6 +40,10 @@ export const useQuotaStore = create<QuotaState>()(
           plan: plan ?? null,
         }),
       dismiss: () =>
+        set({ open: false, quotaType: null, message: null, used: null, limit: null, plan: null }),
+      // MJ-9: используется в auth-store.logout() — на shared device юзер B
+      // не должен видеть quota-сообщения юзера A.
+      clear: () =>
         set({ open: false, quotaType: null, message: null, used: null, limit: null, plan: null }),
     }),
     { name: "quota-store" },

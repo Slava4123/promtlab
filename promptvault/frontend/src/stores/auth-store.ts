@@ -3,6 +3,10 @@ import { devtools } from "zustand/middleware"
 import { api, apiVoid, setTokens, setAccessToken, clearTokens, ensureFreshToken } from "@/api/client"
 import type { User, AuthResponse, AdminLoginStepResponse, VerifyTOTPResponse } from "@/api/types"
 import { setSentryUser, clearSentryUser } from "@/lib/sentry"
+import { queryClient } from "@/lib/query-client"
+import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useAdminStore } from "@/stores/admin-store"
+import { useQuotaStore } from "@/stores/quota-store"
 
 // SESSION_HINT_KEY — флаг localStorage указывающий что у юзера (вероятно)
 // есть валидный refresh cookie. Ставится при login, снимается при logout.
@@ -151,6 +155,14 @@ export const useAuthStore = create<AuthState>()(
         clearTokens()
         clearSessionHint()
         clearSentryUser()
+        // MJ-9: очищаем TanStack Query cache + все Zustand stores. На shared
+        // device без этого юзер B видел данные юзера A в кеше до hard refresh
+        // (data leak between users). queryClient.clear() сбрасывает все
+        // запросы и mutations; per-store clear() обнуляет workspace/admin/quota.
+        queryClient.clear()
+        useWorkspaceStore.getState().clearTeam()
+        useAdminStore.getState().clear()
+        useQuotaStore.getState().clear()
         set({ user: null, isAuthenticated: false, sessionError: null })
       },
 
