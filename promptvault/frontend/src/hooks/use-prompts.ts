@@ -202,7 +202,14 @@ export function useToggleFavorite() {
   return useMutation({
     mutationFn: (id: number) => api<Prompt>(`/prompts/${id}/favorite`, { method: "POST" }),
     onMutate: async (id) => {
-      const filter = { queryKey: ["prompts"] as const }
+      // MN-50: predicate isMainPromptsQuery — отменяем и обновляем только
+      // активные «дашбордные» queries, не каждую trash/version/admin query
+      // под ключом ["prompts", *]. Раньше cancelQueries без predicate
+      // мог cancel'ить unrelated query'ям с тем же prefix'ом.
+      const filter = {
+        queryKey: ["prompts"] as const,
+        predicate: (q: { queryKey: unknown }) => isMainPromptsQuery(q.queryKey),
+      }
       await qc.cancelQueries(filter)
       const prev = qc.getQueriesData<PromptsInfiniteData>(filter)
       qc.setQueriesData<PromptsInfiniteData>(filter, (old) => {

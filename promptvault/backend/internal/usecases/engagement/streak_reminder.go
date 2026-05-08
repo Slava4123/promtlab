@@ -2,6 +2,7 @@ package engagement
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -74,7 +75,17 @@ func (l *StreakReminderLoop) tick() {
 	}
 	for _, s := range atRisk {
 		u, err := l.users.GetByID(ctx, s.UserID)
-		if err != nil || u == nil || u.Email == "" {
+		if err != nil {
+			// MN-22: разделяем ErrNotFound (юзер удалён, штатно) от DB
+			// outage (нужно знать). Раньше bare `if err != nil` тихо
+			// переходил к следующему — connection drop маскировался как
+			// «нет пользователя».
+			if !errors.Is(err, repo.ErrNotFound) {
+				slog.Warn("streak.reminder.user_fetch_failed", "user_id", s.UserID, "error", err)
+			}
+			continue
+		}
+		if u == nil || u.Email == "" {
 			continue
 		}
 		if err := l.email.SendStreakReminder(u.Email, u.Name, s.CurrentStreak, l.frontendURL); err != nil {

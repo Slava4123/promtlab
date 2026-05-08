@@ -44,7 +44,15 @@ export default function ProtectedRoute() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/sign-in" replace />
+    // MN-56: пробрасываем return_url чтобы после login юзер вернулся на
+    // ту же страницу. Без этого после redirect-to-sign-in юзер всегда
+    // уходит на /dashboard и теряет deep-link контекст (например, шаринг
+    // ссылки на промпт).
+    const returnUrl = location.pathname + location.search
+    const target = returnUrl !== "/" && returnUrl !== "/sign-in"
+      ? `/sign-in?return_url=${encodeURIComponent(returnUrl)}`
+      : "/sign-in"
+    return <Navigate to={target} replace />
   }
 
   // Onboarding gate (две стороны):
