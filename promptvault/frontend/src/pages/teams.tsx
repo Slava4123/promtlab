@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Plus, Users, Pencil, Trash2, Loader2 } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -36,8 +36,12 @@ export default function Teams() {
 
   // Закрываем форму, когда поверх всплывает QuotaExceededDialog (HTTP 402),
   // иначе под ним остаётся «фантомный» Dialog с полями.
+  // MJ-1: setState during render вместо useEffect — рекомендуемый React
+  // pattern для derived state (см. https://react.dev/learn/you-might-not-need-an-effect).
   const quotaOpen = useQuotaStore((s) => s.open)
-  useEffect(() => { if (quotaOpen) setDialogOpen(false) }, [quotaOpen])
+  if (quotaOpen && dialogOpen) {
+    setDialogOpen(false)
+  }
 
   const openCreate = () => {
     setEditing(null)

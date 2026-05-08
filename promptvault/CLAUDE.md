@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Профилирование**: net/http/pprof (только в dev)
 - **Валидация**: go-playground/validator/v10
 - **Error tracking**: sentry-go v0.44+ с GlitchTip self-hosted (Sentry-compatible API), через feature flag `SENTRY_ENABLED`
-- **MCP**: `modelcontextprotocol/go-sdk` v1.5 — встроенный MCP-сервер (`internal/mcpserver/`) **v1.2.0**, 30 tools (CRUD промптов/коллекций/тегов, поиск, версии, корзина, команды, шаринг, `whoami`/`use_prompt`). Опубликован в [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=promtlab) как `ru.promtlabs/promptvault`, автопубликация по git-тегу `v*` через `.github/workflows/mcp-publish.yml` (DNS-верификация, Ed25519 private key в secret `MCP_DNS_PRIVATE_KEY`). Scoped API-keys с `allowed_tools` whitelist (синхронизирован между `apikey/constants.go` и `frontend/src/lib/mcp-tools.ts`). Квотирование: 13 из 30 tools едят дневную MCP-квоту (все write/destructive кроме idempotent UX-toggle `prompt_favorite`/`prompt_pin`/`prompt_increment_usage`).
+- **MCP**: `modelcontextprotocol/go-sdk` v1.5 — встроенный MCP-сервер (`internal/mcpserver/`) **v1.5.0**, 30 tools (CRUD промптов/коллекций/тегов, поиск, версии, корзина, команды, шаринг, `whoami`/`use_prompt`) + 4 chains tools (Phase 16, dark launch). Опубликован в [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=promtlab) как `ru.promtlabs/promptvault`, автопубликация по git-тегу `v*` через `.github/workflows/mcp-publish.yml` (DNS-верификация, Ed25519 private key в secret `MCP_DNS_PRIVATE_KEY`). Scoped API-keys с `allowed_tools` whitelist (синхронизирован между `apikey/constants.go` и `frontend/src/lib/mcp-tools.ts`). Квотирование: 13 из 30 tools едят дневную MCP-квоту (все write/destructive кроме idempotent UX-toggle `prompt_favorite`/`prompt_pin`/`prompt_increment_usage`).
 - **Email**: SMTP-клиент (`internal/infrastructure/email/`) для писем верификации/сброса пароля
 - **Миграции**: `golang-migrate/migrate` v4 (embedded SQL, папка `migrations/`)
 
@@ -42,6 +42,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Backend (из `promptvault/backend/`)
 ```bash
 go run ./cmd/server                                        # запуск dev-сервера
+go run ./cmd/create-admin --email=you@example.com          # bootstrap первого админа
 go build -o server ./cmd/server                            # сборка бинарника
 go test -short ./...                                       # unit-тесты (через testing.Short() пропускаем testcontainers)
 go test ./...                                              # + integration (нужен Docker для testcontainers-go v0.41)
@@ -117,10 +118,13 @@ backend/internal/
 │   │   └── loader.go                       #   Load() + defaults
 │   ├── postgres/
 │   │   ├── postgres.go                     #   GORM connection (принимает DatabaseConfig)
-│   │   ├── migrate.go                      #   golang-migrate (embedded SQL, 5+ миграций)
+│   │   ├── migrate.go                      #   golang-migrate (embedded SQL, 61+ миграция)
 │   │   └── repository/                     #   GORM реализации интерфейсов
 │   │       └── user_repo.go
-│   └── email/                              #   SMTP-клиент
+│   ├── email/                              #   SMTP-клиент
+│   ├── metrics/                            #   Prometheus counters (loop panics, branding, chains)
+│   ├── payment/                            #   T-Bank SDK + webhook signature/idempotency
+│   └── telemetry/                          #   OpenTelemetry tracing (Tempo)
 │
 ├── models/                                 # GORM entities (один пакет, НЕ разносить по папкам)
 │   ├── user.go, team.go, collection.go
@@ -142,9 +146,11 @@ backend/internal/
 │       ├── response.go                     #   response DTOs + конверторы
 │       └── errors.go                       #   маппинг доменных ошибок → HTTP
 │       #
-│       # Актуальные фичи: admin, adminauth, apikey, auth, badge,
-│       # chain (Phase 16), changelog, collection, feedback, prompt,
-│       # search, share, starter, streak, tag, team, trash, user
+│       # Актуальные фичи: activity, admin, adminauth, analytics, apikey,
+│       # audit, auth, badge, chain (Phase 16), changelog, collection,
+│       # engagement, feedback, metadata, oauth_server, prompt, quota,
+│       # search, seo, share, starter, streak, subscription, tag, team,
+│       # teamcheck, testcleanup, trash, user, webhook
 │
 ├── middleware/
 │   ├── auth/                               #   JWT + API-key middleware
@@ -158,15 +164,23 @@ backend/internal/
 │   ├── logger/
 │   │   └── logger.go                       #   slog request logger
 │   ├── ratelimit/
-│   │   └── ratelimit.go                    #   Rate limiting (sliding window): IP для auth
+│   │   └── ratelimit.go                    #   Rate limiting (sliding window): IP для auth, ByUserID 401-fail-closed
+│   ├── ipallowlist/
+│   │   └── ipallowlist.go                  #   IP/CIDR whitelist для webhook + /metrics
+│   ├── metrics/
+│   │   └── metrics.go                      #   Prometheus middleware (RED метрики на HTTP)
+│   ├── secheaders/                         #   X-Frame-Options/XCTO/Referrer/HSTS (MJ-12)
 │   ├── sentry/                             #   Sentry/GlitchTip error tracking
 │   │   └── sentry.go                       #     Handler() + UserContext (sentry.User{ID} из JWT claims)
 │   └── admin/                              #   Admin panel middleware
 │       ├── require_admin.go                #     RequireAdmin(users) — re-check role+status из БД
-│       ├── audit_context.go                #     AdminAuditContext — кладёт AdminRequestInfo в ctx
+│       ├── audit_context.go                #     AdminAuditContext(trustProxy) — кладёт AdminRequestInfo в ctx
 │       └── constants.go                    #     FreshTOTPTTL = 12h
 │
-└── mcpserver/                              # встроенный MCP v1.2.0 (go-sdk v1.5)
+├── pkg/safeloop/                           # CR-6: defer recover() helper для background loops
+│   └── safeloop.go                         #     RunWithRecover(name, fn) + Prometheus counter
+│
+└── mcpserver/                              # встроенный MCP v1.5.0 (go-sdk v1.5)
     ├── server.go                             #   NewMCPServer — регистрация tools/resources/prompts, DNS/github auth
     ├── tools.go                              #   30 tool handlers; parseMCPQuota/incrementMCPUsage у write-операций
     ├── interfaces.go                         #   {Prompt,Collection,Tag,Search,Share,Team,Trash,User}Service — mock-able
@@ -235,7 +249,7 @@ backend/internal/
   - **API:** `/api/chains` (CRUD + steps + reorder + executions), `/api/executions/:id` (read + advance). Status: `in_progress` → `completed`/`abandoned`. AdvanceStep пишет output под ключом `step_<id>` в `step_outputs JSONB`.
   - **MCP (4 tools):** `list_chains`, `get_chain` (read), `start_chain_execution`, `advance_chain_step` (write, едят MCP-квоту). Loop: клиент сам вызывает LLM между Start и Advance. **Эксперимент** с Cursor/Claude Code на multi-step tool-loop — обязателен перед launch.
   - **Feature flag:** `CHAINS_ENABLED` (env, default `false`) → backend nil-wires chainSvc/handler/MCP-tools, не регистрирует routes. `VITE_CHAINS_ENABLED` (frontend) → скрывает sidebar item «Цепочки» и не регистрирует роуты `/chains/*`. Включается одновременно после QA.
-  - **Frontend:** `pages/chains/{index,editor,run}.tsx`. Drag-drop через `@dnd-kit/core + @dnd-kit/sortable` (новые deps, проверены с React 19). Multi-step wizard через `useState<RunStep>`. Пункт меню `Link2` icon в `app-sidebar.tsx`.
+  - **Frontend:** `pages/chains/{index,editor,run,runs,canvas}.tsx` (5 страниц). Tree-canvas через `@xyflow/react` + `elkjs` для DAG-layout (заменили `@dnd-kit` после Phase 16 v2). Multi-step wizard через `useState<RunStep>`. Пункт меню `Link2` icon в `app-sidebar.tsx`.
   - **Phase B (Conditional Chains, Max-only):** реализовано dark launch. Миграция 000054 (`step_type`, `conditions JSONB` + CHECK constraint). 7 matchers (`contains, not_contains, regex, equals, starts_with, ends_with, length_gt, length_lt`) + AND/OR/NOT с MaxConditionDepth=10. Cycle detection через DFS на graph branches (запрещает self-reference). ReDoS защита: Go RE2 + MaxRegexPatternLen=500. Tier-check: `quotas.IsMaxTierUser` (plan_id ∈ {max, max_yearly}); Pro юзер → 403. Frontend: JSON-textarea condition builder (visual editor — Phase 1 polish), badge «условный» в editor + run-wizard.
   - **MCP server bump v1.4.0 → v1.5.0** (4 новых chains tools).
   - **Pre-activation fixes:** `trashRepo.PurgeExpired`/`EmptyTrash` skip prompts с `id IN (SELECT prompt_id FROM prompt_chain_steps)` — иначе FK 23503. Prometheus counters: `chains_created_total{scope}`, `chain_executions_started_total`, `chain_executions_completed_total{status}`, `chain_conditional_evaluated_total{result}` (последний — legacy v1 DSL, не инкрементится; удалить отдельно).
@@ -255,7 +269,7 @@ backend/internal/
 - **Шаблонные `{{var}}` имеют идентичную грамматику на frontend (`lib/template/parse.ts`) и backend (`internal/template/template.go`)** — менять одну сторону без другой нельзя. Подсветка в редакторе использует тот же regex (`lib/codemirror/template-variable-highlight.ts`). Решение оставить custom-парсер вместо Mustache/Handlebars — см. ADR 0005.
 
 ## Документация (`docs/`)
-- `PLAN.md` — 12-фазный план разработки
+- `PLAN.md` — 16+ фазный план разработки (Phase 13 платежи, 14 collab, 15 polish, 16 chains)
 - `FEATURES.md` — каталог 104 идей с tier'ами (1-4) и ✅ маркерами закрытых
 - `DEPLOY.md` — Docker Compose + GitHub Actions + VPS + GlitchTip setup
 - `OBSERVABILITY.md` — Prometheus metrics + Sentry breadcrumbs + alert rules
@@ -264,7 +278,15 @@ backend/internal/
 - `MCP.md` — полный справочник сервера (30 tools с квотными аннотациями, resources, use_prompt, cursor-пагинация)
 - `MCP-PUBLISHING.md` — автопубликация CI, DNS setup, roadmap по всем каталогам (Registry/Anthropic Connectors/Smithery/Glama/PulseMCP/Cline)
 - `ANTHROPIC_CONNECTORS.md` — blueprint для подачи в Anthropic MCP Directory
-- `archive/` — выполненные/исторические документы: `TODO.md`, `LAUNCH_PLAN.md`, `RELEASE_READINESS.md`, `ANTHROPIC_CONNECTORS_TODO.md`, `PHASE14_SELF_REVIEW.md`, `PROGRESS_2026-04-20.md`, `SUBSCRIPTION_PLAN.md` (Phase 13 план), `SECURITY_AUDIT.md` (чеклист перед открытием репо), `BACKLOG_PHASE14.md` (матрица закрытия Phase 14.3 wave 1-4)
+- `MIGRATIONS.md` — best-practices для SQL-миграций (CONCURRENTLY, NOT VALID, 3-шаговый GENERATED rollout)
+- `BUSINESS_RESEARCH.md` — анализ конкурентов + ценообразование Free/Pro/Max
+- `FEATURE_PROMPT_CHAINS.md` — полная спецификация Phase 16 (tree-canvas, fork, RBAC)
+- `QUOTAS_IMPROVEMENTS_PLAN.md` — TTL-модель квот (заменяет active-count + daily-create из Phase 13)
+- `SLO.md` — service level objectives + alert thresholds
+- `REVIEW_2026-05-07.md` — последний полный архитектурный аудит (17 Critical + 40 Major + 80 Minor)
+- `adr/` — architecture decision records (FTS, JWT PlanID, pg_trgm gotcha, template syntax, bytea logo)
+- `runbooks/` — инциденты SRE: `CleanupLoopStalled`, `InsightsComputeLoopStalled`, `TeamBrandingUploadErrors`
+- `archive/` — выполненные/исторические документы: `TODO.md`, `LAUNCH_PLAN.md`, `RELEASE_READINESS.md`, `ANTHROPIC_CONNECTORS_TODO.md`, `PHASE14_SELF_REVIEW.md`, `PROGRESS_2026-04-20.md`, `SUBSCRIPTION_PLAN.md` (Phase 13 план), `SECURITY_AUDIT.md` (чеклист перед открытием репо), `BACKLOG_PHASE14.md` (матрица закрытия Phase 14.3 wave 1-4), `REVIEW_2026-05-07_v1.md` (предыдущая итерация ревью)
 
 ## Admin Panel (кратко)
 

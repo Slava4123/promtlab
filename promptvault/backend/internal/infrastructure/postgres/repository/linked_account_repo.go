@@ -46,3 +46,42 @@ func (r *linkedAccountRepo) CountByUserID(ctx context.Context, userID uint) (int
 	err := r.db.WithContext(ctx).Model(&models.LinkedAccount{}).Where("user_id = ?", userID).Count(&count).Error
 	return count, err
 }
+
+// DeleteIfMethodsRemain — atomic compare-and-delete для UnlinkProvider.
+// Оборачивает в transaction с SELECT FOR UPDATE на linked_accounts(user_id)
+// — гарантирует, что между подсчётом и DELETE никто другой не удалил
+// одновременно последний linked_account, оставив юзера без login methods.
+//
+// Логика проверки «остаётся хотя бы один способ войти»:
+//   - hasPassword=true: всегда OK (пароль остаётся как login method);
+//   - hasPassword=false: count ДОЛЖЕН быть > 1 (после delete останется ≥ 1).
+func (r *linkedAccountRepo) DeleteIfMethodsRemain(ctx context.Context, userID uint, provider string, hasPassword bool) (bool, error) {
+	var deleted bool
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// SELECT FOR UPDATE — лочит все linked_accounts юзера; concurrent
+		// unlink ждёт COMMIT/ROLLBACK. Pg использует row-level locks.
+		var count int64
+		if err := tx.Raw(
+			"SELECT COUNT(*) FROM linked_accounts WHERE user_id = ? FOR UPDATE",
+			userID,
+		).Scan(&count).Error; err != nil {
+			return err
+		}
+		// totalMethods после удаления = (count - 1) + (hasPassword ? 1 : 0)
+		// Должен быть >= 1.
+		remaining := count - 1
+		if hasPassword {
+			remaining++
+		}
+		if remaining < 1 {
+			return nil // deleted остаётся false → caller вернёт ErrCannotUnlinkLast
+		}
+		res := tx.Where("user_id = ? AND provider = ?", userID, provider).Delete(&models.LinkedAccount{})
+		if res.Error != nil {
+			return res.Error
+		}
+		deleted = res.RowsAffected > 0
+		return nil
+	})
+	return deleted, err
+}

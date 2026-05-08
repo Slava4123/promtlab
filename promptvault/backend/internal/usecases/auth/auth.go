@@ -539,27 +539,26 @@ func (s *Service) GetLinkedAccounts(ctx context.Context, userID uint) ([]models.
 	return s.linkedAccounts.GetByUserID(ctx, userID)
 }
 
+// UnlinkProvider удаляет linked_account по provider, гарантируя что у юзера
+// остаётся хотя бы один способ входа (либо другой OAuth, либо password).
+//
+// MJ-14: переписано на atomic DeleteIfMethodsRemain — раньше две concurrent
+// UnlinkProvider могли пройти оба check (CountByUserID + arithmetic), оба
+// сделать Delete и оставить юзера без login methods. Сейчас репо делает
+// SELECT FOR UPDATE → check → DELETE в одной transaction.
 func (s *Service) UnlinkProvider(ctx context.Context, userID uint, provider string) error {
-	count, err := s.linkedAccounts.CountByUserID(ctx, userID)
-	if err != nil {
-		return err
-	}
-
 	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return err
 	}
-
-	totalMethods := count
-	if user.HasPassword() {
-		totalMethods++
+	deleted, err := s.linkedAccounts.DeleteIfMethodsRemain(ctx, userID, provider, user.HasPassword())
+	if err != nil {
+		return err
 	}
-
-	if totalMethods <= 1 {
+	if !deleted {
 		return ErrCannotUnlinkLast
 	}
-
-	return s.linkedAccounts.Delete(ctx, userID, provider)
+	return nil
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, userID uint, name, avatarURL string, username *string) (*models.User, error) {

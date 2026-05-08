@@ -36,14 +36,14 @@ promptvault/
 
 ## MCP server
 
-Встроенный в backend MCP-сервер v1.2.0 опубликован в [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=promtlab) как `ru.promtlabs/promptvault`.
+Встроенный в backend MCP-сервер **v1.5.0** опубликован в [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=promtlab) как `ru.promtlabs/promptvault`. 30 базовых tools + 4 chains tools (Phase 16).
 
 **Релиз новой версии:**
 ```bash
 # 1. bump в promptvault/server.json (и опционально в internal/mcpserver/server.go)
 # 2. commit + push в main
 # 3. теги:
-git tag v1.3.0 && git push origin v1.3.0
+git tag v1.6.0 && git push origin v1.6.0
 # → workflow .github/workflows/mcp-publish.yml публикует в Registry (DNS-auth)
 # → создаётся GitHub Release
 ```

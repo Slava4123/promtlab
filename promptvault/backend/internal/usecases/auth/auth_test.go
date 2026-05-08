@@ -196,10 +196,10 @@ func TestUnlinkProvider_Success(t *testing.T) {
 	svc := newTestService(users, linked, new(mockVerificationRepo))
 	ctx := context.Background()
 
-	// 2 linked providers, no password — can unlink one
-	linked.On("CountByUserID", ctx, uint(1)).Return(int64(2), nil)
+	// 2 linked providers, no password — can unlink one (deleted=true).
+	// MJ-14: вместо CountByUserID+Delete теперь atomic DeleteIfMethodsRemain.
 	users.On("GetByID", ctx, uint(1)).Return(&models.User{ID: 1, PasswordHash: ""}, nil)
-	linked.On("Delete", ctx, uint(1), "github").Return(nil)
+	linked.On("DeleteIfMethodsRemain", ctx, uint(1), "github", false).Return(true, nil)
 
 	err := svc.UnlinkProvider(ctx, 1, "github")
 
@@ -213,9 +213,9 @@ func TestUnlinkProvider_CannotUnlinkLast_OnlyProvider(t *testing.T) {
 	svc := newTestService(users, linked, new(mockVerificationRepo))
 	ctx := context.Background()
 
-	// Only 1 linked provider, no password — totalMethods=1, cannot unlink
-	linked.On("CountByUserID", ctx, uint(1)).Return(int64(1), nil)
+	// 1 linked provider, no password — atomic check возвращает deleted=false.
 	users.On("GetByID", ctx, uint(1)).Return(&models.User{ID: 1, PasswordHash: ""}, nil)
+	linked.On("DeleteIfMethodsRemain", ctx, uint(1), "github", false).Return(false, nil)
 
 	err := svc.UnlinkProvider(ctx, 1, "github")
 
@@ -229,10 +229,9 @@ func TestUnlinkProvider_AllowedWhenPasswordExists(t *testing.T) {
 	ctx := context.Background()
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte("pass"), bcrypt.DefaultCost)
-	// 1 linked provider + password — totalMethods=2, can unlink
-	linked.On("CountByUserID", ctx, uint(1)).Return(int64(1), nil)
+	// 1 linked provider + password — atomic check возвращает deleted=true.
 	users.On("GetByID", ctx, uint(1)).Return(&models.User{ID: 1, PasswordHash: string(hash)}, nil)
-	linked.On("Delete", ctx, uint(1), "google").Return(nil)
+	linked.On("DeleteIfMethodsRemain", ctx, uint(1), "google", true).Return(true, nil)
 
 	err := svc.UnlinkProvider(ctx, 1, "google")
 

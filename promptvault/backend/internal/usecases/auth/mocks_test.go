@@ -114,6 +114,10 @@ func (m *mockLinkedAccountRepo) GetByProviderID(ctx context.Context, provider, p
 func (m *mockLinkedAccountRepo) Delete(ctx context.Context, userID uint, provider string) error {
 	return m.Called(ctx, userID, provider).Error(0)
 }
+func (m *mockLinkedAccountRepo) DeleteIfMethodsRemain(ctx context.Context, userID uint, provider string, hasPassword bool) (bool, error) {
+	args := m.Called(ctx, userID, provider, hasPassword)
+	return args.Bool(0), args.Error(1)
+}
 func (m *mockLinkedAccountRepo) CountByUserID(ctx context.Context, userID uint) (int64, error) {
 	args := m.Called(ctx, userID)
 	return args.Get(0).(int64), args.Error(1)

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { Loader2, Trash2, Upload } from "lucide-react"
 import { toast } from "sonner"
 
@@ -59,19 +59,24 @@ export function LogoUploader({
 }: LogoUploaderProps) {
   const initialMode: Mode = logoSource === "file" ? "file" : "url"
   const [mode, setMode] = useState<Mode>(initialMode)
+  const [prevLogoSource, setPrevLogoSource] = useState(logoSource)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const upload = useUploadLogo(slug)
   const remove = useDeleteLogo(slug)
 
-  // Если родитель перезагружает branding (например, после save), синхронизируем
-  // mode с серверным logo_source. Без этого юзер мог застрять в URL-режиме
-  // даже после успешной загрузки файла.
-  useEffect(() => {
+  // MJ-1: «storing prop in state» pattern с setState during render вместо
+  // useEffect — рекомендуемый React idiom для синхронизации с пропом
+  // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  // Если родитель перезагружает branding (после save), mode синхронизируется
+  // с серверным logo_source — иначе юзер мог застрять в URL-режиме после
+  // успешной загрузки файла.
+  if (prevLogoSource !== logoSource) {
+    setPrevLogoSource(logoSource)
     if (logoSource === "file") setMode("file")
     else if (logoSource === "url") setMode("url")
-  }, [logoSource])
+  }
 
   const handleFile = (file: File) => {
     if (!isAllowedMime(file.type)) {
