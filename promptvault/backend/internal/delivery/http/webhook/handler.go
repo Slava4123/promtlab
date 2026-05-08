@@ -74,12 +74,18 @@ func rawToSigValue(v json.RawMessage) (string, bool) {
 	if len(v) == 0 {
 		return "", false
 	}
+	// MN-21: до фикса unmarshal errors молча возвращали (``, false), и поле
+	// выпадало из подписи без сигнала. T-Bank webhook с corrupt JSON-полем
+	// тогда тихо проходил signature mismatch путь без возможности диагноза.
+	// Сейчас явно логируем — SRE видит «webhook.sig.unmarshal_failed» и может
+	// эскалировать. Поле всё равно excluded (поведение совместимо с tbank).
 	// Строка: "..." → убираем кавычки через json.Unmarshal.
 	if v[0] == '"' {
 		var s string
 		if err := json.Unmarshal(v, &s); err == nil {
 			return s, true
 		}
+		slog.Warn("webhook.sig.unmarshal_failed", "type", "string", "raw_len", len(v))
 		return "", false
 	}
 	// Bool: true/false → "true"/"false".
@@ -88,6 +94,7 @@ func rawToSigValue(v json.RawMessage) (string, bool) {
 		if err := json.Unmarshal(v, &b); err == nil {
 			return strconv.FormatBool(b), true
 		}
+		slog.Warn("webhook.sig.unmarshal_failed", "type", "bool", "raw_len", len(v))
 		return "", false
 	}
 	// Число: десятичная запись без форматирования.

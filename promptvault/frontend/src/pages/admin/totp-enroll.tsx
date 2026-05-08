@@ -69,9 +69,11 @@ export default function AdminTOTPEnrollPage() {
   }
 
   const copy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      toast.success(`${label} скопирован`)
-    })
+    // MN-62: explicit .catch — без него Promise rejection при denied permission
+    // на HTTP context даёт unhandled rejection в DevTools.
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success(`${label} скопирован`))
+      .catch(() => toast.error("Не удалось скопировать"))
   }
 
   if (guardLoading || step === "loading") {

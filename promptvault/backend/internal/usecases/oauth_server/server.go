@@ -203,7 +203,13 @@ func (s *Service) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeO
 
 	// Policy — пока пустой JSON {}. В будущем сюда копируем scope-restrictions
 	// из consent-screen (если пользователь выбрал «только чтение»).
-	policy, _ := json.Marshal(models.Policy{})
+	// MN-20: explicit error handling. Для пустого Policy{} json.Marshal не
+	// может фейлить, но если в будущем добавят nested unsupported тип
+	// (channel/func) — silent `_` маскирует bug. Bail out явно.
+	policy, err := json.Marshal(models.Policy{})
+	if err != nil {
+		return nil, fmt.Errorf("marshal policy: %w", err)
+	}
 
 	code := &models.OAuthAuthorizationCode{
 		CodeHash:            hash,

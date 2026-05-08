@@ -99,8 +99,11 @@ export function APIKeysSection() {
   }
 
   const copyKey = (key: string) => {
+    // MN-62: clipboard.writeText возвращает Promise — без .catch unhandled
+    // rejection в DevTools при denied permission (HTTPS only context).
     navigator.clipboard.writeText(key)
-    toast.success("API-ключ скопирован")
+      .then(() => toast.success("API-ключ скопирован"))
+      .catch(() => toast.error("Не удалось скопировать"))
   }
 
   const toggleTool = (toolName: string) => {

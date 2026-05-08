@@ -81,14 +81,23 @@ export function PromptSplitEditor({
 
   // Отслеживаем ширину окна, чтобы "both" автоматически деградировал в "editor"
   // при resize до mobile.
+  // MN-43: debounce 100ms — без него каждый pixel resize дёргал re-render,
+  // что замечалось при медленном dragging бордера окна на больших экранах.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
     function update() {
-      const next = window.innerWidth >= MIN_SPLIT_WIDTH
-      setCanSplit(next)
-      if (!next && mode === "both") setMode("editor")
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        const next = window.innerWidth >= MIN_SPLIT_WIDTH
+        setCanSplit(next)
+        if (!next && mode === "both") setMode("editor")
+      }, 100)
     }
     window.addEventListener("resize", update)
-    return () => window.removeEventListener("resize", update)
+    return () => {
+      if (timer) clearTimeout(timer)
+      window.removeEventListener("resize", update)
+    }
   }, [mode])
 
   // Персистим выбор в localStorage, чтобы при возврате в редактор он
@@ -161,16 +170,20 @@ export function PromptSplitEditor({
             maxLength={maxLength}
             id={id}
             minHeight="320px"
+            // 60vh держит редактор в пределах одного экрана даже на коротких
+            // ноутбуках (≤768px) — action-buttons остаются видимыми без
+            // скролла страницы. Для большого монитора кепится 640px.
+            maxHeight="min(640px, 60vh)"
             aria-invalid={aria["aria-invalid"]}
             aria-describedby={aria["aria-describedby"]}
           />
         )}
         {showPreview && (
           <div
-            className={cn(
-              "min-h-[320px] overflow-auto rounded-lg border border-border bg-muted/20 px-4 py-3",
-              mode === "preview" ? "" : "lg:max-h-[640px]",
-            )}
+            // max-h применяется ВСЕГДА (раньше было только в both — single-tab
+            // превью разрастался на любую высоту, заставляя пользователя
+            // скроллить страницу до кнопок Сохранить/Отмена).
+            className="min-h-[320px] max-h-[min(640px,60vh)] overflow-y-auto rounded-lg border border-border bg-muted/20 px-4 py-3"
             role="tabpanel"
             aria-label="Превью промпта"
           >
