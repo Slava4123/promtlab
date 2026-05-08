@@ -26,8 +26,12 @@ export function UserMenu() {
     .toUpperCase()
     .slice(0, 2) || "U"
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    // MN-67: ждём logout (clear cookies + queryClient.clear() + stores.clear())
+    // перед navigate. Раньше bare `logout()` без await — navigate выполнялся
+    // одновременно с logout cleanup, и юзер мог кратко увидеть свои данные
+    // на /sign-in (если рендер /sign-in ловил последний state).
+    await logout()
     navigate("/sign-in")
   }
 

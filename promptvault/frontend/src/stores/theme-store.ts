@@ -58,10 +58,21 @@ if (stored) {
   applyTheme("dark")
 }
 
-// Следить за изменением системной темы
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  const { theme } = useThemeStore.getState()
-  if (theme === "system") {
-    applyTheme("system")
+// MN-58: dev HMR пере-импортирует модуль и аккумулирует listener'ы
+// (memory leak в dev). Module-level guard через WeakSet/flag предотвращает
+// двойную регистрацию. В production модуль грузится один раз — там было ок,
+// но HMR cleanup всё равно best practice.
+declare global {
+  interface Window {
+    __themeMediaListenerInstalled?: boolean
   }
-})
+}
+if (!window.__themeMediaListenerInstalled) {
+  window.__themeMediaListenerInstalled = true
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    const { theme } = useThemeStore.getState()
+    if (theme === "system") {
+      applyTheme("system")
+    }
+  })
+}

@@ -104,7 +104,10 @@ function AppRoutes() {
 
   useEffect(() => {
     captureReferralFromURL()
-    restoreSession()
+    // MN-67: void prefix — restoreSession async, но мы не ждём его в useEffect
+    // (компонент рендерится с isLoading=true и ProtectedRoute показывает spinner).
+    // Без void TypeScript no-floating-promises (если включить strict) ругался бы.
+    void restoreSession()
   }, [restoreSession])
 
   return (
