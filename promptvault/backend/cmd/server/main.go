@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
@@ -143,7 +144,9 @@ func main() {
 
 	go func() {
 		slog.Info("server starting", "port", cfg.Server.Port, "env", cfg.Server.Environment)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		// MN-18: errors.Is вместо bare == — на случай если http stack
+		// начнёт wrap'ить ErrServerClosed (например, через fmt.Errorf).
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server error", "error", err)
 			os.Exit(1)
 		}

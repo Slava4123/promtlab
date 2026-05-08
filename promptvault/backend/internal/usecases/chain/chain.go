@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -976,9 +977,18 @@ func (s *Service) AdvanceStep(ctx context.Context, execID, userID uint, stepOutp
 		return nil, ErrInvalidStepPosition
 	}
 
+	// MN-15: corrupt step_outputs больше не silent — раньше unmarshal-error
+	// возвращал outputs={} и затем перезаписывал StepOutputs новой записью,
+	// тихо теряя outputs шагов 1..(N-1). Теперь возвращаем явную ошибку,
+	// AdvanceStep отказывает — юзер видит сообщение, SRE может посмотреть
+	// почему JSONB сломан.
 	outputs := map[string]string{}
 	if len(exec.StepOutputs) > 0 {
-		_ = json.Unmarshal(exec.StepOutputs, &outputs)
+		if uErr := json.Unmarshal(exec.StepOutputs, &outputs); uErr != nil {
+			slog.Error("chain.advance.corrupt_step_outputs",
+				"execution_id", exec.ID, "error", uErr)
+			return nil, fmt.Errorf("chain.advance: corrupt step_outputs: %w", uErr)
+		}
 	}
 	outputs[stepOutputKey(currentStep.ID)] = stepOutput
 	outputsJSON, err := json.Marshal(outputs)

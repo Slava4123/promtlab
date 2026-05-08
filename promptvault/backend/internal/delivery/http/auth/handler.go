@@ -318,8 +318,14 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 
 	resp := NewUserResponse(*user)
 	if h.changelog != nil {
+		// MN-16: silent error swallow заменён на slog.Warn — без логирования
+		// мы маскируем DB-проблему (если HasUnread фейлится из-за коннекта,
+		// фронт всегда показывает 0 unread — никто не замечает).
 		if unread, err := h.changelog.HasUnread(r.Context(), userID); err == nil {
 			resp.HasUnreadChangelog = unread
+		} else {
+			slog.Warn("auth.me.changelog_has_unread_failed",
+				"user_id", userID, "error", err)
 		}
 	}
 	utils.WriteOK(w, resp)
