@@ -69,6 +69,7 @@ func (m *mockUserRepo) SearchUsers(ctx context.Context, query string, limit int)
 	return nil, nil
 }
 func (m *mockUserRepo) Update(ctx context.Context, user *models.User) error { return nil }
+func (m *mockUserRepo) SetPlan(context.Context, uint, string) error          { return nil }
 func (m *mockUserRepo) SetQuotaWarningSentOn(ctx context.Context, userID uint, date time.Time) error {
 	return nil
 }

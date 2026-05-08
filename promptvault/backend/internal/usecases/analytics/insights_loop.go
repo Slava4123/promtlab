@@ -7,6 +7,7 @@ import (
 
 	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
+	"promptvault/internal/pkg/safeloop"
 )
 
 // InsightsComputeLoop — ежесуточный пересчёт Smart Insights для Max-юзеров.
@@ -41,11 +42,11 @@ func (l *InsightsComputeLoop) run() {
 	ticker := time.NewTicker(l.interval)
 	defer ticker.Stop()
 
-	l.compute()
+	safeloop.RunWithRecover("insights_compute", l.compute)
 	for {
 		select {
 		case <-ticker.C:
-			l.compute()
+			safeloop.RunWithRecover("insights_compute", l.compute)
 		case <-l.stopCh:
 			return
 		}
@@ -61,6 +62,8 @@ func (l *InsightsComputeLoop) run() {
 func (l *InsightsComputeLoop) compute() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+
+	metrics.InsightsLoopRuns.Inc()
 
 	ids, err := l.users.ListMaxUsers(ctx)
 	if err != nil {

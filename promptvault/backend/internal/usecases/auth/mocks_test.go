@@ -48,6 +48,9 @@ func (m *mockUserRepo) SearchUsers(ctx context.Context, query string, limit int)
 func (m *mockUserRepo) Update(ctx context.Context, user *models.User) error {
 	return m.Called(ctx, user).Error(0)
 }
+func (m *mockUserRepo) SetPlan(ctx context.Context, userID uint, planID string) error {
+	return m.Called(ctx, userID, planID).Error(0)
+}
 func (m *mockUserRepo) SetQuotaWarningSentOn(ctx context.Context, userID uint, date time.Time) error {
 	return m.Called(ctx, userID, date).Error(0)
 }

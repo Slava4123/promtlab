@@ -8,6 +8,7 @@ import (
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	"promptvault/internal/pkg/safeloop"
 )
 
 // ExpirationNotifier уведомляет юзера о том, что подписка истекла и он переведён
@@ -52,12 +53,12 @@ func (l *ExpirationLoop) run() {
 	defer ticker.Stop()
 
 	// Первый запуск сразу при старте
-	l.expire()
+	safeloop.RunWithRecover("subscription_expiration", l.expire)
 
 	for {
 		select {
 		case <-ticker.C:
-			l.expire()
+			safeloop.RunWithRecover("subscription_expiration", l.expire)
 		case <-l.stopCh:
 			return
 		}

@@ -7,6 +7,7 @@ import (
 
 	iservice "promptvault/internal/interface/service"
 	repo "promptvault/internal/interface/repository"
+	"promptvault/internal/pkg/safeloop"
 )
 
 // StreakReminderLoop шлёт "не сломай серию" напоминания (M-16).
@@ -46,11 +47,11 @@ func (l *StreakReminderLoop) Stop()  { close(l.stopCh) }
 func (l *StreakReminderLoop) run() {
 	ticker := time.NewTicker(l.interval)
 	defer ticker.Stop()
-	l.tick()
+	safeloop.RunWithRecover("engagement_streak_reminder", l.tick)
 	for {
 		select {
 		case <-ticker.C:
-			l.tick()
+			safeloop.RunWithRecover("engagement_streak_reminder", l.tick)
 		case <-l.stopCh:
 			return
 		}

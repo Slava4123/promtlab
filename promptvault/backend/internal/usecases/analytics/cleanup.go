@@ -7,6 +7,7 @@ import (
 
 	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
+	"promptvault/internal/pkg/safeloop"
 )
 
 // CleanupLoop — ежесуточный retention cleanup для team_activity_log,
@@ -44,11 +45,11 @@ func (l *CleanupLoop) run() {
 	ticker := time.NewTicker(l.interval)
 	defer ticker.Stop()
 
-	l.cleanup()
+	safeloop.RunWithRecover("analytics_cleanup", l.cleanup)
 	for {
 		select {
 		case <-ticker.C:
-			l.cleanup()
+			safeloop.RunWithRecover("analytics_cleanup", l.cleanup)
 		case <-l.stopCh:
 			return
 		}

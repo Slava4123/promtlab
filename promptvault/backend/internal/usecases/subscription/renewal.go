@@ -14,6 +14,7 @@ import (
 	"promptvault/internal/infrastructure/payment"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	"promptvault/internal/pkg/safeloop"
 )
 
 // Retry-политика автопродления. Три попытки списания с интервалом 24ч — даёт юзеру
@@ -87,11 +88,11 @@ func (l *RenewalLoop) Stop() { close(l.stopCh) }
 func (l *RenewalLoop) run() {
 	ticker := time.NewTicker(l.interval)
 	defer ticker.Stop()
-	l.tick()
+	safeloop.RunWithRecover("subscription_renewal", l.tick)
 	for {
 		select {
 		case <-ticker.C:
-			l.tick()
+			safeloop.RunWithRecover("subscription_renewal", l.tick)
 		case <-l.stopCh:
 			return
 		}

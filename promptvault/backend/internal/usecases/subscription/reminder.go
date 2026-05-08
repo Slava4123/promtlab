@@ -8,6 +8,7 @@ import (
 
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	"promptvault/internal/pkg/safeloop"
 )
 
 // ReminderLoop шлёт pre-expire напоминания юзерам с auto_renew=false за 3 и 1 день
@@ -51,11 +52,11 @@ func (l *ReminderLoop) run() {
 	ticker := time.NewTicker(l.interval)
 	defer ticker.Stop()
 
-	l.tick() // первый запуск при старте
+	safeloop.RunWithRecover("subscription_reminder", l.tick) // первый запуск при старте
 	for {
 		select {
 		case <-ticker.C:
-			l.tick()
+			safeloop.RunWithRecover("subscription_reminder", l.tick)
 		case <-l.stopCh:
 			return
 		}

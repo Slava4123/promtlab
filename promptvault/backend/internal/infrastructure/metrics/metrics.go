@@ -109,6 +109,16 @@ var (
 		Help: "Team branding logo serve responses, labelled by cache hit (304 vs 200).",
 	}, []string{"cache_hit"})
 
+	// LoopPanicsTotal — количество восстановленных panic'ов в background
+	// loops + fire-and-forget горутинах. CR-6: до фикса панические compute()
+	// убивали loop навсегда (silent multi-day downtime renewal/expiration/
+	// purge/insights). Каждый Inc — диагностический сигнал, нужно идти в
+	// логи loop.panic.<name> и смотреть stack. Label loop: имя loop'а.
+	// SRE alert: rate(promptvault_loop_panics_total[1h]) > 0 → P2.
+	LoopPanicsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "promptvault_loop_panics_total",
+		Help: "Background loop panics that were recovered, labelled by loop name.",
+	}, []string{"loop"})
 )
 
 // init zero-инициализирует все ожидаемые label combinations CounterVec'ов.
@@ -149,4 +159,15 @@ func init() {
 	TeamBrandingLogoUploads.WithLabelValues("other").Add(0)
 	TeamBrandingLogoServe.WithLabelValues("hit").Add(0)
 	TeamBrandingLogoServe.WithLabelValues("miss").Add(0)
+
+	// CR-6: zero-init для всех loop'ов, чтобы absent_over_time не давал
+	// false-positive на тихом проде (паник нет — это норма).
+	for _, name := range []string{
+		"insights_compute", "analytics_cleanup",
+		"subscription_renewal", "subscription_expiration", "subscription_reminder",
+		"trash_purge", "engagement_reengagement", "engagement_streak_reminder",
+		"oauth_touch_last_login", "team_invite_email",
+	} {
+		LoopPanicsTotal.WithLabelValues(name).Add(0)
+	}
 }

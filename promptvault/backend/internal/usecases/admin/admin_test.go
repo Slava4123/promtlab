@@ -64,6 +64,13 @@ func (f *fakeUserRepo) Update(_ context.Context, user *models.User) error {
 	f.users[user.ID] = user
 	return nil
 }
+func (f *fakeUserRepo) SetPlan(_ context.Context, userID uint, planID string) error {
+	if u, ok := f.users[userID]; ok {
+		u.PlanID = planID
+		return nil
+	}
+	return repo.ErrNotFound
+}
 func (f *fakeUserRepo) SetQuotaWarningSentOn(_ context.Context, _ uint, _ time.Time) error {
 	return nil
 }

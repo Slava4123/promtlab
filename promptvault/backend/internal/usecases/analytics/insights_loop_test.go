@@ -36,7 +36,8 @@ func (f *fakeUsersForLoop) GetByUsername(context.Context, string) (*models.User,
 func (f *fakeUsersForLoop) SearchUsers(context.Context, string, int) ([]models.User, error) {
 	panic("unused")
 }
-func (f *fakeUsersForLoop) Update(context.Context, *models.User) error { panic("unused") }
+func (f *fakeUsersForLoop) Update(context.Context, *models.User) error  { panic("unused") }
+func (f *fakeUsersForLoop) SetPlan(context.Context, uint, string) error { panic("unused") }
 func (f *fakeUsersForLoop) SetQuotaWarningSentOn(context.Context, uint, time.Time) error {
 	panic("unused")
 }

@@ -9,6 +9,7 @@ import (
 
 	iservice "promptvault/internal/interface/service"
 	repo "promptvault/internal/interface/repository"
+	"promptvault/internal/pkg/safeloop"
 )
 
 // ReengagementLoop шлёт re-engagement email юзерам, не заходившим 14+ дней (M-5d).
@@ -59,11 +60,11 @@ func (l *ReengagementLoop) run() {
 	ticker := time.NewTicker(l.interval)
 	defer ticker.Stop()
 
-	l.tick()
+	safeloop.RunWithRecover("engagement_reengagement", l.tick)
 	for {
 		select {
 		case <-ticker.C:
-			l.tick()
+			safeloop.RunWithRecover("engagement_reengagement", l.tick)
 		case <-l.stopCh:
 			return
 		}

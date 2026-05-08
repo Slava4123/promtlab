@@ -6,6 +6,7 @@ import (
 	"time"
 
 	repo "promptvault/internal/interface/repository"
+	"promptvault/internal/pkg/safeloop"
 )
 
 type PurgeLoop struct {
@@ -37,12 +38,12 @@ func (p *PurgeLoop) run() {
 	defer ticker.Stop()
 
 	// Первый запуск сразу при старте
-	p.purge()
+	safeloop.RunWithRecover("trash_purge", p.purge)
 
 	for {
 		select {
 		case <-ticker.C:
-			p.purge()
+			safeloop.RunWithRecover("trash_purge", p.purge)
 		case <-p.stopCh:
 			return
 		}

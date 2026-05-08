@@ -39,7 +39,8 @@ func (s *stubUserRepo) GetByUsername(context.Context, string) (*models.User, err
 func (s *stubUserRepo) SearchUsers(context.Context, string, int) ([]models.User, error) {
 	panic("unused")
 }
-func (s *stubUserRepo) Update(context.Context, *models.User) error            { panic("unused") }
+func (s *stubUserRepo) Update(context.Context, *models.User) error  { panic("unused") }
+func (s *stubUserRepo) SetPlan(context.Context, uint, string) error { panic("unused") }
 func (s *stubUserRepo) SetQuotaWarningSentOn(context.Context, uint, time.Time) error {
 	panic("unused")
 }

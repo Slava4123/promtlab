@@ -20,6 +20,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write  # нужно для создания GitHub Release
     steps:
@@ -84,9 +85,10 @@ jobs:
           echo "::error::registry still shows $CURRENT after 90s, expected $EXPECTED"
           exit 1
 
+      # CR-17: SHA-pin third-party action — supply-chain hardening.
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@e7a8f85e1c67a31e6ed99a94b41bd0b71bbee6b8 # v2.0.9
         with:
           generate_release_notes: true
           body: |

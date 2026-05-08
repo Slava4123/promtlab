@@ -87,6 +87,15 @@ func Load() (*Config, error) {
 				return nil, fmt.Errorf("CORS origin %q must use HTTPS in production", origin)
 			}
 		}
+		// CR-5: webhook IP allowlist обязателен в prod при включённом
+		// биллинге — defence-in-depth поверх SHA-256 подписи. Если пустой,
+		// ipallowlist middleware пропускает всё (см. ipallowlist.go:25
+		// «empty allowlist — всё пропускается»). Утечка PAYMENT_TBANK_PASSWORD
+		// (логи, дамп БД, инсайдер) → атакующий шлёт поддельные webhook'и
+		// с любого IP, без attribute-based защиты. См. CR-5 в REVIEW_2026-05-07.md.
+		if cfg.Payment.Enabled && len(cfg.Payment.WebhookAllowedIPs) == 0 {
+			return nil, fmt.Errorf("PAYMENT_WEBHOOK_ALLOWED_IPS must be set when PAYMENT_ENABLED=true in production (T-Bank IPs: 212.233.80.7,91.218.132.2,91.194.226.0/23)")
+		}
 	}
 
 	// Sentry safety — если включён, DSN обязателен (иначе silent no-op в SDK,
@@ -174,6 +183,10 @@ func defaults() map[string]any {
 			"enabled":            false,
 			"otlp_endpoint":      "tempo:4317",
 			"traces_sample_rate": 0.1,
+		},
+		"chains": map[string]any{
+			// Phase 16: feature flag. Установить CHAINS_ENABLED=true в .env после QA.
+			"enabled": false,
 		},
 	}
 }

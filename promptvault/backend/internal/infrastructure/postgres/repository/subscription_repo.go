@@ -243,7 +243,7 @@ func (r *subscriptionRepo) Pause(ctx context.Context, subID, userID uint, paused
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			return gorm.ErrRecordNotFound
+			return repo.ErrNotFound
 		}
 		return tx.Model(&models.User{}).
 			Where("id = ?", userID).
@@ -274,7 +274,7 @@ func (r *subscriptionRepo) Resume(ctx context.Context, subID, userID uint, resum
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			return gorm.ErrRecordNotFound
+			return repo.ErrNotFound
 		}
 		return tx.Model(&models.User{}).
 			Where("id = ?", userID).

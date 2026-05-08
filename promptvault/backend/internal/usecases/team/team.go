@@ -9,6 +9,7 @@ import (
 	repo "promptvault/internal/interface/repository"
 	iservice "promptvault/internal/interface/service"
 	"promptvault/internal/models"
+	"promptvault/internal/pkg/safeloop"
 	activityuc "promptvault/internal/usecases/activity"
 	quotauc "promptvault/internal/usecases/quota"
 )
@@ -214,11 +215,11 @@ func (s *Service) InviteMember(ctx context.Context, slug string, userID uint, in
 		}
 		targetEmail := targetUser.Email
 		teamName := team.Name
-		go func() {
+		go safeloop.RunWithRecover("team_invite_email", func() {
 			if err := s.email.SendTeamInvitation(targetEmail, teamName, inviterName); err != nil {
 				slog.Error("team invitation email failed", "error", err)
 			}
-		}()
+		})
 	}
 
 	return inv, nil

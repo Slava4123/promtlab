@@ -1,4 +1,5 @@
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
+import { isValidElement, type ReactElement } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -9,8 +10,17 @@ function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root {...props} />
 }
 
-function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
-  return <PopoverPrimitive.Trigger {...props} />
+type PopoverTriggerProps = PopoverPrimitive.Trigger.Props & {
+  asChild?: boolean
+}
+
+function PopoverTrigger({ asChild, children, ...props }: PopoverTriggerProps) {
+  if (asChild && isValidElement(children)) {
+    return (
+      <PopoverPrimitive.Trigger {...props} render={children as ReactElement} />
+    )
+  }
+  return <PopoverPrimitive.Trigger {...props}>{children}</PopoverPrimitive.Trigger>
 }
 
 function PopoverContent({

@@ -186,8 +186,9 @@ func (s *Service) Downgrade(ctx context.Context, userID uint) error {
 		}
 		slog.Info("subscription.downgrade.completed", "user_id", userID, "old_plan", sub.PlanID)
 	} else {
-		// Нет подписки, просто обновляем plan_id
-		if updErr := s.users.Update(ctx, &models.User{ID: userID, PlanID: "free"}); updErr != nil {
+		// Нет подписки, просто обновляем plan_id (partial UPDATE — иначе
+		// gorm.Save() стёр бы остальные поля юзера, см. CR-2).
+		if updErr := s.users.SetPlan(ctx, userID, "free"); updErr != nil {
 			return fmt.Errorf("subscription.downgrade: %w", updErr)
 		}
 	}
@@ -275,7 +276,9 @@ func (s *Service) Pause(ctx context.Context, in PauseInput) error {
 // Новый period_end = now + (old_period_end - paused_at) — юзер не теряет
 // оставшиеся дни оплаченного периода.
 func (s *Service) Resume(ctx context.Context, userID uint) error {
-	sub, err := s.subs.GetActiveByUserID(ctx, userID)
+	// GetCurrentByUserID ловит paused (которые GetActiveByUserID не возвращает) —
+	// именно paused-подписки и являются единственным валидным input'ом Resume.
+	sub, err := s.subs.GetCurrentByUserID(ctx, userID)
 	if err != nil {
 		return ErrNoActiveSubscription
 	}
@@ -409,7 +412,8 @@ func (s *Service) handleRefund(ctx context.Context, pay *models.Payment) error {
 		}
 	} else {
 		// Нет активной — просто убеждаемся что users.plan_id=free.
-		if updErr := s.users.Update(ctx, &models.User{ID: pay.UserID, PlanID: "free"}); updErr != nil {
+		// Partial UPDATE через SetPlan, не Save() — см. CR-2 (mass-overwrite).
+		if updErr := s.users.SetPlan(ctx, pay.UserID, "free"); updErr != nil {
 			slog.Error("subscription.refund.update_plan_failed", "user_id", pay.UserID, "error", updErr)
 		}
 	}
@@ -447,7 +451,7 @@ func (s *Service) activateSubscription(ctx context.Context, pay *models.Payment,
 		slog.Error("subscription.activate.get_existing_failed", "user_id", pay.UserID, "error", existErr)
 	}
 	if isRenewal && existing != nil {
-		newEnd := existing.CurrentPeriodEnd.AddDate(0, 0, plan.PeriodDays)
+		newEnd := addPlanPeriod(existing.CurrentPeriodEnd, plan.PeriodDays)
 		if err := s.subs.ExtendPeriod(ctx, existing.ID, newEnd); err != nil {
 			slog.Error("subscription.renewal.extend_failed", "sub_id", existing.ID, "error", err)
 			return fmt.Errorf("subscription.renewal.extend: %w", err)
@@ -468,7 +472,7 @@ func (s *Service) activateSubscription(ctx context.Context, pay *models.Payment,
 		PlanID:             plan.ID,
 		Status:             models.SubStatusActive,
 		CurrentPeriodStart: now,
-		CurrentPeriodEnd:   now.AddDate(0, 0, plan.PeriodDays),
+		CurrentPeriodEnd:   addPlanPeriod(now, plan.PeriodDays),
 		RebillId:           rebillID,
 		AutoRenew:          true,
 	}

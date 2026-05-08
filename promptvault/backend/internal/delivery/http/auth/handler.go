@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -141,9 +142,20 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Admin flow: проверить confirmed TOTP и либо требовать verify, либо
-	// пропустить в enrollment wizard. Если adminauth service не wired —
-	// degrade gracefully: admin логинится как обычный user (с предупреждением в логах).
-	if user.IsAdmin() && h.adminauth != nil {
+	// пропустить в enrollment wizard. Fail-closed: если adminauth service
+	// не wired (DI bug, refactor, забыли передать в app.go), админ НЕ
+	// логинится тихо как обычный user — это classic security misconfig
+	// (OWASP ASVS V2.7.4 «Verify that authentication failures are
+	// non-bypassable: if a security control is unavailable, the request
+	// must fail closed»). См. CR-3 в REVIEW_2026-05-07.md.
+	if user.IsAdmin() {
+		if h.adminauth == nil {
+			slog.Error("auth.login.adminauth_not_wired",
+				"user_id", user.ID,
+				"hint", "admin auth subsystem nil — startup wiring bug")
+			httperr.Respond(w, httperr.Internal(errors.New("admin auth subsystem unavailable")))
+			return
+		}
 		confirmed, err := h.adminauth.IsConfirmed(r.Context(), user.ID)
 		if err != nil {
 			slog.Error("auth.login.totp_status_failed", "user_id", user.ID, "error", err)

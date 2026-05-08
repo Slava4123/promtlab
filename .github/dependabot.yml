@@ -1,0 +1,91 @@
+version: 2
+# Dependabot создан в рамках CR-17 из REVIEW_2026-05-07.md — supply-chain
+# hardening. До этого все third-party GitHub Actions использовались с
+# мутабельными мажор-тегами (@v1, @v2, @v4, @v5, @v6) — supply-chain attack
+# vector (см. tj-actions/changed-files March 2025: 23k+ репозиториев утекли
+# через подмену тега). SHA-pin критичных actions сделан вручную в
+# .github/workflows/deploy.yml + mcp-publish.yml; Dependabot будет авто-
+# bump'ить SHA до новых релизов раз в неделю.
+updates:
+  # GitHub Actions — third-party (appleboy/ssh-action, softprops, docker/*,
+  # actions/*, golangci/golangci-lint-action и т.д.).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(deps)"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    # Группируем minor/patch updates чтобы не плодить PR'ы — major
+    # bump'ы получают отдельный PR (review needed).
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Go modules backend — security CVE alerts + lib upgrades.
+  - package-ecosystem: gomod
+    directory: /promptvault/backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(go)"
+    labels:
+      - "dependencies"
+      - "go"
+    groups:
+      go-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # npm frontend.
+  - package-ecosystem: npm
+    directory: /promptvault/frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(frontend)"
+    labels:
+      - "dependencies"
+      - "frontend"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # npm extension (отдельный package.json).
+  - package-ecosystem: npm
+    directory: /promptvault/extension
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(extension)"
+    labels:
+      - "dependencies"
+      - "extension"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch

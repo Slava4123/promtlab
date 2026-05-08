@@ -15,6 +15,14 @@ type UserRepository interface {
 	SearchUsers(ctx context.Context, query string, limit int) ([]models.User, error)
 	Update(ctx context.Context, user *models.User) error
 
+	// SetPlan атомарно меняет users.plan_id (+ updated_at) без трогания
+	// прочих полей. Используется webhook-обработчиками subscription
+	// (Downgrade, Refund) — раньше они шли через Update() с partial-struct
+	// &models.User{ID, PlanID}, что Save() трактовал как mass-overwrite
+	// (обнулял email/password_hash/role). Возвращает repo.ErrNotFound,
+	// если юзера нет.
+	SetPlan(ctx context.Context, userID uint, planID string) error
+
 	// SetQuotaWarningSentOn выставляет users.quota_warning_sent_on = date
 	// атомарным UPDATE (M-5c). Используется quota.Service чтобы не слать
 	// warning повторно в ту же дату.

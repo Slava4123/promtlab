@@ -36,7 +36,8 @@ func (r *fakeUserRepo) GetByUsername(context.Context, string) (*models.User, err
 func (r *fakeUserRepo) SearchUsers(context.Context, string, int) ([]models.User, error) {
 	panic("not used")
 }
-func (r *fakeUserRepo) Update(context.Context, *models.User) error { panic("not used") }
+func (r *fakeUserRepo) Update(context.Context, *models.User) error  { panic("not used") }
+func (r *fakeUserRepo) SetPlan(context.Context, uint, string) error { panic("not used") }
 func (r *fakeUserRepo) SetQuotaWarningSentOn(context.Context, uint, time.Time) error {
 	return nil
 }

@@ -101,7 +101,15 @@ func (s *Service) getUser(ctx context.Context, userID uint) (*models.User, error
 func (s *Service) Register(ctx context.Context, userEmail, password, name, username, referredBy string) (*models.User, error) {
 	existing, err := s.users.GetByEmail(ctx, userEmail)
 	if err == nil {
-		accounts, _ := s.linkedAccounts.GetByUserID(ctx, existing.ID)
+		// MJ-6: error propagation — silent swallow `accounts, _ :=` опасен.
+		// Если linked_accounts lookup упал из-за DB drop, мы шли в ветку
+		// «email не подтверждён» и пере-перезапись PasswordHash юзера
+		// (потенциальный account-takeover). Различаем ErrNotFound (нет
+		// привязок — нормально) от прочих ошибок БД (пропагандируем).
+		accounts, accErr := s.linkedAccounts.GetByUserID(ctx, existing.ID)
+		if accErr != nil && !errors.Is(accErr, repo.ErrNotFound) {
+			return nil, fmt.Errorf("register: lookup linked accounts: %w", accErr)
+		}
 		if len(accounts) > 0 {
 			return nil, &EmailTakenError{Provider: providerName(accounts[0].Provider)}
 		}

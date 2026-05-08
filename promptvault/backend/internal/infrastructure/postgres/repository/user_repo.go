@@ -82,6 +82,26 @@ func (r *userRepo) Update(ctx context.Context, user *models.User) error {
 	return r.db.WithContext(ctx).Save(user).Error
 }
 
+// SetPlan — partial UPDATE users.plan_id, безопасный для webhook'а.
+// gorm.Save(&User{ID, PlanID}) обнулял бы все остальные поля (email,
+// password_hash, role) — см. CR-2 в REVIEW_2026-05-07.md.
+func (r *userRepo) SetPlan(ctx context.Context, userID uint, planID string) error {
+	res := r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]any{
+			"plan_id":    planID,
+			"updated_at": time.Now(),
+		})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return repo.ErrNotFound
+	}
+	return nil
+}
+
 func (r *userRepo) SetQuotaWarningSentOn(ctx context.Context, userID uint, date time.Time) error {
 	return r.db.WithContext(ctx).
 		Model(&models.User{}).

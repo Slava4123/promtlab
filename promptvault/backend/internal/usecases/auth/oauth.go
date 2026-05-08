@@ -16,6 +16,7 @@ import (
 	"promptvault/internal/infrastructure/config"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	"promptvault/internal/pkg/safeloop"
 )
 
 var yandexEndpoint = oauth2.Endpoint{
@@ -250,6 +251,21 @@ func (s *OAuthService) upsertOAuthUser(ctx context.Context, provider, providerID
 	// 2. Ищем по email — привязываем провайдер к существующему аккаунту
 	user, err := s.users.GetByEmail(ctx, oauthEmail)
 	if err == nil {
+		// Защита от account-takeover: если у существующего локального
+		// аккаунта есть пароль и email НЕ верифицирован — мы не можем
+		// доверять, что владелец email именно этот юзер. Атакующий мог
+		// зарегистрировать почту жертвы локально (без верификации),
+		// дождаться её входа через OAuth и тихо имперсонировать (provider
+		// привяжется к нему + EmailVerified=true). Отказываем — пусть
+		// сначала пройдёт верификацию по email-коду и затем привяжет
+		// OAuth явно из Settings. См. CR-4 в REVIEW_2026-05-07.md.
+		if user.HasPassword() && !user.EmailVerified {
+			slog.Warn("oauth.link.refused_unverified_local",
+				"user_id", user.ID,
+				"provider", provider,
+				"email", oauthEmail)
+			return nil, nil, ErrEmailNotVerified
+		}
 		// Аккаунт с таким email уже есть — привязываем нового провайдера
 		if err := s.linkedAccounts.Create(ctx, &models.LinkedAccount{
 			UserID:     user.ID,
@@ -305,12 +321,15 @@ func (s *OAuthService) upsertOAuthUser(ctx context.Context, provider, providerID
 
 // touchLastLogin обновляет users.last_login_at в background — триггер для
 // re-engagement (M-5d). Ошибку игнорируем: lifecycle-метрика, не критична.
+// CR-6: обёрнуто в safeloop.RunWithRecover, чтобы panic в TouchLastLogin
+// (например, nil-deref в slog при corrupted ctx) не уронил весь сервер
+// — Effective Go: panic в любой goroutine убивает весь процесс.
 func (s *OAuthService) touchLastLogin(userID uint) {
-	go func() {
+	go safeloop.RunWithRecover("oauth_touch_last_login", func() {
 		if err := s.users.TouchLastLogin(context.Background(), userID); err != nil {
 			slog.Warn("oauth.touch_last_login.failed", "user_id", userID, "error", err)
 		}
-	}()
+	})
 }
 
 // --- Profile fetchers ---

@@ -19,6 +19,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: promptvault/backend
@@ -38,16 +39,20 @@ jobs:
           version: v2.11.4
           working-directory: promptvault/backend
 
+      # CR-17: govulncheck больше не декоративный (continue-on-error снят).
+      # CVE в Go deps теперь блокируют merge — иначе OWASP A06:2025 violation
+      # «Vulnerable and outdated components» проскальзывает в prod молча.
+      # Версия пиннируется (@v1.1.4), не @latest — supply-chain attack vector.
       - name: Security scan (Go)
-        continue-on-error: true
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
           govulncheck ./...
 
   test-backend:
     name: Test Backend
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: promptvault/backend
@@ -68,6 +73,7 @@ jobs:
     name: Test Frontend
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: promptvault/frontend
@@ -92,6 +98,7 @@ jobs:
     name: Test & Build Extension
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: promptvault/extension
@@ -152,6 +159,7 @@ jobs:
     name: Build & Push Images
     needs: [test-backend, test-frontend, test-extension]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -270,10 +278,15 @@ jobs:
     name: Deploy
     needs: build-push
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: production
     steps:
+      # CR-17: SHA-pin third-party action — у appleboy/ssh-action есть
+      # VPS_SSH_KEY со shell-доступом к prod. Mutable @v1 tag — supply-chain
+      # attack vector (см. tj-actions/changed-files March 2025: подмена тега
+      # увела секреты из 23k+ репозиториев). SHA = v1.0.3 release.
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.0.3
         env:
           GITHUB_SHA: ${{ github.sha }}
         with:
