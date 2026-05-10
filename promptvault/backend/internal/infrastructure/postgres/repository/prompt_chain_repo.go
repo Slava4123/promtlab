@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -71,6 +72,103 @@ func (r *chainRepo) ListByUser(ctx context.Context, userID uint, teamIDs []uint,
 		return nil, 0, err
 	}
 	return chains, total, nil
+}
+
+// ListByUserWithStats — расширенный list для UI с агрегатной статистикой
+// (step_count, has_branching, saved_runs_count, steps_preview) в одном SELECT
+// через LATERAL. Без N+1 — pattern из team_repo (MN-38).
+//
+// steps_preview ограничен models.ChainStepsPreviewLimit первых шагов
+// (по position), для длинных цепочек UI рисует "+N more".
+func (r *chainRepo) ListByUserWithStats(ctx context.Context, userID uint, teamIDs []uint, limit, offset int) ([]models.PromptChainListRow, int64, error) {
+	q := r.db.WithContext(ctx).Model(&models.PromptChain{})
+	if len(teamIDs) > 0 {
+		q = q.Where("team_id IN ?", teamIDs)
+	} else {
+		q = q.Where("user_id = ? AND team_id IS NULL", userID)
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	type rawRow struct {
+		models.PromptChain
+		StepCount        int             `gorm:"column:step_count"`
+		HasBranching     bool            `gorm:"column:has_branching"`
+		SavedRunsCount   int             `gorm:"column:saved_runs_count"`
+		StepsPreviewJSON json.RawMessage `gorm:"column:steps_preview_json"`
+	}
+
+	rawSQL := `
+SELECT c.*,
+       COALESCE(cs.step_count, 0)        AS step_count,
+       COALESCE(cs.has_branching, false) AS has_branching,
+       COALESCE(cr.runs_count, 0)        AS saved_runs_count,
+       COALESCE(sp.steps_preview_json, '[]'::json) AS steps_preview_json
+FROM prompt_chains c
+LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS step_count,
+           BOOL_OR(step_type = 'fork') AS has_branching
+    FROM prompt_chain_steps
+    WHERE chain_id = c.id
+) cs ON true
+LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS runs_count
+    FROM prompt_chain_executions
+    WHERE chain_id = c.id AND status = ?
+) cr ON true
+LEFT JOIN LATERAL (
+    SELECT json_agg(json_build_object('position', position, 'step_type', step_type) ORDER BY position) AS steps_preview_json
+    FROM (
+        SELECT position, step_type
+        FROM prompt_chain_steps
+        WHERE chain_id = c.id
+        ORDER BY position
+        LIMIT ?
+    ) s
+) sp ON true
+WHERE c.deleted_at IS NULL
+`
+	args := []any{string(models.ChainExecutionStatusCompleted), models.ChainStepsPreviewLimit}
+
+	if len(teamIDs) > 0 {
+		rawSQL += " AND c.team_id IN ?"
+		args = append(args, teamIDs)
+	} else {
+		rawSQL += " AND c.user_id = ? AND c.team_id IS NULL"
+		args = append(args, userID)
+	}
+	rawSQL += " ORDER BY c.updated_at DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	var raws []rawRow
+	if err := r.db.WithContext(ctx).Raw(rawSQL, args...).Scan(&raws).Error; err != nil {
+		return nil, 0, err
+	}
+
+	rows := make([]models.PromptChainListRow, len(raws))
+	for i, raw := range raws {
+		var preview []models.PromptChainStepPreview
+		if len(raw.StepsPreviewJSON) > 0 && string(raw.StepsPreviewJSON) != "null" {
+			if err := json.Unmarshal(raw.StepsPreviewJSON, &preview); err != nil {
+				// Defensive: при corrupt JSON отдаём пустой preview, но не валим весь list.
+				preview = nil
+			}
+		}
+		if preview == nil {
+			preview = []models.PromptChainStepPreview{}
+		}
+		rows[i] = models.PromptChainListRow{
+			PromptChain:    raw.PromptChain,
+			StepCount:      raw.StepCount,
+			HasBranching:   raw.HasBranching,
+			SavedRunsCount: raw.SavedRunsCount,
+			StepsPreview:   preview,
+		}
+	}
+	return rows, total, nil
 }
 
 func (r *chainRepo) Update(ctx context.Context, c *models.PromptChain) error {

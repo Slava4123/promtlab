@@ -141,6 +141,24 @@ func (s *Service) List(ctx context.Context, userID uint, teamIDs []uint, limit, 
 	return s.chains.ListByUser(ctx, userID, teamIDs, limit, offset)
 }
 
+// ListWithStats — расширенный list для UI карточек: каждая цепочка идёт со
+// step_count, has_branching, saved_runs_count и steps_preview. Один SELECT
+// через LATERAL в репозитории — без N+1.
+func (s *Service) ListWithStats(ctx context.Context, userID uint, teamIDs []uint, limit, offset int) ([]models.PromptChainListRow, int64, error) {
+	if len(teamIDs) > 0 {
+		if err := teamcheck.RequireMembership(ctx, s.teams, teamIDs, userID); err != nil {
+			return nil, 0, mapTeamError(err)
+		}
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return s.chains.ListByUserWithStats(ctx, userID, teamIDs, limit, offset)
+}
+
 func (s *Service) Update(ctx context.Context, chainID, userID uint, name, description string) (*models.PromptChain, error) {
 	c, err := s.GetByID(ctx, chainID, userID)
 	if err != nil {
@@ -261,7 +279,10 @@ func (s *Service) AddStep(ctx context.Context, chainID, userID uint, in AddStepI
 		if in.PromptID == nil || *in.PromptID == 0 {
 			return nil, ErrPromptNotFound
 		}
-		if _, err := s.prompts.GetByID(ctx, *in.PromptID); err != nil {
+		// MN-37: GetMeta вместо GetByID — нам нужно только подтверждение
+		// существования промпта, Tags/Collections не используются. Экономит
+		// 2 SELECT'а на каждый AddStep.
+		if _, err := s.prompts.GetMeta(ctx, *in.PromptID); err != nil {
 			if errors.Is(err, repo.ErrNotFound) {
 				return nil, ErrPromptNotFound
 			}

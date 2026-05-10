@@ -24,6 +24,33 @@ type PromptChain struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+// PromptChainStepPreview — облегчённое представление шага для list-эндпойнта
+// /api/chains. Содержит только тип и позицию первых N шагов цепочки — без
+// контента промптов, conditions, variable_mapping. Используется для рендера
+// mini-graph на карточке цепочки в UI (Phase 16 UI polish).
+type PromptChainStepPreview struct {
+	Position int    `json:"position"`
+	StepType string `json:"step_type"`
+}
+
+// PromptChainListRow — расширенное представление цепочки для list-эндпойнта,
+// агрегирующее статистику в одном SELECT через LATERAL (см. chain_repo.
+// ListByUserWithStats). Не персистентный тип: GORM не сохраняет его.
+//
+// StepsPreview ограничен первыми ChainStepsPreviewLimit шагами; UI может
+// нарисовать первые 4-5 шагов и показать "+N more" для длинных цепочек.
+type PromptChainListRow struct {
+	PromptChain
+	StepCount      int                      `json:"step_count"`
+	HasBranching   bool                     `json:"has_branching"`
+	SavedRunsCount int                      `json:"saved_runs_count"`
+	StepsPreview   []PromptChainStepPreview `json:"steps_preview"`
+}
+
+// ChainStepsPreviewLimit — максимальное число шагов в StepsPreview.
+// 5 покрывает «компактное» отображение в UI; для длинных цепочек +N бейдж.
+const ChainStepsPreviewLimit = 5
+
 // PromptChainStep — шаг в цепочке. Position сохранён как стабильная сортировка
 // для UI (Order BY position в репозитории), но логика переходов после миграции
 // 000056 строится на NextStepID, не на position+1.
@@ -115,25 +142,40 @@ type ConditionBranch struct {
 // ломает выполнение. Variables — initial_vars от пользователя; StepOutputs —
 // {step_id: output_text} накопительно.
 type PromptChainExecution struct {
-	ID            uint            `gorm:"primaryKey" json:"id"`
-	ChainID       uint            `gorm:"not null;index" json:"chain_id"`
-	UserID        uint            `gorm:"not null;index" json:"user_id"`
-	CurrentStep   int             `gorm:"not null;default:1" json:"current_step"`
-	Variables     json.RawMessage `gorm:"type:jsonb;not null;default:'{}'" json:"variables"`
-	StepOutputs   json.RawMessage `gorm:"type:jsonb;not null;default:'{}'" json:"step_outputs"`
-	ChainSnapshot json.RawMessage `gorm:"type:jsonb;not null" json:"chain_snapshot"`
-	Status        string          `gorm:"size:20;not null;default:in_progress" json:"status"`
-	StartedAt     time.Time       `gorm:"not null;default:now()" json:"started_at"`
-	CompletedAt   *time.Time      `json:"completed_at,omitempty"`
-	UpdatedAt     time.Time       `json:"updated_at"`
+	ID            uint                 `gorm:"primaryKey" json:"id"`
+	ChainID       uint                 `gorm:"not null;index" json:"chain_id"`
+	UserID        uint                 `gorm:"not null;index" json:"user_id"`
+	CurrentStep   int                  `gorm:"not null;default:1" json:"current_step"`
+	Variables     json.RawMessage      `gorm:"type:jsonb;not null;default:'{}'" json:"variables"`
+	StepOutputs   json.RawMessage      `gorm:"type:jsonb;not null;default:'{}'" json:"step_outputs"`
+	ChainSnapshot json.RawMessage      `gorm:"type:jsonb;not null" json:"chain_snapshot"`
+	// MN-33: typed Status вместо raw string. Захватывает invalid-state
+	// присваивания на compile-time + параллель с CHECK constraint в миграции 000053.
+	Status        ChainExecutionStatus `gorm:"size:20;not null;default:in_progress" json:"status"`
+	StartedAt     time.Time            `gorm:"not null;default:now()" json:"started_at"`
+	CompletedAt   *time.Time           `json:"completed_at,omitempty"`
+	UpdatedAt     time.Time            `json:"updated_at"`
 }
 
-// Допустимые значения PromptChainExecution.Status (CHECK constraint в миграции 000053).
+// ChainExecutionStatus — статус выполнения цепочки.
+// CHECK constraint в миграции 000053 enforces те же значения на БД-уровне.
+type ChainExecutionStatus string
+
+// Допустимые значения PromptChainExecution.Status.
 const (
-	ChainExecutionStatusInProgress = "in_progress"
-	ChainExecutionStatusCompleted  = "completed"
-	ChainExecutionStatusAbandoned  = "abandoned"
+	ChainExecutionStatusInProgress ChainExecutionStatus = "in_progress"
+	ChainExecutionStatusCompleted  ChainExecutionStatus = "completed"
+	ChainExecutionStatusAbandoned  ChainExecutionStatus = "abandoned"
 )
+
+// IsValid возвращает true если значение — допустимый статус.
+func (s ChainExecutionStatus) IsValid() bool {
+	switch s {
+	case ChainExecutionStatusInProgress, ChainExecutionStatusCompleted, ChainExecutionStatusAbandoned:
+		return true
+	}
+	return false
+}
 
 // VariableSource — источник значения переменной в шаге цепочки.
 //   Type="manual"      → значение вводит юзер вручную в run-mode

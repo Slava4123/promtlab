@@ -402,6 +402,10 @@ export interface PublicPrompt {
   /** Phase 14 D: Branded share pages (Max-only). undefined для Free/Pro и не-team промптов. */
   branding?: {
     logo_url?: string
+    /** Phase 16-X: 'url' | 'file' | 'none'. Резолвинг между внешним URL и uploaded-file. */
+    logo_source?: "url" | "file" | "none"
+    /** Phase 16-X: готовый src для <img> (бэк уже выбрал между logo_url и /api/.../branding/logo). */
+    effective_logo_url?: string
     tagline?: string
     website?: string
     primary_color?: string
@@ -451,6 +455,29 @@ export interface BadgeListResponse {
 // Subscription / Billing
 
 export type PlanID = "free" | "pro" | "max" | "pro_yearly" | "max_yearly"
+
+// MN-60: runtime guard вместо `as PlanID` cast. Сейчас юзер из БД может прийти
+// с любым plan_id (например, после rollback миграции, ручной правки строки или
+// future tier — `enterprise`). Без этого guard'а компонент молча сломал бы
+// rendering, потому что PlanBadge не знает unknown plan.
+const VALID_PLAN_IDS: ReadonlySet<string> = new Set([
+  "free",
+  "pro",
+  "max",
+  "pro_yearly",
+  "max_yearly",
+])
+
+export function isPlanID(v: unknown): v is PlanID {
+  return typeof v === "string" && VALID_PLAN_IDS.has(v)
+}
+
+// asPlanID — runtime-проверенная замена `as PlanID`. fallback="free" даёт
+// безопасный дефолт, если значение из API/store не валидно (free всегда
+// поддерживается).
+export function asPlanID(v: unknown, fallback: PlanID = "free"): PlanID {
+  return isPlanID(v) ? v : fallback
+}
 export type SubscriptionStatus = "active" | "past_due" | "paused" | "cancelled" | "expired"
 
 export type CancelReason =
@@ -537,6 +564,18 @@ export interface Chain {
   description: string
   created_at: string
   updated_at: string
+  // Phase 16 UI polish — расширенный list-эндпойнт /api/chains
+  // (отсутствуют в одиночных GET /api/chains/{id} ответах).
+  step_count?: number
+  has_branching?: boolean
+  saved_runs_count?: number
+  steps_preview?: ChainStepPreview[]
+}
+
+/** Облегчённое представление шага для рендера mini-graph. Только position и step_type. */
+export interface ChainStepPreview {
+  position: number
+  step_type: ChainStepType
 }
 
 // Phase 16 v2 (Tree-canvas): manual fork с label-based branches.
