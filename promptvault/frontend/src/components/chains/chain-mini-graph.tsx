@@ -41,7 +41,7 @@ export function ChainMiniGraph({ stepsPreview, totalSteps }: ChainMiniGraphProps
   return (
     <svg
       viewBox={`0 0 ${totalWidth} 24`}
-      className="h-6 w-full text-muted-foreground"
+      className="h-6 w-full text-violet-500 dark:text-violet-400"
       aria-label={`Структура цепочки: ${totalSteps} ${pluralizeRu(totalSteps, "шаг", "шага", "шагов")}`}
     >
       {stepsPreview.map((step, i) => {
@@ -55,10 +55,9 @@ export function ChainMiniGraph({ stepsPreview, totalSteps }: ChainMiniGraphProps
               <polygon
                 points={`${cx},${cy - 6} ${cx + 7},${cy} ${cx},${cy + 6} ${cx - 7},${cy}`}
                 fill="currentColor"
-                fillOpacity="0.2"
+                fillOpacity="0.5"
                 stroke="currentColor"
-                strokeOpacity="0.6"
-                strokeWidth="1"
+                strokeWidth="1.25"
               />
             ) : (
               <rect
@@ -68,10 +67,9 @@ export function ChainMiniGraph({ stepsPreview, totalSteps }: ChainMiniGraphProps
                 height="12"
                 rx="2"
                 fill="currentColor"
-                fillOpacity="0.15"
+                fillOpacity="0.45"
                 stroke="currentColor"
-                strokeOpacity="0.5"
-                strokeWidth="1"
+                strokeWidth="1.25"
               />
             )}
             {i < stepsPreview.length - 1 && (
@@ -94,18 +92,17 @@ export function ChainMiniGraph({ stepsPreview, totalSteps }: ChainMiniGraphProps
             height="12"
             rx="6"
             fill="currentColor"
-            fillOpacity="0.1"
+            fillOpacity="0.25"
             stroke="currentColor"
-            strokeOpacity="0.4"
+            strokeWidth="1"
           />
           <text
             x={totalWidth - badgeWidth / 2 - padding}
             y="15"
             fontSize="9"
-            fontWeight="500"
+            fontWeight="600"
             textAnchor="middle"
             fill="currentColor"
-            fillOpacity="0.7"
           >
             +{remaining}
           </text>
@@ -118,9 +115,9 @@ export function ChainMiniGraph({ stepsPreview, totalSteps }: ChainMiniGraphProps
 function ArrowSegment({ x, y, width }: { x: number; y: number; width: number }) {
   const endX = x + width - 3
   return (
-    <g stroke="currentColor" strokeOpacity="0.5" strokeWidth="1" fill="none">
+    <g stroke="currentColor" strokeWidth="1.25" fill="none">
       <line x1={x} y1={y} x2={endX} y2={y} />
-      <polyline points={`${endX - 3},${y - 2} ${endX},${y} ${endX - 3},${y + 2}`} fill="currentColor" fillOpacity="0.5" />
+      <polyline points={`${endX - 3},${y - 2} ${endX},${y} ${endX - 3},${y + 2}`} fill="currentColor" />
     </g>
   )
 }

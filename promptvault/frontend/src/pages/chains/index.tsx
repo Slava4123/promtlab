@@ -40,7 +40,7 @@ export default function ChainsPage() {
         {/* В empty-state верхнюю CTA скрываем — основное действие есть в галерее
             шаблонов и «Создать с нуля». В filled-state CTA остаётся как primary. */}
         {canWrite && !isEmpty && (
-          <Button asChild>
+          <Button variant="brand" asChild>
             <Link to="/chains/new">
               <Plus className="mr-2 h-4 w-4" />
               Создать цепочку

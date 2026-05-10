@@ -95,7 +95,7 @@ export function ChainCard({ chain, canWrite, isViewer, onDelete }: ChainCardProp
           )}
         </p>
         <div className="mt-auto flex flex-wrap gap-2 pt-1">
-          <Button size="sm" asChild>
+          <Button size="sm" variant="brand" asChild>
             <Link to={`/chains/${chain.id}/run`}>
               <PlayCircle className="mr-2 h-4 w-4" />
               Запустить
