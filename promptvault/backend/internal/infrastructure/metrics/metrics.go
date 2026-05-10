@@ -119,6 +119,21 @@ var (
 		Name: "promptvault_loop_panics_total",
 		Help: "Background loop panics that were recovered, labelled by loop name.",
 	}, []string{"loop"})
+
+	// QuotaCleanupRuns — каждый тик quota cleanup-loop'а (daily_feature_usage
+	// retention). Аналог AnalyticsCleanupRuns: используется в alert'ах
+	// чтобы отличить «loop помер» от «нечего удалять» (свежий prod).
+	QuotaCleanupRuns = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "quota_cleanup_runs_total",
+		Help: "Number of quota retention cleanup loop iterations (daily_feature_usage).",
+	})
+
+	// QuotaCleanupRowsDeleted — удалённые строки daily_feature_usage. Аналог
+	// AnalyticsCleanupDeleted, но без label'ов (одна таблица).
+	QuotaCleanupRowsDeleted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "quota_cleanup_rows_deleted_total",
+		Help: "Rows deleted from daily_feature_usage by retention cleanup loop.",
+	})
 )
 
 // init zero-инициализирует все ожидаемые label combinations CounterVec'ов.
@@ -167,6 +182,7 @@ func init() {
 		"subscription_renewal", "subscription_expiration", "subscription_reminder",
 		"trash_purge", "engagement_reengagement", "engagement_streak_reminder",
 		"oauth_touch_last_login", "team_invite_email",
+		"quota_cleanup",
 	} {
 		LoopPanicsTotal.WithLabelValues(name).Add(0)
 	}

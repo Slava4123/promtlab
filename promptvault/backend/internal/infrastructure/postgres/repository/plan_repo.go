@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,6 +11,11 @@ import (
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 )
+
+// testPlanIDPrefix скрывает E2E test-планы (test_free / test_pro / test_max) из
+// публичного листинга /api/subscription/plans, но НЕ из GetByID — quota.Service
+// должен находить план по user.plan_id даже если юзер на test-плане.
+const testPlanIDPrefix = "test_"
 
 const planCacheTTL = 5 * time.Minute
 
@@ -76,7 +82,7 @@ func (r *planRepo) GetActive(ctx context.Context) ([]models.SubscriptionPlan, er
 	}
 	active := make([]models.SubscriptionPlan, 0, len(plans))
 	for _, p := range plans {
-		if p.IsActive {
+		if p.IsActive && !strings.HasPrefix(p.ID, testPlanIDPrefix) {
 			active = append(active, p)
 		}
 	}

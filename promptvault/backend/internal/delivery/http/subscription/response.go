@@ -23,6 +23,11 @@ type PlanResponse struct {
 	MaxChains          int             `json:"max_chains"`
 	MaxStepsPerChain   int             `json:"max_steps_per_chain"`
 	MaxSavedExecutions int             `json:"max_saved_executions"`
+	// Pack T (миграция 000070): team-pool квоты. Лимит на ресурсы внутри
+	// одной команды, считается против плана owner'а команды.
+	MaxTeamPrompts     int             `json:"max_team_prompts"`
+	MaxTeamCollections int             `json:"max_team_collections"`
+	MaxTeamChains      int             `json:"max_team_chains"`
 	Features           json.RawMessage `json:"features"`
 	SortOrder          int             `json:"sort_order"`
 	IsActive           bool            `json:"is_active"`
@@ -44,6 +49,9 @@ func NewPlanResponse(p models.SubscriptionPlan) PlanResponse {
 		MaxChains:          p.MaxChains,
 		MaxStepsPerChain:   p.MaxStepsPerChain,
 		MaxSavedExecutions: p.MaxSavedExecutions,
+		MaxTeamPrompts:     p.MaxTeamPrompts,
+		MaxTeamCollections: p.MaxTeamCollections,
+		MaxTeamChains:      p.MaxTeamChains,
 		Features:           p.Features,
 		SortOrder:          p.SortOrder,
 		IsActive:           p.IsActive,

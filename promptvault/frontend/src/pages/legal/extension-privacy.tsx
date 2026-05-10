@@ -116,7 +116,7 @@ export default function ExtensionPrivacyPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr>
-                  <th className="border-b border-border pb-1 text-left font-medium">Permission</th>
+                  <th className="border-b border-border pb-1 text-left font-medium">Разрешение</th>
                   <th className="border-b border-border pb-1 text-left font-medium">Обоснование</th>
                 </tr>
               </thead>

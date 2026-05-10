@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlanBadge } from "./plan-badge"
 import { UsageMeters } from "./usage-meters"
+import { TeamUsageMeters } from "./team-usage-meters"
 import { PauseDialog } from "./pause-dialog"
 import { CancelDialog } from "./cancel-dialog"
 import {
@@ -15,6 +16,7 @@ import {
   useResumeSubscription,
   useSetAutoRenew,
 } from "@/hooks/use-subscription"
+import { useTeams } from "@/hooks/use-teams"
 import { useAuthStore } from "@/stores/auth-store"
 import { asPlanID } from "@/api/types"
 
@@ -33,6 +35,9 @@ export function SubscriptionSection() {
   const planId = asPlanID(useAuthStore((s) => s.user?.plan_id))
   const { data: subscription, isLoading: subLoading } = useSubscription()
   const { data: usage, isLoading: usageLoading } = useUsage()
+  // Pack TU: список команд юзера для team-pool usage. Каждая team имеет
+  // свой независимый pool по плану owner'а (Pack T model).
+  const { data: teams } = useTeams()
   const cancelMutation = useCancelSubscription()
   const pauseMutation = usePauseSubscription()
   const resumeMutation = useResumeSubscription()
@@ -155,6 +160,22 @@ export function SubscriptionSection() {
           )}
 
           {usage && <UsageMeters usage={usage} />}
+
+          {teams && teams.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <div>
+                <h3 className="text-sm font-medium text-foreground">Использование команд</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  У каждой команды свой независимый пул ресурсов — лимит из плана её владельца.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {teams.map((team) => (
+                  <TeamUsageMeters key={team.slug} slug={team.slug} teamName={team.name} />
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             {planId === "free" && (

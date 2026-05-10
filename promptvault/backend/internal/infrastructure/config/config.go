@@ -11,4 +11,5 @@ type Config struct {
 	Payment   PaymentConfig   `koanf:"payment"`
 	Analytics AnalyticsConfig `koanf:"analytics"`
 	Telemetry TelemetryConfig `koanf:"telemetry"`
+	Chains    ChainsConfig    `koanf:"chains"`
 }

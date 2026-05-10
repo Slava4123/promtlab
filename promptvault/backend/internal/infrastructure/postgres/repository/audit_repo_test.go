@@ -21,42 +21,28 @@ func newAuditRepoTest(t *testing.T) (repo.AuditRepository, *gorm.DB) {
 	return NewAuditRepository(db), db
 }
 
-// applyAppendOnlyGuard реплицирует триггер-защиту из миграции 000018 в
-// AutoMigrate-окружении testcontainers. Без этого тесты append-only
-// не имели бы смысла — AutoMigrate создаёт «голую» таблицу без триггеров.
-// Trigger-based защита выбрана потому что REVOKE не работает для owner таблицы.
+// MN-11: applyAppendOnlyGuard был hack — реплицировал триггеры из миграции 000018
+// потому что setupTestDB до CR-10 использовал db.AutoMigrate (без триггеров).
+// После CR-10 setupTestDB применяет реальные миграции через postgres.RunMigrations,
+// т.е. триггеры уже на месте. Функция оставлена как no-op заглушка только чтобы
+// не ломать вызывающие тесты (они продолжают её вызывать в качестве «явной
+// записи требования» — append-only защита должна быть активна).
 func applyAppendOnlyGuard(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, db.Exec(`
-		CREATE OR REPLACE FUNCTION prevent_audit_log_modification() RETURNS TRIGGER AS $$
-		BEGIN
-		    RAISE EXCEPTION 'audit_log is append-only: % operations are not allowed', TG_OP
-		        USING ERRCODE = 'insufficient_privilege';
-		END;
-		$$ LANGUAGE plpgsql;
-	`).Error)
-	require.NoError(t, db.Exec(`DROP TRIGGER IF EXISTS audit_log_prevent_update ON audit_log`).Error)
-	require.NoError(t, db.Exec(`DROP TRIGGER IF EXISTS audit_log_prevent_delete ON audit_log`).Error)
-	require.NoError(t, db.Exec(`
-		CREATE TRIGGER audit_log_prevent_update
-		    BEFORE UPDATE ON audit_log
-		    FOR EACH STATEMENT
-		    EXECUTE FUNCTION prevent_audit_log_modification()
-	`).Error)
-	require.NoError(t, db.Exec(`
-		CREATE TRIGGER audit_log_prevent_delete
-		    BEFORE DELETE ON audit_log
-		    FOR EACH STATEMENT
-		    EXECUTE FUNCTION prevent_audit_log_modification()
-	`).Error)
+	// Sanity check: триггер реально установлен миграцией 000018.
+	var count int64
+	require.NoError(t, db.Raw(
+		`SELECT COUNT(*) FROM pg_trigger WHERE tgname = 'audit_log_prevent_update'`,
+	).Scan(&count).Error)
+	require.Equal(t, int64(1), count, "миграция 000018 должна установить append-only trigger")
 }
 
 func makeEntry(adminID uint, action string) *models.AuditLog {
 	payload, _ := json.Marshal(map[string]any{"ok": true})
 	return &models.AuditLog{
 		AdminID:     adminID,
-		Action:      action,
-		TargetType:  "user",
+		Action:      models.AuditAction(action),
+		TargetType:  models.AuditTargetType("user"),
 		TargetID:    uint_ptrAudit(42),
 		BeforeState: nil,
 		AfterState:  payload,

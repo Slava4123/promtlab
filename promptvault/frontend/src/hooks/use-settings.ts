@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { api } from "@/api/client"
+import { useAuthStore } from "@/stores/auth-store"
 import type { LinkedAccount, UpdateProfileRequest, ChangePasswordRequest } from "@/api/types"
 
 export function useLinkedAccounts() {
@@ -66,10 +67,10 @@ export function useUnlinkProvider() {
 
 // Phase 14 M-10: opt-in toggle для email-digest по Smart Insights.
 // PATCH /api/auth/notifications/insights — { enabled: boolean }.
-// Отвечает { insight_emails_enabled: boolean }. Инвалидация "me" чтобы
-// обновить user.insight_emails_enabled в auth-store.
+// Отвечает { insight_emails_enabled: boolean }. После update нужно дёрнуть
+// fetchMe из auth-store: `me` живёт в Zustand, не в TanStack cache, поэтому
+// invalidateQueries({queryKey:["me"]}) ничего не делал — MN-49.
 export function useSetInsightEmails() {
-  const qc = useQueryClient()
   return useMutation({
     mutationFn: (enabled: boolean) =>
       api<{ insight_emails_enabled: boolean }>(
@@ -77,7 +78,7 @@ export function useSetInsightEmails() {
         { method: "PATCH", body: JSON.stringify({ enabled }) },
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["me"] })
+      void useAuthStore.getState().fetchMe()
     },
     onError: (err: Error) => {
       toast.error(err.message || "Не удалось обновить настройки уведомлений")

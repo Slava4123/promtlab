@@ -6,8 +6,8 @@
 -- остаётся false в prod.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- GIN-индекс по content для быстрого similarity() с partial filter на not-deleted.
--- Partial index экономит место (удалённые промпты не индексируются).
-CREATE INDEX IF NOT EXISTS idx_prompts_content_trgm
-    ON prompts USING gin (content gin_trgm_ops)
-    WHERE deleted_at IS NULL;
+-- MN-81: idx_prompts_content_trgm уже создан в 000026_prompts_performance_indexes.up.sql,
+-- здесь был второй CREATE INDEX IF NOT EXISTS — фактически no-op (IF NOT EXISTS),
+-- но мусор: дубликат шумит при `pg_dump --schema-only` diff'ах и вводит в заблуждение
+-- разработчиков (кажется что Phase 14 M8 владеет индексом). Оставляем только pg_trgm
+-- extension; индекс остаётся в 000026 как single source of truth.

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { useShareLink, useCreateShareLink, useDeleteShareLink } from "@/hooks/use-share"
 import { ApiError } from "@/api/client"
+import { useAuthStore } from "@/stores/auth-store"
 
 interface ShareDialogProps {
   promptId: number
@@ -23,9 +24,13 @@ export function ShareDialog({ promptId, open, onOpenChange }: ShareDialogProps) 
   const createShare = useCreateShareLink()
   const deleteShare = useDeleteShareLink()
   const [confirming, setConfirming] = useState(false)
+  const planId = useAuthStore((s) => s.user?.plan_id ?? "free")
+  const isMaxTier = planId === "max" || planId === "max_yearly"
 
   // Phase 16-Y: квот нет (ни active-count, ни daily-create).
-  // Анти-абуз — общий rate-limit byUser(120/min) на /api. TTL 30d на сервере.
+  // Анти-абуз — общий rate-limit byUser(120/min) на /api.
+  // TTL: 30d для Free/Pro, NULL (бессрочно) для Max — backend выставляет
+  // expires_at в зависимости от плана юзера.
   const is404 = error instanceof ApiError && error.status === 404
   const hasLink = !isError && !!shareLink
   const showError = isError && !is404
@@ -125,8 +130,10 @@ export function ShareDialog({ promptId, open, onOpenChange }: ShareDialogProps) 
         ) : (
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
-              Создайте публичную ссылку — любой сможет просмотреть этот промпт без регистрации.
-              Ссылка действует 30 дней; после этого её можно создать заново.
+              Создайте публичную ссылку — любой сможет просмотреть этот промпт без регистрации.{" "}
+              {isMaxTier
+                ? "Ссылка действует бессрочно (Max-эксклюзив)."
+                : "Ссылка действует 30 дней; после этого её можно создать заново."}
             </p>
 
             <Button

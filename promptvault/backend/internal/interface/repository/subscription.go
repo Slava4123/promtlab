@@ -127,13 +127,35 @@ type PaymentRepository interface {
 }
 
 // QuotaRepository — подсчёт использованных ресурсов для enforcement квот.
+//
+// Pack T (миграция 000070): персональные и командные ресурсы разделены.
+//   CountPersonalPrompts — только промпты юзера с team_id IS NULL (соло-библиотека)
+//   CountTeamPrompts     — все промпты команды (pool, считается против плана owner'а)
+// Аналогично для collections/chains. Старые CountPrompts/CountCollections/
+// CountChains оставлены для backward compat (используют ВСЕ промпты юзера
+// без фильтра team_id) — их остаются вызовы в legacy-коде.
 type QuotaRepository interface {
-	CountPrompts(ctx context.Context, userID uint) (int64, error)
-	CountCollections(ctx context.Context, userID uint) (int64, error)
+	// Личные счётчики — только ресурсы с team_id IS NULL.
+	CountPersonalPrompts(ctx context.Context, userID uint) (int64, error)
+	CountPersonalCollections(ctx context.Context, userID uint) (int64, error)
+	CountPersonalChains(ctx context.Context, userID uint) (int64, error)
+
+	// Команд-pool счётчики — все ресурсы команды.
+	CountTeamPrompts(ctx context.Context, teamID uint) (int64, error)
+	CountTeamCollections(ctx context.Context, teamID uint) (int64, error)
+	CountTeamChains(ctx context.Context, teamID uint) (int64, error)
+
 	CountTeamsOwned(ctx context.Context, userID uint) (int64, error)
 	CountActiveShareLinks(ctx context.Context, userID uint) (int64, error)
 	CountTeamMembers(ctx context.Context, teamID uint) (int, error)
 	GetDailyUsage(ctx context.Context, userID uint, date time.Time, featureType string) (int, error)
 	GetTotalUsage(ctx context.Context, userID uint, featureType string) (int, error)
 	IncrementDailyUsage(ctx context.Context, userID uint, date time.Time, featureType string) error
+	// DeleteOldDailyUsage удаляет строки старше olderThanDays. Возвращает
+	// количество удалённых. Используется фоновым cleanup loop'ом, чтобы
+	// таблица не росла бесконечно (только сегодняшний день читается, всё
+	// остальное — мёртвый balast). Безопасно вызывать на пустой таблице.
+	DeleteOldDailyUsage(ctx context.Context, olderThanDays int) (int64, error)
+	// Phase 16 (Prompt Chains): шаги внутри одной цепочки (per-chain лимит).
+	CountStepsByChain(ctx context.Context, chainID uint) (int64, error)
 }

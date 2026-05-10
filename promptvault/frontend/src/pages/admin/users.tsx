@@ -14,22 +14,22 @@ function RoleBadge({ role }: { role: string }) {
   if (role === "admin") {
     return (
       <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[0.65rem] font-medium text-violet-300">
-        admin
+        админ
       </span>
     )
   }
-  return <span className="text-[0.7rem] text-muted-foreground">user</span>
+  return <span className="text-[0.7rem] text-muted-foreground">юзер</span>
 }
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "frozen") {
     return (
       <span className="rounded-md bg-destructive/15 px-1.5 py-0.5 text-[0.65rem] font-medium text-destructive">
-        frozen
+        заморожен
       </span>
     )
   }
-  return <span className="text-[0.7rem] text-emerald-400">active</span>
+  return <span className="text-[0.7rem] text-emerald-400">активен</span>
 }
 
 export default function AdminUsersPage() {
@@ -70,7 +70,7 @@ export default function AdminUsersPage() {
               setQuery(e.target.value)
               setPage(1)
             }}
-            placeholder="Поиск по email, username, name..."
+            placeholder="Поиск по email, нику или имени..."
             className="pl-8"
           />
         </div>
@@ -84,8 +84,8 @@ export default function AdminUsersPage() {
             className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm sm:flex-none"
           >
             <option value="">Все роли</option>
-            <option value="user">user</option>
-            <option value="admin">admin</option>
+            <option value="user">юзер</option>
+            <option value="admin">админ</option>
           </select>
           <select
             value={status}
@@ -96,8 +96,8 @@ export default function AdminUsersPage() {
             className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm sm:flex-none"
           >
             <option value="">Все статусы</option>
-            <option value="active">active</option>
-            <option value="frozen">frozen</option>
+            <option value="active">активен</option>
+            <option value="frozen">заморожен</option>
           </select>
         </div>
       </div>
@@ -170,10 +170,10 @@ function DesktopUserTable({
       <table className="w-full text-sm">
         <thead className="bg-muted/20 text-[0.72rem] uppercase tracking-wider text-muted-foreground">
           <tr>
-            <th className="px-3 py-2 text-left font-medium">Email / Name</th>
-            <th className="px-3 py-2 text-left font-medium">Role</th>
-            <th className="px-3 py-2 text-left font-medium">Status</th>
-            <th className="px-3 py-2 text-left font-medium">Created</th>
+            <th className="px-3 py-2 text-left font-medium">Email / Имя</th>
+            <th className="px-3 py-2 text-left font-medium">Роль</th>
+            <th className="px-3 py-2 text-left font-medium">Статус</th>
+            <th className="px-3 py-2 text-left font-medium">Создан</th>
           </tr>
         </thead>
         <tbody>

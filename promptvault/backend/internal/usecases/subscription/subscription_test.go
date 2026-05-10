@@ -76,6 +76,58 @@ func TestExtractPlanID(t *testing.T) {
 	}
 }
 
+// MN-12: edge cases для isRenewalPayment.
+func TestIsRenewalPayment(t *testing.T) {
+	cases := []struct {
+		name string
+		pay  *models.Payment
+		want bool
+	}{
+		{"пустой ProviderData — false", &models.Payment{ID: 1, ProviderData: nil}, false},
+		{"renewal=true (string)", &models.Payment{ID: 2, ProviderData: mustJSON(map[string]string{"plan_id": "pro", "renewal": "true"})}, true},
+		{"renewal=false (string)", &models.Payment{ID: 3, ProviderData: mustJSON(map[string]string{"plan_id": "pro", "renewal": "false"})}, false},
+		{"renewal отсутствует", &models.Payment{ID: 4, ProviderData: mustJSON(map[string]string{"plan_id": "pro"})}, false},
+		{"renewal с произвольной строкой — false (только 'true' буквально)", &models.Payment{ID: 5, ProviderData: mustJSON(map[string]string{"renewal": "yes"})}, false},
+		{"невалидный JSON — false (логируется, не паника)", &models.Payment{ID: 6, ProviderData: json.RawMessage("not-json")}, false},
+		{"empty object — false", &models.Payment{ID: 7, ProviderData: mustJSON(map[string]string{})}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isRenewalPayment(tc.pay); got != tc.want {
+				t.Errorf("isRenewalPayment = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// MN-12: nested JSON object в provider_data — extractPlanID не должен паниковать.
+func TestExtractPlanID_NestedObject_Refused(t *testing.T) {
+	// PaymentProviderData ожидает {plan_id: string}; nested object не подойдёт type-mismatch.
+	nested := json.RawMessage(`{"plan_id": {"sub": "pro"}}`)
+	pay := &models.Payment{ID: 1, ProviderData: nested}
+	_, err := extractPlanID(pay)
+	if err == nil {
+		t.Fatal("nested object для plan_id должен дать unmarshal error")
+	}
+	if !strings.Contains(err.Error(), "unmarshal") {
+		t.Errorf("expected unmarshal error, got %q", err.Error())
+	}
+}
+
+// MN-12: huge ProviderData (DoS защита — JSON should not OOM).
+func TestExtractPlanID_HugeJSON_StillReturnsError_NoOOM(t *testing.T) {
+	// Очень большая строка — encoding/json парсит линейно, без OOM.
+	huge := `{"plan_id": "pro", "junk": "` + strings.Repeat("x", 100_000) + `"}`
+	pay := &models.Payment{ID: 1, ProviderData: json.RawMessage(huge)}
+	got, err := extractPlanID(pay)
+	if err != nil {
+		t.Fatalf("huge but valid JSON — должно вернуть plan_id, got %v", err)
+	}
+	if got != "pro" {
+		t.Errorf("plan_id = %q, want pro", got)
+	}
+}
+
 func TestGenerateIdempotencyKey(t *testing.T) {
 	// Ключ должен быть уникальным между вызовами и правильной длины (32 hex).
 	seen := make(map[string]struct{}, 100)

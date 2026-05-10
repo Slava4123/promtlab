@@ -2,6 +2,7 @@ package quota
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -99,10 +100,16 @@ type incCall struct {
 	feature string
 }
 
-func (r *fakeQuotaRepo) CountPrompts(context.Context, uint) (int64, error) {
+func (r *fakeQuotaRepo) CountPersonalPrompts(context.Context, uint) (int64, error) {
 	return r.prompts, nil
 }
-func (r *fakeQuotaRepo) CountCollections(context.Context, uint) (int64, error) {
+func (r *fakeQuotaRepo) CountPersonalCollections(context.Context, uint) (int64, error) {
+	return r.collections, nil
+}
+func (r *fakeQuotaRepo) CountTeamPrompts(context.Context, uint) (int64, error) {
+	return r.prompts, nil
+}
+func (r *fakeQuotaRepo) CountTeamCollections(context.Context, uint) (int64, error) {
 	return r.collections, nil
 }
 func (r *fakeQuotaRepo) CountTeamsOwned(context.Context, uint) (int64, error) {
@@ -127,11 +134,53 @@ func (r *fakeQuotaRepo) IncrementDailyUsage(_ context.Context, userID uint, date
 	r.incrementLog = append(r.incrementLog, incCall{userID: userID, date: date, feature: feature})
 	return nil
 }
-func (r *fakeQuotaRepo) CountChains(context.Context, uint) (int64, error) {
+func (r *fakeQuotaRepo) CountPersonalChains(context.Context, uint) (int64, error) {
+	return r.chains, nil
+}
+func (r *fakeQuotaRepo) CountTeamChains(context.Context, uint) (int64, error) {
 	return r.chains, nil
 }
 func (r *fakeQuotaRepo) CountStepsByChain(_ context.Context, chainID uint) (int64, error) {
 	return r.stepsByChain[chainID], nil
+}
+func (r *fakeQuotaRepo) DeleteOldDailyUsage(context.Context, int) (int64, error) {
+	return 0, nil
+}
+
+func TestEffectiveLimit_NoLegacy(t *testing.T) {
+	u := &models.User{}
+	got := effectiveLimit(u, "max_prompts", 15)
+	if got != 15 {
+		t.Errorf("no legacy → expected plan value 15, got %d", got)
+	}
+}
+
+func TestEffectiveLimit_LegacyHigherThanPlan(t *testing.T) {
+	u := &models.User{LegacyQuotas: json.RawMessage(`{"max_prompts": 50}`)}
+	// Юзер был на старом Free (50 промптов), новый план Free=15. Должны
+	// сохранить ему 50 (grandfather против downgrade).
+	got := effectiveLimit(u, "max_prompts", 15)
+	if got != 50 {
+		t.Errorf("legacy 50 > plan 15 → expected 50, got %d", got)
+	}
+}
+
+func TestEffectiveLimit_LegacyLowerThanPlan(t *testing.T) {
+	u := &models.User{LegacyQuotas: json.RawMessage(`{"max_prompts": 50}`)}
+	// Юзер с legacy=50 апгрейднулся на Pro (plan=500). Должен получить 500,
+	// а не 50 — legacy не должен ограничивать апгрейд.
+	got := effectiveLimit(u, "max_prompts", 500)
+	if got != 500 {
+		t.Errorf("legacy 50 < plan 500 → expected 500 (upgrade), got %d", got)
+	}
+}
+
+func TestEffectiveLimit_LegacyEqualToPlan(t *testing.T) {
+	u := &models.User{LegacyQuotas: json.RawMessage(`{"max_prompts": 50}`)}
+	got := effectiveLimit(u, "max_prompts", 50)
+	if got != 50 {
+		t.Errorf("legacy == plan → expected 50, got %d", got)
+	}
 }
 
 // --- helpers ---
@@ -228,6 +277,88 @@ func TestCheckExtensionAndMCPQuota(t *testing.T) {
 
 	if err := svc.CheckMCPQuota(context.Background(), 1); err != nil {
 		t.Fatalf("mcp: unexpected error %v", err)
+	}
+}
+
+// --- MN-9: Boundary cases ---
+
+// Zero limit (например, plan ставит MaxChains=0 → создание любой цепочки заблокировано).
+func TestCheckChainQuota_ZeroLimit_AnyUsageBlocks(t *testing.T) {
+	user := &models.User{ID: 1, PlanID: "free"}
+	plan := &models.SubscriptionPlan{ID: "free", MaxChains: 0}
+	q := &fakeQuotaRepo{chains: 0}
+	svc := newService(user, plan, q)
+
+	err := svc.CheckChainQuota(context.Background(), 1)
+	var qe *QuotaExceededError
+	if !errors.As(err, &qe) {
+		t.Fatalf("expected QuotaExceededError на limit=0, got %v", err)
+	}
+	if qe.QuotaType != "chains" || qe.Limit != 0 {
+		t.Fatalf("expected chains/limit=0, got %+v", qe)
+	}
+}
+
+// Exactly at limit (used == limit) — границу не пересекаем; isWithinLimit strict <.
+func TestCheckPromptQuota_ExactlyAtLimit_Blocks(t *testing.T) {
+	user := &models.User{ID: 1, PlanID: "pro"}
+	plan := &models.SubscriptionPlan{ID: "pro", MaxPrompts: 100}
+	q := &fakeQuotaRepo{prompts: 100}
+	svc := newService(user, plan, q)
+
+	err := svc.CheckPromptQuota(context.Background(), 1)
+	var qe *QuotaExceededError
+	if !errors.As(err, &qe) {
+		t.Fatalf("expected QuotaExceeded на used=limit=100, got %v", err)
+	}
+	if qe.Used != 100 || qe.Limit != 100 {
+		t.Fatalf("expected used=100 limit=100, got %+v", qe)
+	}
+}
+
+// Огромный used (потенциальный uint overflow) — int64 holds 2^63-1; не должно crash.
+func TestCheckPromptQuota_HugeUsage_StillRejects(t *testing.T) {
+	user := &models.User{ID: 1, PlanID: "pro"}
+	plan := &models.SubscriptionPlan{ID: "pro", MaxPrompts: 100}
+	q := &fakeQuotaRepo{prompts: 1_000_000_000_000} // 10^12
+	svc := newService(user, plan, q)
+
+	err := svc.CheckPromptQuota(context.Background(), 1)
+	var qe *QuotaExceededError
+	if !errors.As(err, &qe) {
+		t.Fatalf("expected QuotaExceeded на огромном used, got %v", err)
+	}
+	if qe.Used <= qe.Limit {
+		t.Fatalf("expected used > limit, got used=%d limit=%d", qe.Used, qe.Limit)
+	}
+}
+
+// CheckChainStepQuota по chainID — разные цепочки имеют независимые счётчики.
+func TestCheckChainStepQuota_PerChainIndependent(t *testing.T) {
+	user := &models.User{ID: 1, PlanID: "pro"}
+	plan := &models.SubscriptionPlan{ID: "pro", MaxStepsPerChain: 10}
+	q := &fakeQuotaRepo{stepsByChain: map[uint]int64{
+		100: 10, // at limit
+		200: 5,  // within limit
+	}}
+	svc := newService(user, plan, q)
+
+	if err := svc.CheckChainStepQuota(context.Background(), 1, 100); err == nil {
+		t.Fatal("chain 100 at limit — expected error")
+	}
+	if err := svc.CheckChainStepQuota(context.Background(), 1, 200); err != nil {
+		t.Fatalf("chain 200 within limit — unexpected error %v", err)
+	}
+}
+
+// IsMaxTierUser возвращает false при ошибке загрузки плана (defence-in-depth).
+func TestIsMaxTierUser_PlanLoadError_False(t *testing.T) {
+	user := &models.User{ID: 1, PlanID: "nonexistent"} // план не зарегистрирован
+	plan := &models.SubscriptionPlan{ID: "max"}
+	svc := newService(user, plan, &fakeQuotaRepo{})
+
+	if got := svc.IsMaxTierUser(context.Background(), 1); got {
+		t.Fatal("ожидался false при невозможности загрузить план юзера, got true")
 	}
 }
 

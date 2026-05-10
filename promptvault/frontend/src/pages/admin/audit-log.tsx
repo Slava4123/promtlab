@@ -143,10 +143,10 @@ function DesktopAuditTable({ items }: { items: AuditEntry[] }) {
         <thead className="bg-muted/20 text-[0.72rem] uppercase tracking-wider text-muted-foreground">
           <tr>
             <th className="px-3 py-2 text-left font-medium">Время</th>
-            <th className="px-3 py-2 text-left font-medium">Admin</th>
-            <th className="px-3 py-2 text-left font-medium">Action</th>
-            <th className="px-3 py-2 text-left font-medium">Target</th>
-            <th className="px-3 py-2 text-left font-medium">After</th>
+            <th className="px-3 py-2 text-left font-medium">Администратор</th>
+            <th className="px-3 py-2 text-left font-medium">Действие</th>
+            <th className="px-3 py-2 text-left font-medium">Объект</th>
+            <th className="px-3 py-2 text-left font-medium">После</th>
             <th className="px-3 py-2 text-left font-medium">IP</th>
           </tr>
         </thead>

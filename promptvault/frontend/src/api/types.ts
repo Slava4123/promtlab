@@ -16,6 +16,9 @@ export interface User {
   has_unread_changelog?: boolean
   // Phase 14 M-10: opt-in email digest по Smart Insights.
   insight_emails_enabled?: boolean
+  // Pack E/F (миграции 000068+): юзер с grandfather-снапшотом старых лимитов.
+  // true → /pricing показывает баннер «На вашем тарифе сохранены прежние лимиты».
+  has_legacy_quotas?: boolean
 }
 
 export interface Tag {
@@ -505,6 +508,12 @@ export interface Plan {
   max_chains: number
   max_steps_per_chain: number
   max_saved_executions: number
+  /** Pack T (миграция 000070): team-pool квоты. Лимит на ресурсы внутри одной
+   * команды, считается против плана owner'а. Free 50/10/3, Pro 2000/400/20,
+   * Max 50000/5000/500. Решает «Free участник в Pro команде = bottleneck». */
+  max_team_prompts: number
+  max_team_collections: number
+  max_team_chains: number
   features: string[]
   sort_order: number
   is_active: boolean
@@ -539,6 +548,17 @@ export interface UsageSummary {
   ext_uses_today: QuotaInfo
   mcp_uses_today: QuotaInfo
   /** Phase 16: общее количество цепочек (не soft-deleted). */
+  chains: QuotaInfo
+}
+
+/** Pack TU: usage одной команды против её team-pool лимита. Лимиты — из плана
+ * owner'а команды. Возвращается из GET /api/teams/{slug}/usage. */
+export interface TeamUsageSummary {
+  team_id: number
+  team_name: string
+  owner_plan_id: PlanID
+  prompts: QuotaInfo
+  collections: QuotaInfo
   chains: QuotaInfo
 }
 

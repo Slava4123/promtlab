@@ -60,8 +60,8 @@ func TestLog_Success(t *testing.T) {
 
 	e := fake.entries[0]
 	assert.Equal(t, uint(1), e.AdminID)
-	assert.Equal(t, "grant_badge", e.Action)
-	assert.Equal(t, "user", e.TargetType)
+	assert.Equal(t, "grant_badge", string(e.Action))
+	assert.Equal(t, "user", string(e.TargetType))
 	require.NotNil(t, e.TargetID)
 	assert.Equal(t, uint(42), *e.TargetID)
 	assert.Equal(t, "127.0.0.1", e.IP)

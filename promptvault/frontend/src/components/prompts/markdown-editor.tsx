@@ -5,6 +5,7 @@ import { languages } from "@codemirror/language-data"
 import { oneDark } from "@codemirror/theme-one-dark"
 import { indentWithTab } from "@codemirror/commands"
 import { useThemeStore } from "@/stores/theme-store"
+import { templateVariableHighlight } from "@/lib/codemirror/template-variable-highlight"
 import { cn } from "@/lib/utils"
 
 interface MarkdownEditorProps {
@@ -14,6 +15,11 @@ interface MarkdownEditorProps {
   maxLength?: number
   className?: string
   minHeight?: string
+  // maxHeight — внешнее ограничение для предотвращения растягивания на
+  // длинных промптах. CodeMirror уважает CSS max-height на .cm-editor и
+  // включает internal scroll на .cm-scroller. По умолчанию "640px"
+  // для совместимости с предыдущим поведением.
+  maxHeight?: string
   readOnly?: boolean
   "aria-invalid"?: boolean
   "aria-describedby"?: string
@@ -88,6 +94,7 @@ export function MarkdownEditor({
   maxLength,
   className,
   minHeight = "280px",
+  maxHeight = "640px",
   readOnly = false,
   id,
   ...aria
@@ -116,6 +123,7 @@ export function MarkdownEditor({
       EditorView.lineWrapping,
       keymap.of([indentWithTab]),
       baseTheme,
+      templateVariableHighlight,
       ...(isDark ? [markdownStylingDark] : []),
     ],
     [isDark],
@@ -137,7 +145,7 @@ export function MarkdownEditor({
         extensions={extensions}
         theme={isDark ? oneDark : "light"}
         minHeight={minHeight}
-        maxHeight="640px"
+        maxHeight={maxHeight}
         editable={!readOnly}
         readOnly={readOnly}
         basicSetup={{

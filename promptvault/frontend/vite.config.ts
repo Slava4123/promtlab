@@ -1,6 +1,7 @@
 import path from "path"
 import { defineConfig } from "vitest/config"
-import react from "@vitejs/plugin-react"
+import react, { reactCompilerPreset } from "@vitejs/plugin-react"
+import babel from "@rolldown/plugin-babel"
 import tailwindcss from "@tailwindcss/vite"
 
 // Vite по умолчанию отдаёт статику из public/ с Content-Type без charset.
@@ -21,7 +22,22 @@ const utf8TextPlugin = {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), utf8TextPlugin],
+  // MN-55: React Compiler — auto-memoization компонентов/хуков.
+  // Убирает ручные useMemo/useCallback (см. branch-edge.tsx после MN-44 — теперь
+  // memoization идёт автоматически). Vite 8 + Rolldown использует oxc-transformer
+  // вместо babel, поэтому React Compiler подключается через @rolldown/plugin-babel
+  // как separate plugin с reactCompilerPreset (нативный путь от @vitejs/plugin-react).
+  //
+  // Откат: закомментировать `babel(...)` плагин — Compiler выключится, остальные
+  // плагины работают независимо.
+  plugins: [
+    react(),
+    babel({
+      presets: [reactCompilerPreset({ target: "19" })],
+    }),
+    tailwindcss(),
+    utf8TextPlugin,
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

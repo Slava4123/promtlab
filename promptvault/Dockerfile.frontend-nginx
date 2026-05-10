@@ -1,3 +1,19 @@
+# MN-74: split-stage Dockerfile.
+# Stage 1 (deps) — npm ci, кэшируется через GHA cache (не зависит от build-args).
+# Stage 2 (builder) — vite build с VITE_SENTRY_* literals (cache invalidate'ится
+#                     при изменении build-args, что и нужно — иначе stale bundle).
+# Stage 3 (runtime) — nginx с готовым dist/.
+#
+# Раньше один stage с no-cache: true пересобирал всё (включая npm ci ~60s)
+# на каждый deploy. Сейчас deps cache hit → ~5-10s, реальная работа только в builder.
+
+# === Stage 1: deps (cacheable) ===
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+# === Stage 2: builder (build-args invalidate cache only here) ===
 FROM node:22-alpine AS builder
 WORKDIR /app
 
@@ -10,8 +26,8 @@ ARG VITE_SENTRY_ENVIRONMENT=production
 ARG VITE_SENTRY_RELEASE=dev
 ARG VITE_SENTRY_TRACES_SAMPLE_RATE=0.0
 
+COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
 COPY frontend/ .
 
 # Vite читает env vars ТОЛЬКО из .env* файлов, не из Docker ENV / process.env.
@@ -26,6 +42,7 @@ RUN printf 'VITE_SENTRY_ENABLED=%s\nVITE_SENTRY_DSN=%s\nVITE_SENTRY_ENVIRONMENT=
     > .env.production && \
     npm run build
 
+# === Stage 3: runtime ===
 FROM jonasal/nginx-certbot:5-alpine
 ARG DOMAIN
 ARG SENTRY_DOMAIN

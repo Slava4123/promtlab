@@ -185,6 +185,55 @@ func TestInsightsComputeLoop_TeamScope_ListOwnedTeamsFails_ContinuesNextUser(t *
 	assert.Equal(t, 3, r.calls["UnusedPrompts"])
 }
 
+// MN-13: resilience при ошибке ComputeInsights для одного юзера.
+// Ожидание: остальные юзеры всё равно обработаются, loop не зависает,
+// слабые ошибки не пробрасываются наружу.
+func TestInsightsComputeLoop_PersonalComputeFails_ContinuesNextUser(t *testing.T) {
+	r := newTrackingRepo()
+	r.failOnUserID = 1 // ComputeInsights для user 1 упадёт
+	svc := newServiceForTest(r, true, true)
+
+	users := &fakeUsersForLoop{ids: []uint{1, 2, 3}}
+	teams := &fakeTeamsForLoop{ownedByUser: map[uint][]models.Team{}}
+
+	loop := NewInsightsComputeLoop(svc, users, teams, time.Hour)
+	loop.compute()
+
+	// User 1 — ошибка, user 2 и 3 — успешно. UnusedPrompts должна быть вызвана
+	// для всех трёх (errgroup parallelism=4 — все запускаются параллельно).
+	assert.Equal(t, 3, r.calls["UnusedPrompts"], "loop должен дойти до всех юзеров несмотря на ошибку")
+}
+
+// MN-13: ListMaxUsers вернул empty — loop корректно завершается без вызовов.
+func TestInsightsComputeLoop_NoMaxUsers_NoOp(t *testing.T) {
+	r := newTrackingRepo()
+	svc := newServiceForTest(r, true, true)
+
+	users := &fakeUsersForLoop{ids: []uint{}}
+	teams := &fakeTeamsForLoop{}
+
+	loop := NewInsightsComputeLoop(svc, users, teams, time.Hour)
+	loop.compute()
+
+	assert.Zero(t, r.calls["UnusedPrompts"], "пустой список — никаких вызовов не должно быть")
+}
+
+// MN-13: ListMaxUsers вернул ошибку — loop тихо завершается, метрика error
+// инкрементится, panic нет.
+func TestInsightsComputeLoop_ListMaxUsersError_NoPanic(t *testing.T) {
+	r := newTrackingRepo()
+	svc := newServiceForTest(r, true, true)
+
+	users := &fakeUsersForLoop{ids: nil, err: errors.New("db dropped")}
+	teams := &fakeTeamsForLoop{}
+
+	loop := NewInsightsComputeLoop(svc, users, teams, time.Hour)
+
+	// Не должна паниковать на nil-deref — функция должна корректно отдать early return.
+	require.NotPanics(t, func() { loop.compute() })
+	assert.Zero(t, r.calls["UnusedPrompts"])
+}
+
 func TestListOwnedTeams_InterfaceContract(t *testing.T) {
 	// Sanity-check: интерфейс TeamRepository содержит ListOwnedTeams.
 	teams := &fakeTeamsForLoop{ownedByUser: map[uint][]models.Team{1: {{ID: 99}}}}

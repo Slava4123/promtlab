@@ -2,6 +2,8 @@ package analytics
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,15 +19,39 @@ import (
 // проверить ветки feature-flag и pg_trgm probe.
 type trackingAnalyticsRepo struct {
 	calls map[string]int
+	mu    sync.Mutex
+	// MN-13: failOnUserID — если != 0, вызовы UnusedPrompts для этого юзера
+	// возвращают ошибку. Используется для resilience-теста errgroup'а
+	// (один failed user не должен блокировать остальные).
+	failOnUserID uint
 }
 
 func newTrackingRepo() *trackingAnalyticsRepo {
 	return &trackingAnalyticsRepo{calls: make(map[string]int)}
 }
 
-func (r *trackingAnalyticsRepo) UnusedPrompts(_ context.Context, _ uint, _ *uint, _ time.Time, _ int) ([]repo.PromptUsageRow, error) {
+func (r *trackingAnalyticsRepo) UnusedPrompts(_ context.Context, userID uint, _ *uint, _ time.Time, _ int) ([]repo.PromptUsageRow, error) {
+	r.mu.Lock()
 	r.calls["UnusedPrompts"]++
+	r.mu.Unlock()
+	if r.failOnUserID != 0 && userID == r.failOnUserID {
+		return nil, errors.New("compute insights failed for user " + uintToStr(userID))
+	}
 	return []repo.PromptUsageRow{{PromptID: 1, Title: "x", Uses: 0}}, nil
+}
+
+func uintToStr(v uint) string {
+	if v == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	i := len(buf)
+	for v > 0 {
+		i--
+		buf[i] = byte('0' + v%10)
+		v /= 10
+	}
+	return string(buf[i:])
 }
 func (r *trackingAnalyticsRepo) GetTrendingPrompts(_ context.Context, _ uint, _ *uint, _ float64, _ bool, _ int) ([]repo.TrendRow, error) {
 	r.calls["GetTrendingPrompts"]++

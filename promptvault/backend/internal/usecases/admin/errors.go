@@ -28,4 +28,10 @@ var (
 
 	// ErrEmailNotConfigured — попытка reset password при отключённом SMTP.
 	ErrEmailNotConfigured = errors.New("SMTP не настроен, невозможно отправить email")
+
+	// ErrFeedbackNotFound — отзыв с указанным id не найден.
+	ErrFeedbackNotFound = errors.New("отзыв не найден")
+
+	// ErrInvalidFeedbackStatus — передан неизвестный feedback_status.
+	ErrInvalidFeedbackStatus = errors.New("неверный статус отзыва")
 )

@@ -26,9 +26,17 @@ function colorFor(model: string): string {
   return DEFAULT_COLOR
 }
 
+// Backend агрегирует строки с пустой `prompts.model` под пустой строкой
+// (через COALESCE(model_used,'') в analytics_repo.go). Для пользователя
+// показываем расшифровку, а не голое "" или "Без модели", чтобы не было
+// неоднозначности — это промпты, в которых пользователь не выбрал модель
+// при создании, не legacy-данные и не баг.
 function labelFor(model: string): string {
-  return model === "" ? "Без модели" : model
+  return model === "" ? "Модель не указана" : model
 }
+
+const UNKNOWN_MODEL_HINT =
+  "Промпты, в которых при создании не указана target-модель в редакторе"
 
 // ModelSegmentationChart — простая горизонтальная полоса без тяжёлых recharts-
 // зависимостей. Показывает долю каждой модели в общем использовании + список
@@ -69,11 +77,13 @@ export function ModelSegmentationChart({ data, title = "Использовани
           {display.map((row) => {
             const pct = (row.uses / total) * 100
             const color = row.model === "__other__" ? DEFAULT_COLOR : colorFor(row.model)
+            const labelText = row.model === "__other__" ? "Другие" : labelFor(row.model)
+            const hint = row.model === "" ? ` — ${UNKNOWN_MODEL_HINT}` : ""
             return (
               <div
                 key={row.model}
                 style={{ width: `${pct}%`, backgroundColor: color }}
-                title={`${row.model === "__other__" ? "Другие" : labelFor(row.model)}: ${row.uses} (${pct.toFixed(1)}%)`}
+                title={`${labelText}: ${row.uses} (${pct.toFixed(1)}%)${hint}`}
               />
             )
           })}
@@ -85,14 +95,29 @@ export function ModelSegmentationChart({ data, title = "Использовани
             const pct = (row.uses / total) * 100
             const color = row.model === "__other__" ? DEFAULT_COLOR : colorFor(row.model)
             const label = row.model === "__other__" ? "Другие" : labelFor(row.model)
+            const isUnknown = row.model === ""
             return (
-              <li key={row.model} className="flex items-center gap-2 text-xs">
+              <li
+                key={row.model}
+                className="flex items-center gap-2 text-xs"
+                title={isUnknown ? UNKNOWN_MODEL_HINT : undefined}
+              >
                 <span
                   className="size-2.5 rounded-full"
                   style={{ backgroundColor: color }}
                   aria-hidden
                 />
-                <span className="flex-1 truncate">{label}</span>
+                <span className="flex-1 truncate">
+                  {label}
+                  {isUnknown && (
+                    <span
+                      className="ml-1 cursor-help text-muted-foreground/70"
+                      aria-label={UNKNOWN_MODEL_HINT}
+                    >
+                      ⓘ
+                    </span>
+                  )}
+                </span>
                 <span className="tabular-nums text-muted-foreground">
                   {row.uses.toLocaleString("ru")} · {pct.toFixed(0)}%
                 </span>

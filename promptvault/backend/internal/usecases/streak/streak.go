@@ -41,12 +41,14 @@ func (s *Service) GetStreak(ctx context.Context, userID uint, timezone string) (
 	}
 
 	today := todayInTimezone(timezone)
-
+	// MJ-29: LastActiveDate теперь *time.Time. Сравнение через date-aware
+	// helper'ы — нет риска timezone-offset сюрприза от драйвера.
+	lastDateStr := streak.LastActiveDateString()
 	return &StreakOutput{
 		CurrentStreak:  streak.CurrentStreak,
 		LongestStreak:  streak.LongestStreak,
-		LastActiveDate: streak.LastActiveDate,
-		ActiveToday:    streak.LastActiveDate == today,
+		LastActiveDate: lastDateStr,
+		ActiveToday:    lastDateStr == today,
 	}, nil
 }
 

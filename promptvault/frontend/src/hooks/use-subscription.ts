@@ -6,6 +6,7 @@ import {
   fetchPlans,
   fetchSubscription,
   fetchUsage,
+  fetchTeamUsage,
   postCheckout,
   postCancelSubscription,
   postDowngrade,
@@ -63,6 +64,17 @@ export function useUsage() {
   return useQuery({
     queryKey: ["subscription", "usage"],
     queryFn: fetchUsage,
+  })
+}
+
+// Pack TU: usage конкретной команды (team-pool квоты).
+// enabled=false если slug пустой — для condense-loading случая.
+export function useTeamUsage(slug: string | null | undefined) {
+  return useQuery({
+    queryKey: ["team", "usage", slug],
+    queryFn: () => fetchTeamUsage(slug!),
+    enabled: !!slug,
+    staleTime: 30_000,
   })
 }
 

@@ -3,7 +3,7 @@ import { render, screen, cleanup } from "@testing-library/react"
 import { ModelSegmentationChart } from "./model-segmentation-chart"
 
 // Регрессия на B.7 (segmentation по AI-моделям): пустой массив не должен
-// крашить, известные модели получают русскую обёртку «Без модели» для "",
+// крашить, известные модели получают русскую обёртку «Модель не указана» для "",
 // хвост (>6) агрегируется в «Другие».
 
 afterEach(() => cleanup())
@@ -34,9 +34,13 @@ describe("ModelSegmentationChart", () => {
     expect(screen.getByText(/10.*10%/)).toBeInTheDocument()
   })
 
-  it("пустая model заменяется на «Без модели»", () => {
+  it("пустая model заменяется на «Модель не указана» с подсказкой", () => {
     render(<ModelSegmentationChart data={[{ model: "", uses: 5 }]} />)
-    expect(screen.getByText("Без модели")).toBeInTheDocument()
+    expect(screen.getByText("Модель не указана")).toBeInTheDocument()
+    // Подсказка-объяснение доступна через aria-label на info-маркере.
+    expect(
+      screen.getByLabelText(/при создании не указана target-модель/i),
+    ).toBeInTheDocument()
   })
 
   it("более 6 моделей — хвост агрегируется в «Другие»", () => {

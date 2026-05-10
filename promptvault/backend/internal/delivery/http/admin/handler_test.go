@@ -81,6 +81,23 @@ func (f *fakeAdminSvc) ChangeTier(_ context.Context, _ uint, _, _ string) error 
 	return f.tierErr
 }
 
+// Заглушки для admin feedback методов — handler_test.go их не покрывает,
+// возвращают «not configured»/«not found», чтобы не проходили мимо доменной
+// проверки. Реальные тесты feedback-методов идут отдельно (см. feedback_repo_test.go
+// и/или admin_test.go). Достаточно того, что fake реализует интерфейс.
+func (f *fakeAdminSvc) ListFeedbacks(_ context.Context, _ repo.FeedbackListFilter) (*adminuc.FeedbackListResult, error) {
+	return &adminuc.FeedbackListResult{Items: []repo.FeedbackListItem{}, Page: 1, PageSize: 20}, nil
+}
+func (f *fakeAdminSvc) GetFeedbackDetail(_ context.Context, _ uint) (*repo.FeedbackDetail, error) {
+	return nil, adminuc.ErrFeedbackNotFound
+}
+func (f *fakeAdminSvc) UpdateFeedbackStatus(_ context.Context, _ uint, _ models.FeedbackStatus) error {
+	return adminuc.ErrFeedbackNotFound
+}
+func (f *fakeAdminSvc) DeleteFeedback(_ context.Context, _ uint) error {
+	return adminuc.ErrFeedbackNotFound
+}
+
 type fakeTOTPVerifier struct {
 	valid bool
 }

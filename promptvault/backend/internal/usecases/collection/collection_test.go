@@ -191,7 +191,7 @@ func TestCreate_PersonalSuccess(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, "Моя коллекция", c.Name)
-	assert.Equal(t, "#ff0000", c.Color)
+	assert.Equal(t, "#ff0000", string(c.Color))
 	assert.Equal(t, uint(10), c.UserID)
 	assert.Nil(t, c.TeamID)
 	cr.AssertCalled(t, "Create", ctx, mock.Anything)
@@ -206,7 +206,7 @@ func TestCreate_DefaultColor(t *testing.T) {
 	c, _, err := svc.Create(ctx, 10, "Тест", "", "", "", nil)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "#8b5cf6", c.Color)
+	assert.Equal(t, "#8b5cf6", string(c.Color))
 }
 
 func TestCreate_TeamEditorSuccess(t *testing.T) {
@@ -222,7 +222,7 @@ func TestCreate_TeamEditorSuccess(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, teamID, c.TeamID)
-	assert.Equal(t, "#8b5cf6", c.Color) // default color
+	assert.Equal(t, "#8b5cf6", string(c.Color)) // default color
 }
 
 func TestCreate_TeamViewerForbidden(t *testing.T) {
@@ -331,7 +331,7 @@ func TestUpdate_Success(t *testing.T) {
 	ctx := context.Background()
 
 	cr.On("GetByID", ctx, uint(1)).Return(&models.Collection{
-		ID: 1, UserID: 10, Name: "Старое", Color: "#000000",
+		ID: 1, UserID: 10, Name: "Старое", Color: models.HexColor("#000000"),
 	}, nil)
 	cr.On("Update", ctx, mock.AnythingOfType("*models.Collection")).Return(nil)
 
@@ -339,7 +339,7 @@ func TestUpdate_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, "Новое", c.Name)
-	assert.Equal(t, "#ff0000", c.Color)
+	assert.Equal(t, "#ff0000", string(c.Color))
 	assert.Equal(t, "📝", c.Icon)
 }
 

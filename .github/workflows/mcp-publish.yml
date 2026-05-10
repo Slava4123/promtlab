@@ -40,12 +40,27 @@ jobs:
 
       - name: Install mcp-publisher
         run: |
-          # Скачиваем последний linux_amd64 binary напрямую из GitHub Releases.
-          # Endpoint registry.modelcontextprotocol.io/install больше не работает (404).
-          LATEST=$(curl -fsSL https://api.github.com/repos/modelcontextprotocol/registry/releases/latest | jq -r .tag_name)
-          echo "mcp-publisher release: $LATEST"
+          # MN-69: pin к pinned version + sha256 verify. Раньше тянулся @latest
+          # без checksum — supply-chain vector (release переписали → подложили
+          # signed binary с backdoor → DNS-key утёк). Bump версии — через ENV
+          # MCP_PUBLISHER_VERSION в этом workflow.
+          VERSION="v1.3.0"
+          EXPECTED_SHA256="${MCP_PUBLISHER_SHA256:-}"
+          echo "mcp-publisher pinned: $VERSION"
           curl -fsSL -o mcp-publisher.tar.gz \
-            "https://github.com/modelcontextprotocol/registry/releases/download/${LATEST}/mcp-publisher_linux_amd64.tar.gz"
+            "https://github.com/modelcontextprotocol/registry/releases/download/${VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          if [ -n "$EXPECTED_SHA256" ]; then
+            ACTUAL_SHA256=$(sha256sum mcp-publisher.tar.gz | cut -d' ' -f1)
+            if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+              echo "::error::sha256 mismatch для mcp-publisher"
+              echo "  expected: $EXPECTED_SHA256"
+              echo "  actual:   $ACTUAL_SHA256"
+              exit 1
+            fi
+            echo "sha256 verified: $ACTUAL_SHA256"
+          else
+            echo "::warning::MCP_PUBLISHER_SHA256 не задан — skip integrity check (рекомендуется задать в repo secrets)"
+          fi
           tar -xzf mcp-publisher.tar.gz
           sudo mv mcp-publisher /usr/local/bin/mcp-publisher
           chmod +x /usr/local/bin/mcp-publisher
@@ -264,8 +279,29 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
     continue-on-error: true
     steps:
-      - name: Wait for downstream indexers
-        run: sleep 1800  # 30 мин
+      # MN-70: было `sleep 1800` (30 мин просто ожидания) — кушало GHA-минуты
+      # на каждый релиз и блокировало concurrency group. Заменили на active
+      # polling с шагом 60s + ранний выход. Если индексатор всё-таки не подхватил
+      # сервер за 5 минут — даём `::warning::` (не fail; sync до пары дней по
+      # документации каталогов).
+      - name: Wait for downstream indexers (active polling)
+        env:
+          PULSEMCP_API_KEY: ${{ secrets.PULSEMCP_API_KEY }}
+          PULSEMCP_TENANT_ID: ${{ secrets.PULSEMCP_TENANT_ID }}
+        run: |
+          for i in 1 2 3 4 5; do
+            sleep 60
+            RESP=$(curl -fsS \
+              ${PULSEMCP_API_KEY:+-H "X-API-Key: $PULSEMCP_API_KEY"} \
+              ${PULSEMCP_TENANT_ID:+-H "X-Tenant-ID: $PULSEMCP_TENANT_ID"} \
+              "https://api.pulsemcp.com/v0.1/servers?search=promtlab&limit=10" || echo '{}')
+            if echo "$RESP" | jq -e '.servers | length > 0' > /dev/null 2>&1; then
+              echo "PulseMCP подхватил после ~${i}-й минуты"
+              exit 0
+            fi
+            echo "PulseMCP attempt $i — пока не видно"
+          done
+          echo "::warning::PulseMCP не подхватил за 5 минут — sync может занять до пары дней"
 
       - name: Check PulseMCP
         env:

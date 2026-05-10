@@ -82,7 +82,7 @@ func (r *resourceHandlers) readCollections(ctx context.Context, req *sdkmcp.Read
 	for i, c := range colls {
 		result[i] = CollectionWithCountResponse{
 			CollectionResponse: CollectionResponse{
-				ID: c.ID, Name: c.Name, Description: c.Description, Color: c.Color, Icon: c.Icon,
+				ID: c.ID, Name: c.Name, Description: c.Description, Color: string(c.Color), Icon: c.Icon,
 			},
 			PromptCount: c.PromptCount,
 		}
@@ -109,7 +109,7 @@ func (r *resourceHandlers) readTags(ctx context.Context, req *sdkmcp.ReadResourc
 
 	result := make([]TagResponse, len(tags))
 	for i, t := range tags {
-		result[i] = TagResponse{ID: t.ID, Name: t.Name, Color: t.Color}
+		result[i] = TagResponse{ID: t.ID, Name: t.Name, Color: string(t.Color)}
 	}
 
 	data, err := json.Marshal(result)

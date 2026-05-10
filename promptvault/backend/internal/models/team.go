@@ -16,12 +16,33 @@ type Team struct {
 	BrandTagline      string `gorm:"column:brand_tagline;size:200" json:"brand_tagline,omitempty"`
 	BrandWebsite      string `gorm:"column:brand_website;size:500" json:"brand_website,omitempty"`
 	BrandPrimaryColor string `gorm:"column:brand_primary_color;size:7" json:"brand_primary_color,omitempty"`
-	// Phase 16-X: дискриминатор источника логотипа. 'url' — внешний URL в
-	// BrandLogoURL; 'file' — bytea в team_logo_files; 'none' — логотипа нет.
-	// Default 'url' (миграция 000060) для backward compat.
-	BrandLogoSource string    `gorm:"column:brand_logo_source;size:8;not null;default:url" json:"brand_logo_source,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	// Phase 16-X: дискриминатор источника логотипа. MN-27: typed LogoSource
+	// вместо string — compile-time защита от опечаток `if x == "files"`,
+	// параллель с CHECK constraint в миграции 000060.
+	BrandLogoSource LogoSource `gorm:"column:brand_logo_source;size:8;not null;default:url" json:"brand_logo_source,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+// LogoSource — источник лого команды (Phase 16-X).
+type LogoSource string
+
+const (
+	// LogoSourceURL — лого по внешнему URL в Team.BrandLogoURL.
+	LogoSourceURL LogoSource = "url"
+	// LogoSourceFile — лого как bytea в team_logo_files.
+	LogoSourceFile LogoSource = "file"
+	// LogoSourceNone — лого нет.
+	LogoSourceNone LogoSource = "none"
+)
+
+// IsValid проверяет что значение — допустимый источник.
+func (s LogoSource) IsValid() bool {
+	switch s {
+	case LogoSourceURL, LogoSourceFile, LogoSourceNone:
+		return true
+	}
+	return false
 }
 
 // BrandingInfo — DTO для публичного ответа /s/:token. Заполняется только

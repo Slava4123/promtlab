@@ -33,6 +33,24 @@ type Prompt struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+// NewPrompt — конструктор Prompt с обязательными полями (UserID, Title, Content)
+// и явными дефолтами. MN-32: до этого callers использовали struct literal —
+// легко забыть init поля, легко неправильно поставить Favorite/UsageCount.
+//
+// teamID — указатель: nil для personal, non-nil для team-цепочки.
+func NewPrompt(userID uint, title, content string, teamID *uint) *Prompt {
+	return &Prompt{
+		UserID:      userID,
+		TeamID:      teamID,
+		Title:       title,
+		Content:     content,
+		Favorite:    false,
+		UsageCount:  0,
+		IsPublic:    false,
+		SlugAliases: []string{},
+	}
+}
+
 // BeforeSave — для пустого Slug омитим колонку из INSERT/UPDATE.
 //
 // Партиальный unique-index `idx_prompts_slug ON prompts (slug) WHERE slug IS NOT NULL`

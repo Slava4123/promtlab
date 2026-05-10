@@ -18,11 +18,8 @@ func NewService(feedbacks repo.FeedbackRepository) *Service {
 
 // Submit валидирует и сохраняет обратную связь от пользователя.
 func (s *Service) Submit(ctx context.Context, input SubmitInput) (*SubmitResult, error) {
-	// Валидация типа
-	switch models.FeedbackType(input.Type) {
-	case models.FeedbackBug, models.FeedbackFeature, models.FeedbackOther:
-		// ok
-	default:
+	// Валидация типа через типизированный IsValid (MN-35).
+	if !models.FeedbackType(input.Type).IsValid() {
 		return nil, ErrInvalidType
 	}
 

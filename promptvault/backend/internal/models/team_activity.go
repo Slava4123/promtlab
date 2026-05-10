@@ -48,6 +48,15 @@ const (
 	ActivityMemberAdded       = "member.added"
 	ActivityMemberRemoved     = "member.removed"
 	ActivityRoleChanged       = "role.changed"
+
+	// Phase 16 (Prompt Chains): события для team-цепочек. Step-level
+	// (added/removed/updated) сознательно не трекаем — слишком noisy на
+	// длинных цепочках. Команда видит итоговую структуру через canvas.
+	ActivityChainCreated            = "chain.created"
+	ActivityChainUpdated            = "chain.updated"
+	ActivityChainDeleted            = "chain.deleted"
+	ActivityChainExecutionStarted   = "chain.execution_started"
+	ActivityChainExecutionCompleted = "chain.execution_completed"
 )
 
 // Target types для TargetType.
@@ -57,6 +66,7 @@ const (
 	TargetTag        = "tag"
 	TargetShare      = "share"
 	TargetMember     = "member"
+	TargetChain      = "chain"
 )
 
 // Anonymized actor values — используются в AnonymizeActor после удаления user.

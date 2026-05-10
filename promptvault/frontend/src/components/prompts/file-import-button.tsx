@@ -16,6 +16,24 @@ interface FileImportButtonProps {
  *
  * Accessibility: явный label, `aria-busy`, keyboard-friendly (Space/Enter).
  */
+// MN-42: pre-warm pdfjs worker (1.3 MB) на первом hover/focus кнопки.
+// До фикса: первый upload PDF блокировался на ~1-2 секунды загрузки worker'а
+// в момент клика. Теперь — preload параллельно с движением мыши, к click'у
+// worker уже в browser cache.
+//
+// Pre-warm idempotent (Promise resolves один раз) — повторные hover не
+// дублируют запрос.
+let pdfPrefetched = false
+function prefetchPdfParser() {
+  if (pdfPrefetched) return
+  pdfPrefetched = true
+  // Динамический import без await — runtime просто запустит загрузку chunk'а
+  // в фоне; ошибки игнорируются (попробуем снова при реальном click'е).
+  import("@/lib/file-import/parse-pdf").catch(() => {
+    pdfPrefetched = false
+  })
+}
+
 export function FileImportButton({
   onFileSelect,
   isImporting,
@@ -43,6 +61,8 @@ export function FileImportButton({
         variant="ghost"
         size="sm"
         onClick={handleClick}
+        onMouseEnter={prefetchPdfParser}
+        onFocus={prefetchPdfParser}
         disabled={disabled || isImporting}
         aria-busy={isImporting}
         aria-label="Загрузить файл с содержимым промпта"

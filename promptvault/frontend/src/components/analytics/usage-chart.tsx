@@ -1,22 +1,22 @@
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { DEFAULT_USAGE_CHART_CONFIG } from "@/components/analytics/usage-chart-config"
 import type { UsagePoint } from "@/api/analytics"
-
-const chartConfig = {
-  count: {
-    label: "Использования",
-    color: "var(--chart-1)",
-  },
-} satisfies ChartConfig
 
 interface UsageChartProps {
   title: string
   data: UsagePoint[]
   emptyLabel?: string
+  chartConfig?: ChartConfig
 }
 
-export function UsageChart({ title, data, emptyLabel = "Пока нет данных за этот период" }: UsageChartProps) {
+export function UsageChart({
+  title,
+  data,
+  emptyLabel = "Пока нет данных за этот период",
+  chartConfig = DEFAULT_USAGE_CHART_CONFIG,
+}: UsageChartProps) {
   // Backend даёт day как "2026-04-14T00:00:00Z" — оставляем ISO, для tick'ов формат короткий.
   const formattedData = data.map((p) => ({
     day: p.day.slice(0, 10), // "2026-04-14"

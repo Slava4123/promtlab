@@ -334,7 +334,10 @@ export function AppSidebar() {
       <SidebarFooter className="p-3">
         <FeedbackDialog />
         <UserMenu />
-        <div className="flex items-center justify-center gap-2 pt-1 text-[0.6rem] text-muted-foreground">
+        {/* flex-wrap: на узком sidebar 4 ссылки + 3 точки не влезают в одну
+            строку (overflow обрезал «Условия» слева). gap-x-1.5 + leading-tight
+            делают перенос компактным без больших вертикальных просветов. */}
+        <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 pt-1 text-center text-[0.6rem] leading-tight text-muted-foreground">
           <button onClick={() => go("/legal/terms")} className="hover:text-muted-foreground transition-colors">Условия</button>
           <span>&middot;</span>
           <button onClick={() => go("/legal/privacy")} className="hover:text-muted-foreground transition-colors">Конфиденциальность</button>

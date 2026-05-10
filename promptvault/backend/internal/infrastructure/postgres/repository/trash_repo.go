@@ -179,19 +179,34 @@ func (r *trashRepo) HardDeleteCollection(ctx context.Context, id uint) error {
 
 // ---------- Bulk operations ----------
 
+// promptsInChainsSubquery — Phase 16. Исключение для prompts, используемых в
+// активных цепочках. FK prompt_chain_steps.prompt_id без CASCADE дал бы 23503
+// при purge → вместо этого silent-skip. При CHAINS_ENABLED=false таблица
+// prompt_chain_steps пуста → подзапрос no-op.
+const promptsInChainsSubquery = `id NOT IN (SELECT DISTINCT prompt_id FROM prompt_chain_steps)`
+
 func (r *trashRepo) PurgeExpired(ctx context.Context, retentionDays int) (int64, error) {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 	var total int64
 
-	for _, model := range []any{&models.Prompt{}, &models.Collection{}} {
-		res := r.db.WithContext(ctx).Unscoped().
-			Where("deleted_at IS NOT NULL AND deleted_at < ?", cutoff).
-			Delete(model)
-		if res.Error != nil {
-			return total, res.Error
-		}
-		total += res.RowsAffected
+	// Prompts: skip те, что используются в цепочках (FK guard).
+	res := r.db.WithContext(ctx).Unscoped().
+		Where("deleted_at IS NOT NULL AND deleted_at < ?", cutoff).
+		Where(promptsInChainsSubquery).
+		Delete(&models.Prompt{})
+	if res.Error != nil {
+		return total, res.Error
 	}
+	total += res.RowsAffected
+
+	// Collections — chain не зависит от collection, обычный delete.
+	res = r.db.WithContext(ctx).Unscoped().
+		Where("deleted_at IS NOT NULL AND deleted_at < ?", cutoff).
+		Delete(&models.Collection{})
+	if res.Error != nil {
+		return total, res.Error
+	}
+	total += res.RowsAffected
 
 	return total, nil
 }
@@ -199,19 +214,30 @@ func (r *trashRepo) PurgeExpired(ctx context.Context, retentionDays int) (int64,
 func (r *trashRepo) EmptyTrash(ctx context.Context, userID uint, teamIDs []uint) (int64, error) {
 	var total int64
 
-	for _, model := range []any{&models.Prompt{}, &models.Collection{}} {
-		q := r.db.WithContext(ctx).Unscoped().Where("deleted_at IS NOT NULL")
-		if len(teamIDs) > 0 {
-			q = q.Where("team_id IN ?", teamIDs)
-		} else {
-			q = q.Where("user_id = ? AND team_id IS NULL", userID)
-		}
-		res := q.Delete(model)
-		if res.Error != nil {
-			return total, res.Error
-		}
-		total += res.RowsAffected
+	// Prompts с защитой от FK 23503.
+	q := r.db.WithContext(ctx).Unscoped().Where("deleted_at IS NOT NULL")
+	if len(teamIDs) > 0 {
+		q = q.Where("team_id IN ?", teamIDs)
+	} else {
+		q = q.Where("user_id = ? AND team_id IS NULL", userID)
 	}
+	res := q.Where(promptsInChainsSubquery).Delete(&models.Prompt{})
+	if res.Error != nil {
+		return total, res.Error
+	}
+	total += res.RowsAffected
+
+	q2 := r.db.WithContext(ctx).Unscoped().Where("deleted_at IS NOT NULL")
+	if len(teamIDs) > 0 {
+		q2 = q2.Where("team_id IN ?", teamIDs)
+	} else {
+		q2 = q2.Where("user_id = ? AND team_id IS NULL", userID)
+	}
+	res = q2.Delete(&models.Collection{})
+	if res.Error != nil {
+		return total, res.Error
+	}
+	total += res.RowsAffected
 
 	return total, nil
 }

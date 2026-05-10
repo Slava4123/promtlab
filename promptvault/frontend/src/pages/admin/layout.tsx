@@ -1,11 +1,19 @@
 import { NavLink, Outlet } from "react-router-dom"
-import { Loader2, Users, ClipboardList, Activity, ShieldCheck } from "lucide-react"
+import {
+  Loader2,
+  Users,
+  ClipboardList,
+  Activity,
+  ShieldCheck,
+  MessageSquare,
+} from "lucide-react"
 
 import { useAdminGuard } from "@/hooks/admin/use-admin-guard"
 import { cn } from "@/lib/utils"
 
 const tabs = [
   { path: "/admin/users", label: "Пользователи", icon: Users },
+  { path: "/admin/feedbacks", label: "Отзывы", icon: MessageSquare },
   { path: "/admin/audit", label: "Журнал", icon: ClipboardList },
   { path: "/admin/health", label: "Здоровье", icon: Activity },
   { path: "/admin/totp", label: "TOTP", icon: ShieldCheck },

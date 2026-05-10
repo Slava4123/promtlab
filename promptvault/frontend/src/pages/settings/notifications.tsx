@@ -52,7 +52,7 @@ export default function SettingsNotificationsPage() {
       <div className="rounded-lg border p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <p className="font-medium">Smart Insights digest</p>
+            <p className="font-medium">Дайджест умных инсайтов</p>
             <p className="text-sm text-muted-foreground">
               Раз в неделю будем присылать краткую сводку изменений в инсайтах:
               неиспользуемые промпты, растущие, возможные дубликаты. Доступно

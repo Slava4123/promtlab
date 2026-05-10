@@ -258,7 +258,7 @@ func (s *Service) GetPublicPrompt(ctx context.Context, token string, meta ViewMe
 	p := &link.Prompt
 	tags := make([]PublicTag, len(p.Tags))
 	for i, t := range p.Tags {
-		tags[i] = PublicTag{Name: t.Name, Color: t.Color}
+		tags[i] = PublicTag{Name: t.Name, Color: string(t.Color)}
 	}
 
 	info := &PublicPromptInfo{

@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // UserRole — роль пользователя для RBAC. Хранится в БД как VARCHAR(20)
 // с CHECK-constraint (см. миграцию 000016), в Go представлена как typed string
@@ -59,10 +62,38 @@ type User struct {
 	// включить email-уведомления по Smart Insights в настройках.
 	InsightEmailsEnabled bool `gorm:"column:insight_emails_enabled;not null;default:false" json:"insight_emails_enabled"`
 
+	// LegacyQuotas — grandfather-снапшот старых лимитов для юзеров,
+	// зарегистрированных до изменения тарифа. Ключи = имена колонок
+	// SubscriptionPlan ("max_prompts", "max_ext_uses_daily", ...). Значение
+	// JSON-числа. При проверке квоты Service.effectiveLimit использует
+	// значение отсюда если есть, иначе из плана. Пустой {} = новый юзер
+	// получает текущие лимиты плана. См. миграции 000068+ (Pack E/F).
+	LegacyQuotas json.RawMessage `gorm:"column:legacy_quotas;type:jsonb;not null;default:'{}'" json:"-"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
 	LinkedAccounts []LinkedAccount `gorm:"foreignKey:UserID" json:"linked_accounts,omitempty"`
+}
+
+// NewUser — конструктор User с обязательными полями (email, name, passwordHash)
+// и явными дефолтами для критичных enum-полей. MN-32: до этого callers
+// собирали через struct literal — легко промахнуться (Status, Role default'ы).
+//
+// passwordHash может быть пустым — для OAuth-only регистрации.
+// referredBy — referral code пригласившего, "" если без реферала.
+func NewUser(email, name, passwordHash, referredBy string) *User {
+	return &User{
+		Email:                email,
+		Name:                 name,
+		PasswordHash:         passwordHash,
+		Role:                 RoleUser,
+		Status:               StatusActive,
+		PlanID:               "free",
+		EmailVerified:        false,
+		ReferredBy:           referredBy,
+		InsightEmailsEnabled: false,
+	}
 }
 
 func (u *User) HasPassword() bool {
@@ -79,4 +110,31 @@ func (u *User) IsAdmin() bool {
 // IsActive — статус аккаунта, должен проверяться при login.
 func (u *User) IsActive() bool {
 	return u.Status == StatusActive
+}
+
+// LegacyLimit возвращает grandfather-лимит для указанного поля плана,
+// если он сохранён в users.legacy_quotas. ok=false → юзер получает
+// актуальный лимит из своего плана (новые регистрации, или поля без
+// grandfather'а). Безопасно к пустому/невалидному JSON — возвращает
+// (0, false), не паникует.
+//
+// field соответствует имени колонки SubscriptionPlan, например
+// "max_prompts", "max_ext_uses_daily", "max_mcp_uses_daily".
+func (u *User) LegacyLimit(field string) (int, bool) {
+	if len(u.LegacyQuotas) == 0 {
+		return 0, false
+	}
+	var m map[string]json.Number
+	if err := json.Unmarshal(u.LegacyQuotas, &m); err != nil {
+		return 0, false
+	}
+	v, ok := m[field]
+	if !ok {
+		return 0, false
+	}
+	n, err := v.Int64()
+	if err != nil {
+		return 0, false
+	}
+	return int(n), true
 }

@@ -42,21 +42,29 @@ const planDescriptions: Record<string, string> = {
 
 type Billing = "monthly" | "yearly"
 
-// Русское склонение для слова «сохранённый» — единственный/мн.ч. родительный.
-// 1 → сохранённый, 2-4 → сохранённых, 5+ / 11-14 → сохранённых.
-function plurExec(n: number): string {
-  const mod10 = n % 10, mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return "сохранённый"
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "сохранённых"
-  return "сохранённых"
-}
-
 // Форматируем число с разделителем разрядов (10 000, 1 000). Если поле
 // отсутствует в ответе backend'а (старый бинарник без свежих миграций) —
 // показываем «—» вместо краша через toLocaleString на undefined.
 function formatNumber(value: number | undefined | null): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "—"
   return value.toLocaleString("ru-RU")
+}
+
+// Склонение существительного после числа в родительном падеже (для конструкций
+// «до N …»): 1 → singular, 2+ → plural. Учитываем 11-14 как plural.
+// Используется для «до 1 цепочки» / «до 5 цепочек», «до 1 шага» / «до 10 шагов».
+function pluralAfterDo(n: number, singular: string, plural: string): string {
+  if (n % 10 === 1 && n % 100 !== 11) return singular
+  return plural
+}
+
+// Стандартное русское счётное склонение: 1 → one, 2-4 → few, 5+ / 11-14 → many.
+// Используется для «1 запуск / 2 запуска / 5 запусков».
+function plural3(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10, mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return one
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few
+  return many
 }
 
 function planFeatures(plan: Plan): string[] {
@@ -66,37 +74,52 @@ function planFeatures(plan: Plan): string[] {
   features.push(`До ${formatNumber(plan.max_collections)} коллекций`)
   const teams = plan.max_teams ?? 0
   features.push(
-    `${formatNumber(plan.max_teams)} ${teams === 1 ? "команда" : "команд"} (до ${formatNumber(plan.max_team_members)} участников)`,
+    `${formatNumber(plan.max_teams)} ${teams === 1 ? "команда" : "команд"} по ${formatNumber(plan.max_team_members)} участников в каждой`,
   )
   // Phase 16-Y: квот на share-ссылки больше нет — они живут по TTL (30 дней
-  // default, до 1 года). Анти-абуз — общий per-user rate-limit на /api.
-  features.push(`Публичные ссылки на промпты с TTL 30 дней`)
-  features.push(`${formatNumber(plan.max_ext_uses_daily)} вставок/день (расширение)`)
-  features.push(`${formatNumber(plan.max_mcp_uses_daily)} MCP-вызовов/день`)
+  // default для Free/Pro). Max получает бессрочные ссылки (NULL expires_at).
+  // Разводим текст по тарифам, чтобы Max-юзер видел эту ценность на /pricing.
+  if (base === "max") {
+    features.push("Делитесь промптами по ссылке — без срока")
+  } else {
+    features.push("Делитесь промптами по ссылке (30 дней)")
+  }
+  features.push(`${formatNumber(plan.max_ext_uses_daily)} вставок в день через расширение`)
+  features.push(`${formatNumber(plan.max_mcp_uses_daily)} MCP-вызовов в день`)
   // Phase 16: chains только при включённом флаге — синхронно с App.tsx и
   // app-sidebar.tsx, чтобы dark launch не объявлял фичу заранее.
   if (import.meta.env.VITE_CHAINS_ENABLED === "true") {
+    const chainsWord = pluralAfterDo(plan.max_chains, "цепочки", "цепочек")
+    const stepsWord = pluralAfterDo(plan.max_steps_per_chain, "шага", "шагов")
     features.push(
-      `Цепочки: до ${formatNumber(plan.max_chains)} штук × ${formatNumber(plan.max_steps_per_chain)} шагов`,
+      `До ${formatNumber(plan.max_chains)} ${chainsWord}, до ${formatNumber(plan.max_steps_per_chain)} ${stepsWord} в каждой`,
     )
     if (plan.max_saved_executions > 0) {
-      const word = plurExec(plan.max_saved_executions)
-      features.push(`История запусков цепочек: ${formatNumber(plan.max_saved_executions)} ${word}`)
+      const runsWord = plural3(plan.max_saved_executions, "запуск", "запуска", "запусков")
+      features.push(`История цепочек: ${formatNumber(plan.max_saved_executions)} ${runsWord}`)
     }
     if (base === "max") {
       features.push("Условные ветвления в цепочках")
     }
   }
+  // Pack T (миграция 000070): отдельный team-pool лимит. До этого квоты
+  // считали personal+team вместе — Free участник в Pro команде упирался в свой
+  // лимит 15. Теперь команда имеет собственный pool по плану owner'а.
+  // «На каждую команду» — явный per-team scope, не суммарный по всем.
+  features.push(
+    `На каждую команду: до ${formatNumber(plan.max_team_prompts)} промптов и ${formatNumber(plan.max_team_collections)} коллекций`,
+  )
+
   // Phase 14: retention аналитики и флагманские фичи.
   if (base === "free") {
-    features.push("Аналитика: 7 дней истории")
+    features.push("Аналитика за последние 7 дней")
   } else if (base === "pro") {
-    features.push("Аналитика: 90 дней истории + экспорт в CSV")
-    features.push("Активность команды и история промптов")
+    features.push("Аналитика за 90 дней + экспорт в CSV")
+    features.push("Лента активности команды")
   } else if (base === "max") {
-    features.push("Аналитика: 365 дней истории + экспорт в CSV + API")
-    features.push("Умные инсайты: забытые, популярные, дубликаты")
-    features.push("Брендинг публичных ссылок (логотип команды)")
+    features.push("Аналитика за год: экспорт в CSV и доступ через API")
+    features.push("Умные подсказки: забытые промпты, популярные, дубликаты")
+    features.push("Логотип команды на публичных ссылках")
   }
   if (plan.features.includes("priority_support")) {
     features.push("Приоритетная поддержка")
@@ -146,6 +169,11 @@ export default function Pricing() {
   const checkout = useCheckout()
   const downgrade = useDowngrade()
   const currentPlanId = useAuthStore((s) => s.user?.plan_id ?? "free") as PlanID
+  // Pack E/F: юзер с grandfather-снапшотом старых лимитов. Показываем
+  // баннер чтобы не путал «На Free 15 промптов» с тем что у него 47 (его
+  // legacy-лимит 50, не сократился). Баннер гасит вопрос «почему у меня
+  // больше чем в публичном описании тарифа».
+  const hasLegacyQuotas = useAuthStore((s) => s.user?.has_legacy_quotas ?? false)
 
   // Билинг-цикл: если текущий план юзера yearly — открываем сразу yearly-таб.
   const [billing, setBilling] = useState<Billing>(() =>
@@ -193,6 +221,22 @@ export default function Pricing() {
 
       {plans && (
         <>
+          {hasLegacyQuotas && (
+            <div className="mb-6 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm">
+              <p className="font-medium text-emerald-700 dark:text-emerald-400">
+                На вашем тарифе сохранены прежние лимиты
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Числа в карточках ниже — для новых регистраций. Ваш аккаунт продолжит
+                работать со старыми, более высокими лимитами. Они отражены в разделе{" "}
+                <a href="/settings/subscription" className="underline hover:text-foreground">
+                  Настройки → Подписка
+                </a>
+                .
+              </p>
+            </div>
+          )}
+
           {/* Billing toggle: Monthly | Yearly −10% */}
           <div className="mb-6 flex justify-center">
             <div

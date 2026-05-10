@@ -3,7 +3,6 @@ package share
 import (
 	"time"
 
-	"promptvault/internal/models"
 	shareuc "promptvault/internal/usecases/share"
 )
 
@@ -18,14 +17,27 @@ type ShareLinkResponse struct {
 }
 
 type PublicPromptResponse struct {
-	Title     string               `json:"title"`
-	Content   string               `json:"content"`
-	Model     string               `json:"model,omitempty"`
-	Tags      []PublicTagResponse  `json:"tags"`
-	Author    AuthorResponse       `json:"author"`
-	CreatedAt time.Time            `json:"created_at"`
-	UpdatedAt time.Time            `json:"updated_at"`
-	Branding  *models.BrandingInfo `json:"branding,omitempty"`
+	Title     string              `json:"title"`
+	Content   string              `json:"content"`
+	Model     string              `json:"model,omitempty"`
+	Tags      []PublicTagResponse `json:"tags"`
+	Author    AuthorResponse      `json:"author"`
+	CreatedAt time.Time           `json:"created_at"`
+	UpdatedAt time.Time           `json:"updated_at"`
+	// MN-31: BrandingDTO вместо *models.BrandingInfo. Раньше DTO leak — JSON
+	// shape публичного API зависит от GORM-модели; миграция/добавление поля
+	// в модель меняет contract без явного версионирования.
+	Branding *BrandingDTO `json:"branding,omitempty"`
+}
+
+// BrandingDTO — public-shape брендинг информация для /s/:token.
+// MN-31: явный transport-DTO, JSON-теги стабильны независимо от models.BrandingInfo.
+type BrandingDTO struct {
+	LogoSource       string `json:"logo_source,omitempty"`
+	EffectiveLogoURL string `json:"effective_logo_url,omitempty"`
+	Tagline          string `json:"tagline,omitempty"`
+	Website          string `json:"website,omitempty"`
+	PrimaryColor     string `json:"primary_color,omitempty"`
 }
 
 type PublicTagResponse struct {
@@ -55,6 +67,16 @@ func toPublicPromptResponse(info *shareuc.PublicPromptInfo) PublicPromptResponse
 	for i, t := range info.Tags {
 		tags[i] = PublicTagResponse{Name: t.Name, Color: t.Color}
 	}
+	var branding *BrandingDTO
+	if info.Branding != nil {
+		branding = &BrandingDTO{
+			LogoSource:       info.Branding.LogoSource,
+			EffectiveLogoURL: info.Branding.EffectiveLogoURL,
+			Tagline:          info.Branding.Tagline,
+			Website:          info.Branding.Website,
+			PrimaryColor:     info.Branding.PrimaryColor,
+		}
+	}
 	return PublicPromptResponse{
 		Title:     info.Title,
 		Content:   info.Content,
@@ -63,6 +85,6 @@ func toPublicPromptResponse(info *shareuc.PublicPromptInfo) PublicPromptResponse
 		Author:    AuthorResponse{Name: info.Author.Name, AvatarURL: info.Author.AvatarURL},
 		CreatedAt: info.CreatedAt,
 		UpdatedAt: info.UpdatedAt,
-		Branding:  info.Branding,
+		Branding:  branding,
 	}
 }

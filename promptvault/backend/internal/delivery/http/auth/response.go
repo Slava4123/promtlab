@@ -33,6 +33,10 @@ type UserResponse struct {
 	Status                string     `json:"status"`
 	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at,omitempty"`
 	HasUnreadChangelog    bool       `json:"has_unread_changelog"`
+	// HasLegacyQuotas — true если у юзера есть grandfather-снапшот старых
+	// лимитов (после миграций 000068+). Фронт использует флаг для баннера
+	// «На вашем тарифе сохранены прежние лимиты» на /pricing.
+	HasLegacyQuotas bool `json:"has_legacy_quotas,omitempty"`
 }
 
 func NewUserResponse(u models.User) UserResponse {
@@ -48,7 +52,28 @@ func NewUserResponse(u models.User) UserResponse {
 		Role:                  string(u.Role),
 		Status:                string(u.Status),
 		OnboardingCompletedAt: u.OnboardingCompletedAt,
+		HasLegacyQuotas:       hasLegacyQuotas(u),
 	}
+}
+
+// hasLegacyQuotas — true если legacy_quotas содержит хотя бы один ключ.
+// Пустой `{}` или невалидный JSON → false (без баннера).
+func hasLegacyQuotas(u models.User) bool {
+	// Пустая колонка / `null` / `{}` дают len в 0..2 байта — для них пропускаем
+	// json.Unmarshal как fast-path.
+	if len(u.LegacyQuotas) <= 2 {
+		return false
+	}
+	// Проверяем на наличие хотя бы одного ключа без полного парсинга.
+	// Любой JSON-объект с ключами содержит ":". Допустимый false-positive
+	// (двоеточие внутри строкового значения) тут невозможен — мы кладём
+	// только числовые лимиты, не строки.
+	for _, b := range u.LegacyQuotas {
+		if b == ':' {
+			return true
+		}
+	}
+	return false
 }
 
 func NewAuthResponse(u models.User, tokens *authuc.TokenPair) AuthResponse {

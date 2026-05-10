@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -12,9 +13,15 @@ import (
 	subscriptionuc "promptvault/internal/usecases/subscription"
 )
 
+// webhookService — узкий интерфейс, зависимость handler'а от subscription
+// usecase. MN-2: позволяет mock'ать в handler_test.go без real DB/payment.
+type webhookService interface {
+	HandleWebhook(ctx context.Context, provider string, params map[string]string) error
+}
+
 // Handler — HTTP-транспорт для обработки webhook-уведомлений от платёжных провайдеров.
 type Handler struct {
-	svc *subscriptionuc.Service
+	svc webhookService
 }
 
 // NewHandler создаёт handler webhook'ов.

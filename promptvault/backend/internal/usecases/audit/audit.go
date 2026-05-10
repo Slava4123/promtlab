@@ -51,8 +51,8 @@ func (s *Service) Log(ctx context.Context, in LogInput) error {
 
 	entry := &models.AuditLog{
 		AdminID:     info.AdminID,
-		Action:      string(in.Action),
-		TargetType:  string(in.TargetType),
+		Action:      in.Action,
+		TargetType:  in.TargetType,
 		TargetID:    in.TargetID,
 		BeforeState: before,
 		AfterState:  after,

@@ -78,13 +78,24 @@ func (r *teamRepo) ListOwnedTeams(ctx context.Context, userID uint) ([]models.Te
 	return teams, err
 }
 
+// ListByUserIDWithRolesAndCounts — список команд юзера с его ролью и общим
+// количеством участников каждой.
+//
+// MN-38: раньше выполнялось через `LEFT JOIN (SELECT … GROUP BY team_id) mc`
+// — PostgreSQL читал ВСЕ team_members и группировал перед join'ом. На большой
+// базе с 1000+ юзерами это full scan team_members. Теперь LATERAL JOIN считает
+// COUNT только для команд, в которых состоит юзер (типично 1-5 команд) —
+// O(K) вместо O(N), где K=число команд юзера, N=общее число team_members.
+//
+// Index `team_members(team_id)` обеспечивает O(log N + M) на каждый LATERAL
+// invocation, где M = размер команды.
 func (r *teamRepo) ListByUserIDWithRolesAndCounts(ctx context.Context, userID uint) ([]models.TeamWithRoleAndCount, error) {
 	var results []models.TeamWithRoleAndCount
 	err := r.db.WithContext(ctx).
 		Table("teams").
 		Select("teams.*, tm.role, COALESCE(mc.cnt, 0) AS member_count").
 		Joins("JOIN team_members tm ON tm.team_id = teams.id AND tm.user_id = ?", userID).
-		Joins("LEFT JOIN (SELECT team_id, COUNT(*) AS cnt FROM team_members GROUP BY team_id) mc ON mc.team_id = teams.id").
+		Joins("LEFT JOIN LATERAL (SELECT COUNT(*) AS cnt FROM team_members WHERE team_id = teams.id) mc ON TRUE").
 		Order("teams.name").
 		Scan(&results).Error
 	return results, err

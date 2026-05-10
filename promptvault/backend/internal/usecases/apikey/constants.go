@@ -46,6 +46,12 @@ var KnownTools = map[string]bool{
 	// Phase 14 B.4 — HTTP analytics через API-key (Max-only; проверка плана в handler'ах).
 	// Псевдо-tool: не MCP, но используется как allowed_tools scope.
 	"analytics_read": true,
+
+	// Phase 16 — Prompt Chains.
+	"list_chains":           true,
+	"get_chain":             true,
+	"start_chain_execution": true,
+	"advance_chain_step":    true,
 }
 
 // IsKnownTool проверяет, существует ли tool с таким именем.

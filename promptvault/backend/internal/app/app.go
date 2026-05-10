@@ -89,6 +89,7 @@ type App struct {
 	tagHandler        *taghttp.Handler
 	searchHandler     *searchhttp.Handler
 	teamHandler       *teamhttp.Handler
+	teamUsageHandler  *teamhttp.UsageHandler
 	userHandler       *userhttp.Handler
 	starterHandler    *starterhttp.Handler
 	trashHandler      *trashhttp.Handler
@@ -128,6 +129,7 @@ type App struct {
 	// Phase 14: audit + analytics фоновые воркеры.
 	activityCleanupLoop *analyticsuc.CleanupLoop
 	insightsLoop        *analyticsuc.InsightsComputeLoop
+	quotaCleanupLoop    *quotauc.CleanupLoop
 	feedbackRL        *ratelimit.Limiter[uint]
 	// insightsRL — 1 refresh инсайтов в час на юзера (POST /api/analytics/insights/refresh).
 	insightsRL *ratelimit.Limiter[uint]
@@ -250,6 +252,9 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	// Phase 16-Y: тот же loop чистит expired share-ссылки (grace 30d после expires_at).
 	activityCleanupLoop := analyticsuc.NewCleanupLoop(activityRepo, analyticsRepo, shareLinkRepo, pick(24*time.Hour, 1*time.Minute))
 	insightsLoop := analyticsuc.NewInsightsComputeLoop(analyticsSvc, userRepo, teamRepo, pick(24*time.Hour, 1*time.Minute))
+	// Quota cleanup — отдельный loop под daily_feature_usage (read-path читает
+	// только сегодняшний день, всё старше DefaultRetentionDays = balast).
+	quotaCleanupLoop := quotauc.NewCleanupLoop(quotaRepo, pick(24*time.Hour, 1*time.Minute))
 
 	promptSvc := promptuc.NewService(promptRepo, tagRepo, collectionRepo, versionRepo, teamRepo, pinRepo, streakSvc, badgeSvc, quotaSvc)
 	promptSvc.SetActivity(activitySvc)
@@ -444,6 +449,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		tagHandler: taghttp.NewHandler(tagSvc),
 		searchHandler:     searchhttp.NewHandler(searchSvc),
 		teamHandler:       teamhttp.NewHandler(teamSvc),
+		teamUsageHandler:  teamhttp.NewUsageHandler(teamSvc, quotaSvc),
 		userHandler:       userhttp.NewHandler(userSvc),
 		starterHandler:    starterhttp.NewHandler(starterSvc),
 		trashHandler:      trashhttp.NewHandler(trashSvc),
@@ -498,6 +504,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		streakReminderLoop:   streakReminderLoop,
 		activityCleanupLoop:  activityCleanupLoop,
 		insightsLoop:         insightsLoop,
+		quotaCleanupLoop:     quotaCleanupLoop,
 		purgeLoop:         purgeLoop,
 		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour, ratelimit.UintHash),
 		insightsRL:        ratelimit.NewLimiterWithWindow[uint](1, time.Hour, ratelimit.UintHash),

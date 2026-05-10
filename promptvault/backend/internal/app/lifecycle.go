@@ -16,6 +16,7 @@ func (a *App) StartBackground() {
 	a.streakReminderLoop.Start()
 	a.activityCleanupLoop.Start()
 	a.insightsLoop.Start()
+	a.quotaCleanupLoop.Start()
 }
 
 // Shutdown останавливает все loops и ждёт фоновых задач auth Service
@@ -29,6 +30,7 @@ func (a *App) Shutdown(timeout time.Duration) {
 	a.streakReminderLoop.Stop()
 	a.activityCleanupLoop.Stop()
 	a.insightsLoop.Stop()
+	a.quotaCleanupLoop.Stop()
 	a.feedbackRL.Close()
 	a.authSvc.WaitBackground(timeout)
 }

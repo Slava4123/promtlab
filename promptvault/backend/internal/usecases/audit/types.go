@@ -1,30 +1,35 @@
 package audit
 
-// Action — фиксированный список типов административных действий.
-// Используется как значение audit_log.action. Новые actions добавляются здесь,
-// чтобы избежать опечаток и облегчить full-text поиск по коду.
-type Action string
+import "promptvault/internal/models"
 
-const (
-	ActionGrantBadge     Action = "grant_badge"
-	ActionRevokeBadge    Action = "revoke_badge"
-	ActionFreezeUser     Action = "freeze_user"
-	ActionUnfreezeUser   Action = "unfreeze_user"
-	ActionResetPassword  Action = "reset_password"
-	ActionChangeTier     Action = "change_tier"
-	ActionPromoteAdmin   Action = "promote_admin"
-	ActionDemoteAdmin    Action = "demote_admin"
-	ActionEnrollTOTP     Action = "enroll_totp"
-	ActionDisableTOTP    Action = "disable_totp"
-	ActionRegenBackupCodes Action = "regen_backup_codes"
+// MN-30: типы Action / TargetType переехали в models/audit_log.go вместе
+// с самой моделью AuditLog. Здесь оставлены type-aliases для backward
+// compatibility callers'ов и константы — единый источник правды для значений.
+type (
+	Action     = models.AuditAction
+	TargetType = models.AuditTargetType
 )
 
-// TargetType — тип сущности над которой совершается админ-действие.
-type TargetType string
+const (
+	ActionGrantBadge           Action = "grant_badge"
+	ActionRevokeBadge          Action = "revoke_badge"
+	ActionFreezeUser           Action = "freeze_user"
+	ActionUnfreezeUser         Action = "unfreeze_user"
+	ActionResetPassword        Action = "reset_password"
+	ActionChangeTier           Action = "change_tier"
+	ActionPromoteAdmin         Action = "promote_admin"
+	ActionDemoteAdmin          Action = "demote_admin"
+	ActionEnrollTOTP           Action = "enroll_totp"
+	ActionDisableTOTP          Action = "disable_totp"
+	ActionRegenBackupCodes     Action = "regen_backup_codes"
+	ActionUpdateFeedbackStatus Action = "update_feedback_status"
+	ActionDeleteFeedback       Action = "delete_feedback"
+)
 
 const (
 	TargetUser       TargetType = "user"
 	TargetPrompt     TargetType = "prompt"
 	TargetCollection TargetType = "collection"
 	TargetBadge      TargetType = "badge"
+	TargetFeedback   TargetType = "feedback"
 )

@@ -141,3 +141,32 @@ type HealthResponse struct {
 	ActiveUsers int64     `json:"active_users"`
 	FrozenUsers int64     `json:"frozen_users"`
 }
+
+// FeedbackResponse — элемент GET /api/admin/feedbacks и GET /admin/feedbacks/{id}.
+// Поля идентичны repo.FeedbackListItem, но shape стабилизирован JSON-tags
+// для admin frontend (snake_case + типы JSON-ready).
+type FeedbackResponse struct {
+	ID        uint   `json:"id"`
+	UserID    uint   `json:"user_id"`
+	UserEmail string `json:"user_email"`
+	UserName  string `json:"user_name,omitempty"`
+	Type      string `json:"type"`
+	Status    string `json:"status"`
+	Message   string `json:"message"`
+	PageURL   string `json:"page_url,omitempty"`
+	CreatedAt string `json:"created_at"` // RFC3339
+}
+
+func newFeedbackResponse(f repo.FeedbackListItem) FeedbackResponse {
+	return FeedbackResponse{
+		ID:        f.ID,
+		UserID:    f.UserID,
+		UserEmail: f.UserEmail,
+		UserName:  f.UserName,
+		Type:      string(f.Type),
+		Status:    string(f.Status),
+		Message:   f.Message,
+		PageURL:   f.PageURL,
+		CreatedAt: f.CreatedAt,
+	}
+}

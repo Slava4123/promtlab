@@ -28,3 +28,11 @@ type ChangeTierRequest struct {
 type TOTPCodeRequest struct {
 	TOTPCode string `json:"totp_code" validate:"required"`
 }
+
+// UpdateFeedbackStatusRequest — тело PATCH /api/admin/feedbacks/{id}/status.
+// Status — один из enum значений feedback_status.
+// TOTPCode требуется для всех изменений отзыва (sudo mode).
+type UpdateFeedbackStatusRequest struct {
+	Status   string `json:"status" validate:"required,oneof=new read archived"`
+	TOTPCode string `json:"totp_code" validate:"required"`
+}

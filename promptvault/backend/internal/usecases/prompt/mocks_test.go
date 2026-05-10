@@ -23,6 +23,13 @@ func (m *mockPromptRepo) GetByID(ctx context.Context, id uint) (*models.Prompt, 
 	}
 	return args.Get(0).(*models.Prompt), args.Error(1)
 }
+func (m *mockPromptRepo) GetMeta(ctx context.Context, id uint) (*models.Prompt, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Prompt), args.Error(1)
+}
 func (m *mockPromptRepo) Update(ctx context.Context, p *models.Prompt) error {
 	return m.Called(ctx, p).Error(0)
 }

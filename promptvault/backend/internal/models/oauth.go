@@ -3,26 +3,24 @@ package models
 import (
 	"encoding/json"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 // OAuthClient — регистрация MCP-клиента (Claude.ai и т.п.) через RFC 7591.
 // ClientSecretHash может быть пустым для public clients (PKCE-only flow).
 type OAuthClient struct {
-	ID                       uint           `gorm:"primaryKey" json:"id"`
-	ClientID                 string         `gorm:"size:64;not null;uniqueIndex" json:"client_id"`
-	ClientSecretHash         string         `gorm:"size:128" json:"-"`
-	ClientName               string         `gorm:"size:200;not null" json:"client_name"`
-	RedirectURIs             pq.StringArray `gorm:"type:text[];not null" json:"redirect_uris"`
-	GrantTypes               pq.StringArray `gorm:"type:text[];not null" json:"grant_types"`
-	ResponseTypes            pq.StringArray `gorm:"type:text[];not null" json:"response_types"`
-	TokenEndpointAuthMethod  string         `gorm:"size:32;not null;default:none" json:"token_endpoint_auth_method"`
-	Scope                    string         `gorm:"size:500;not null" json:"scope"`
-	IsDynamic                bool           `gorm:"not null;default:true" json:"is_dynamic"`
-	LastUsedAt               *time.Time     `json:"last_used_at,omitempty"`
-	CreatedAt                time.Time      `json:"created_at"`
-	UpdatedAt                time.Time      `json:"updated_at"`
+	ID                      uint        `gorm:"primaryKey" json:"id"`
+	ClientID                string      `gorm:"size:64;not null;uniqueIndex" json:"client_id"`
+	ClientSecretHash        string      `gorm:"size:128" json:"-"`
+	ClientName              string      `gorm:"size:200;not null" json:"client_name"`
+	RedirectURIs            StringArray `gorm:"type:text[];not null" json:"redirect_uris"`
+	GrantTypes              StringArray `gorm:"type:text[];not null" json:"grant_types"`
+	ResponseTypes           StringArray `gorm:"type:text[];not null" json:"response_types"`
+	TokenEndpointAuthMethod string      `gorm:"size:32;not null;default:none" json:"token_endpoint_auth_method"`
+	Scope                   string      `gorm:"size:500;not null" json:"scope"`
+	IsDynamic               bool        `gorm:"not null;default:true" json:"is_dynamic"`
+	LastUsedAt              *time.Time  `json:"last_used_at,omitempty"`
+	CreatedAt               time.Time   `json:"created_at"`
+	UpdatedAt               time.Time   `json:"updated_at"`
 }
 
 // OAuthAuthorizationCode — short-lived (60 сек) one-time код PKCE-flow.

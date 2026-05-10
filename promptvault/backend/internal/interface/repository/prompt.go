@@ -28,6 +28,12 @@ type PromptListFilter struct {
 type PromptRepository interface {
 	Create(ctx context.Context, prompt *models.Prompt) error
 	GetByID(ctx context.Context, id uint) (*models.Prompt, error)
+	// GetMeta — облегчённая GetByID без Preload Tags/Collections.
+	// MN-37: GetByID делает 3 SELECT'а (prompt + tags + collections) даже когда
+	// caller'у нужна только проверка существования или owner_id для access-check.
+	// Используется в chain.AddStep, share access-checks и т.п. — экономит ~2/3
+	// query на каждом обращении.
+	GetMeta(ctx context.Context, id uint) (*models.Prompt, error)
 	Update(ctx context.Context, prompt *models.Prompt) error
 	SoftDelete(ctx context.Context, id uint) error
 	List(ctx context.Context, filter PromptListFilter) ([]models.Prompt, int64, error)

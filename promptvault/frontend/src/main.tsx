@@ -1,6 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+// Импорт ДО App — глобально включает русские дефолтные ошибки Zod
+// (иначе формы показывают raw "expected string, received undefined").
+import '@/lib/zod-locale'
 import App from './App.tsx'
 import { initSentry } from '@/lib/sentry'
 import { initWebVitals } from '@/lib/web-vitals'

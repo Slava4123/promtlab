@@ -185,27 +185,27 @@ func TestCreate_PersonalSuccess(t *testing.T) {
 	svc, tr, _ := newTestService()
 	ctx := context.Background()
 
-	expected := &models.Tag{ID: 1, Name: "golang", Color: "#ff0000", UserID: 10}
+	expected := &models.Tag{ID: 1, Name: "golang", Color: models.HexColor("#ff0000"), UserID: 10}
 	tr.On("GetOrCreate", ctx, "golang", "#ff0000", uint(10), (*uint)(nil)).Return(expected, nil)
 
 	tag, err := svc.Create(ctx, "golang", "#ff0000", 10, nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "golang", tag.Name)
-	assert.Equal(t, "#ff0000", tag.Color)
+	assert.Equal(t, "#ff0000", string(tag.Color))
 }
 
 func TestCreate_DefaultColor(t *testing.T) {
 	svc, tr, _ := newTestService()
 	ctx := context.Background()
 
-	expected := &models.Tag{ID: 1, Name: "test", Color: "#6366f1", UserID: 10}
+	expected := &models.Tag{ID: 1, Name: "test", Color: models.HexColor("#6366f1"), UserID: 10}
 	tr.On("GetOrCreate", ctx, "test", "#6366f1", uint(10), (*uint)(nil)).Return(expected, nil)
 
 	tag, err := svc.Create(ctx, "test", "", 10, nil)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "#6366f1", tag.Color)
+	assert.Equal(t, "#6366f1", string(tag.Color))
 }
 
 func TestCreate_EmptyNameError(t *testing.T) {
@@ -234,7 +234,7 @@ func TestCreate_TeamEditorSuccess(t *testing.T) {
 	tmr.On("GetMember", ctx, uint(5), uint(10)).
 		Return(&models.TeamMember{Role: models.RoleEditor}, nil)
 
-	expected := &models.Tag{ID: 1, Name: "api", Color: "#6366f1", UserID: 10, TeamID: teamID}
+	expected := &models.Tag{ID: 1, Name: "api", Color: models.HexColor("#6366f1"), UserID: 10, TeamID: teamID}
 	tr.On("GetOrCreate", ctx, "api", "#6366f1", uint(10), teamID).Return(expected, nil)
 
 	tag, err := svc.Create(ctx, "api", "", 10, teamID)

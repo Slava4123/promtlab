@@ -311,3 +311,85 @@ func TestFindBranchByIndex_BadJSON_Refused(t *testing.T) {
 		t.Fatalf("expected ErrInvalidConditions on bad JSON, got %v", err)
 	}
 }
+
+// ----------------------- MN-10: дополнительные edge cases -----------------------
+
+// validateForkBranches должен выдержать большое (но валидное) количество ветвей —
+// никаких квадратичных алгоритмов в проверке uniqueness.
+func TestValidateForkBranches_ManyBranches_OK(t *testing.T) {
+	branches := make([]models.ConditionBranch, 100)
+	valid := make(map[uint]struct{}, 100)
+	for i := range branches {
+		branches[i] = models.ConditionBranch{Label: "branch-" + uintToString(uint(i)), NextStepID: nil}
+	}
+	raw, _ := json.Marshal(models.Conditions{Branches: branches})
+	if err := validateForkBranches(raw, valid); err != nil {
+		t.Fatalf("expected OK на 100 ветвях, got %v", err)
+	}
+}
+
+// detectCycles на большом DAG (без циклов) — алгоритм linear, не должен зависать.
+func TestDetectCycles_LargeDAG_Linear_OK(t *testing.T) {
+	const n = 200
+	steps := make([]models.PromptChainStep, n)
+	for i := range steps {
+		var next *uint
+		if i+1 < n {
+			nextID := uint(i + 2)
+			next = &nextID
+		}
+		steps[i] = models.PromptChainStep{
+			ID:         uint(i + 1),
+			StepType:   models.StepTypePrompt,
+			NextStepID: next,
+		}
+	}
+	if err := detectCycles(steps); err != nil {
+		t.Fatalf("linear DAG из %d узлов: ожидался nil, got %v", n, err)
+	}
+}
+
+// detectCycles handle disconnected components — каждый компонент проверяется независимо.
+func TestDetectCycles_DisconnectedComponents_OK(t *testing.T) {
+	// Два независимых пути: 1→2 и 3→4.
+	steps := []models.PromptChainStep{
+		makePromptStep(1, uintPtr(2)),
+		makePromptStep(2, nil),
+		makePromptStep(3, uintPtr(4)),
+		makePromptStep(4, nil),
+	}
+	if err := detectCycles(steps); err != nil {
+		t.Fatalf("disconnected DAGs: ожидался nil, got %v", err)
+	}
+}
+
+// detectCycles в одном из disconnected компонентов с циклом — обнаруживает цикл.
+func TestDetectCycles_OneComponentHasCycle_Refused(t *testing.T) {
+	// 1→2 (linear), 3→4→3 (cycle).
+	steps := []models.PromptChainStep{
+		makePromptStep(1, uintPtr(2)),
+		makePromptStep(2, nil),
+		makePromptStep(3, uintPtr(4)),
+		makePromptStep(4, uintPtr(3)),
+	}
+	err := detectCycles(steps)
+	if !errors.Is(err, ErrCycleInBranches) {
+		t.Fatalf("ожидался ErrCycleInBranches в disconnected component, got %v", err)
+	}
+}
+
+// validateForkBranches accepts label с trim-equivalent (точное сравнение).
+func TestValidateForkBranches_LabelsWhitespaceMatters(t *testing.T) {
+	// "ok" и " ok" считаются разными — мы НЕ trim'им (trim — задача UI-слоя).
+	raw, _ := json.Marshal(models.Conditions{
+		Branches: []models.ConditionBranch{
+			{Label: "ok", NextStepID: nil},
+			{Label: " ok", NextStepID: nil},
+		},
+	})
+	if err := validateForkBranches(raw, map[uint]struct{}{}); err != nil {
+		t.Fatalf("ожидалось OK (whitespace-different labels), got %v", err)
+	}
+}
+
+// uintToString уже определён в chain.go — переиспользуем напрямую через chain package.

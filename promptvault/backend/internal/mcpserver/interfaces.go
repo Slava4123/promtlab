@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	repo "promptvault/internal/interface/repository"
@@ -78,4 +79,14 @@ type ActivityService interface {
 type AnalyticsService interface {
 	GetPersonalDashboard(ctx context.Context, userID uint, requestedRange analyticsuc.RangeID) (*analyticsuc.PersonalDashboard, error)
 	GetTeamDashboard(ctx context.Context, userID, teamID uint, requestedRange analyticsuc.RangeID) (*analyticsuc.TeamDashboard, error)
+}
+
+// ChainService — Phase 16. Optional, nil отключает chain-tools в MCP.
+// MCP-клиент в loop'е вызывает start_chain_execution → собственный LLM-call →
+// advance_chain_step. AdvanceStep сам определяет завершение цепочки.
+type ChainService interface {
+	List(ctx context.Context, userID uint, teamIDs []uint, limit, offset int) ([]models.PromptChain, int64, error)
+	GetByIDWithSteps(ctx context.Context, chainID, userID uint) (*models.PromptChain, error)
+	StartExecution(ctx context.Context, chainID, userID uint, initialVars json.RawMessage) (*models.PromptChainExecution, error)
+	AdvanceStep(ctx context.Context, execID, userID uint, stepOutput string, chosenBranchIdx *int) (*models.PromptChainExecution, error)
 }

@@ -563,11 +563,11 @@ func isDomainError(err error) bool {
 func toPromptResponse(p *models.Prompt) PromptResponse {
 	tags := make([]TagResponse, len(p.Tags))
 	for i, t := range p.Tags {
-		tags[i] = TagResponse{ID: t.ID, Name: t.Name, Color: t.Color}
+		tags[i] = TagResponse{ID: t.ID, Name: t.Name, Color: string(t.Color)}
 	}
 	colls := make([]CollectionResponse, len(p.Collections))
 	for i, c := range p.Collections {
-		colls[i] = CollectionResponse{ID: c.ID, Name: c.Name, Description: c.Description, Color: c.Color, Icon: c.Icon}
+		colls[i] = CollectionResponse{ID: c.ID, Name: c.Name, Description: c.Description, Color: string(c.Color), Icon: c.Icon}
 	}
 	return PromptResponse{
 		ID: p.ID, Title: p.Title, Content: p.Content, Model: p.Model,
@@ -769,7 +769,7 @@ func (t *toolHandlers) listCollections(ctx context.Context, _ *sdkmcp.CallToolRe
 	for i, c := range colls {
 		result[i] = CollectionWithCountResponse{
 			CollectionResponse: CollectionResponse{
-				ID: c.ID, Name: c.Name, Description: c.Description, Color: c.Color, Icon: c.Icon,
+				ID: c.ID, Name: c.Name, Description: c.Description, Color: string(c.Color), Icon: c.Icon,
 			},
 			PromptCount: c.PromptCount,
 		}
@@ -814,7 +814,7 @@ func (t *toolHandlers) listTags(ctx context.Context, _ *sdkmcp.CallToolRequest, 
 
 	result := make([]TagResponse, len(tags))
 	for i, tag := range tags {
-		result[i] = TagResponse{ID: tag.ID, Name: tag.Name, Color: tag.Color}
+		result[i] = TagResponse{ID: tag.ID, Name: tag.Name, Color: string(tag.Color)}
 	}
 	payload := map[string]any{"tags": result}
 	if t.cache != nil {
@@ -1367,7 +1367,7 @@ func (t *toolHandlers) createTag(ctx context.Context, _ *sdkmcp.CallToolRequest,
 	t.incrementMCPUsage(ctx)
 	t.invalidateTagsCache(ctx)
 	t.notifier.NotifyTags(ctx)
-	res, err := jsonResult(TagResponse{ID: tag.ID, Name: tag.Name, Color: tag.Color})
+	res, err := jsonResult(TagResponse{ID: tag.ID, Name: tag.Name, Color: string(tag.Color)})
 	return res, nil, err
 }
 
@@ -1393,7 +1393,7 @@ func (t *toolHandlers) createCollection(ctx context.Context, _ *sdkmcp.CallToolR
 	t.invalidateCollectionsCache(ctx)
 	t.notifier.NotifyCollections(ctx)
 	res, err := jsonResult(CollectionResponse{
-		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: coll.Color, Icon: coll.Icon,
+		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: string(coll.Color), Icon: coll.Icon,
 	})
 	return res, nil, err
 }
@@ -1492,7 +1492,7 @@ func (t *toolHandlers) collectionGet(ctx context.Context, _ *sdkmcp.CallToolRequ
 		return nil, nil, mapDomainError(err)
 	}
 	res, err := jsonResult(CollectionResponse{
-		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: coll.Color, Icon: coll.Icon,
+		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: string(coll.Color), Icon: coll.Icon,
 	})
 	return res, nil, err
 }
@@ -1642,7 +1642,7 @@ func (t *toolHandlers) collectionUpdate(ctx context.Context, _ *sdkmcp.CallToolR
 	if input.Description != nil {
 		description = *input.Description
 	}
-	color := current.Color
+	color := string(current.Color)
 	if input.Color != nil {
 		color = *input.Color
 	}
@@ -1660,7 +1660,7 @@ func (t *toolHandlers) collectionUpdate(ctx context.Context, _ *sdkmcp.CallToolR
 	t.invalidateCollectionsCache(ctx)
 	t.notifier.NotifyCollections(ctx)
 	res, err := jsonResult(CollectionResponse{
-		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: coll.Color, Icon: coll.Icon,
+		ID: coll.ID, Name: coll.Name, Description: coll.Description, Color: string(coll.Color), Icon: coll.Icon,
 	})
 	return res, nil, err
 }

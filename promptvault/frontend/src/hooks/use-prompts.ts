@@ -66,6 +66,8 @@ export function useCreatePrompt() {
       qc.invalidateQueries({ queryKey: ["collections"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["tags"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["streak"], refetchType: "active" })
+      // Activity feed обновляется в team-mode после создания promptа.
+      qc.invalidateQueries({ queryKey: ["activity"], refetchType: "active" })
       handleBadges(data.newly_unlocked_badges)
     },
   })
@@ -90,6 +92,7 @@ export function useUpdatePrompt() {
         qc.invalidateQueries({ queryKey: ["tags"], refetchType: "active" })
       }
       qc.invalidateQueries({ queryKey: ["streak"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["activity"], refetchType: "active" })
       handleBadges(data.newly_unlocked_badges)
     },
   })
@@ -106,6 +109,7 @@ export function useDeletePrompt() {
       qc.invalidateQueries({ queryKey: ["tags"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["trash"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["trash-count"], refetchType: "active" })
+      qc.invalidateQueries({ queryKey: ["activity"], refetchType: "active" })
     },
   })
 }

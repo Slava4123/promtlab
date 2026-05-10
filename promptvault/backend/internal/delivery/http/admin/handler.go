@@ -44,6 +44,10 @@ type AdminService interface {
 	GrantBadge(ctx context.Context, targetID uint, badgeID string) (*badgeuc.Badge, error)
 	RevokeBadge(ctx context.Context, targetID uint, badgeID string) error
 	ChangeTier(ctx context.Context, targetID uint, tier, reason string) error
+	ListFeedbacks(ctx context.Context, filter repo.FeedbackListFilter) (*adminuc.FeedbackListResult, error)
+	GetFeedbackDetail(ctx context.Context, id uint) (*repo.FeedbackDetail, error)
+	UpdateFeedbackStatus(ctx context.Context, id uint, status models.FeedbackStatus) error
+	DeleteFeedback(ctx context.Context, id uint) error
 }
 
 // TOTPVerifier — узкий интерфейс для sudo-mode verification. *adminauthuc.Service
@@ -241,6 +245,90 @@ func (h *Handler) ChangeTier(w http.ResponseWriter, r *http.Request) {
 	utils.WriteOK(w, ActionResponse{OK: true, Action: "change_tier"})
 }
 
+// ==================== feedbacks ====================
+
+// GET /api/admin/feedbacks
+func (h *Handler) ListFeedbacks(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filter := repo.FeedbackListFilter{
+		Type:     models.FeedbackType(q.Get("type")),
+		Status:   models.FeedbackStatus(q.Get("status")),
+		Query:    q.Get("q"),
+		Page:     parseIntDefault(q.Get("page"), 1),
+		PageSize: parseIntDefault(q.Get("page_size"), 20),
+	}
+
+	result, err := h.admin.ListFeedbacks(r.Context(), filter)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	items := make([]FeedbackResponse, 0, len(result.Items))
+	for _, f := range result.Items {
+		items = append(items, newFeedbackResponse(f))
+	}
+	utils.WritePaginated(w, items, result.Total, result.Page, result.PageSize)
+}
+
+// GET /api/admin/feedbacks/{id}
+func (h *Handler) GetFeedbackDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUintParam(r, "id")
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest("неверный id отзыва"))
+		return
+	}
+	detail, err := h.admin.GetFeedbackDetail(r.Context(), id)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	utils.WriteOK(w, newFeedbackResponse(*detail))
+}
+
+// PATCH /api/admin/feedbacks/{id}/status
+// REQUIRES fresh TOTP (sudo mode).
+func (h *Handler) UpdateFeedbackStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUintParam(r, "id")
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest("неверный id отзыва"))
+		return
+	}
+	req, err := utils.DecodeAndValidate[UpdateFeedbackStatusRequest](r, h.validate)
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest(err.Error()))
+		return
+	}
+	if err := h.verifyTOTPCode(r.Context(), req.TOTPCode); err != nil {
+		respondError(w, err)
+		return
+	}
+	if err := h.admin.UpdateFeedbackStatus(r.Context(), id, models.FeedbackStatus(req.Status)); err != nil {
+		respondError(w, err)
+		return
+	}
+	utils.WriteOK(w, ActionResponse{OK: true, Action: "update_feedback_status"})
+}
+
+// DELETE /api/admin/feedbacks/{id}
+// REQUIRES fresh TOTP (sudo mode). Hard delete без возможности восстановления.
+func (h *Handler) DeleteFeedback(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUintParam(r, "id")
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest("неверный id отзыва"))
+		return
+	}
+	if err := h.verifyTOTP(r); err != nil {
+		respondError(w, err)
+		return
+	}
+	if err := h.admin.DeleteFeedback(r.Context(), id); err != nil {
+		respondError(w, err)
+		return
+	}
+	utils.WriteOK(w, ActionResponse{OK: true, Action: "delete_feedback"})
+}
+
 // ==================== audit / health ====================
 
 // GET /api/admin/audit
@@ -358,8 +446,8 @@ func auditEntryToResponse(e models.AuditLog) AuditEntryResponse {
 	resp := AuditEntryResponse{
 		ID:         e.ID,
 		AdminID:    e.AdminID,
-		Action:     e.Action,
-		TargetType: e.TargetType,
+		Action:     string(e.Action),
+		TargetType: string(e.TargetType),
 		TargetID:   e.TargetID,
 		IP:         e.IP,
 		UserAgent:  e.UserAgent,

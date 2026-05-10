@@ -61,9 +61,20 @@ func (s *Service) Create(ctx context.Context, userID uint, name, description str
 	if len(description) > maxDescriptionLen {
 		return nil, ErrInvalidDescription
 	}
+	// Pack T: scope-aware квота. Цепочки в команде идут в team-pool по плану owner'а.
 	if s.quotas != nil {
-		if err := s.quotas.CheckChainQuota(ctx, userID); err != nil {
-			return nil, err
+		if teamID != nil {
+			team, err := s.teams.GetByID(ctx, *teamID)
+			if err != nil {
+				return nil, err
+			}
+			if err := s.quotas.CheckTeamChainQuota(ctx, *teamID, team.CreatedBy); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := s.quotas.CheckChainQuota(ctx, userID); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if err := teamcheck.RequireEditor(ctx, s.teams, teamID, userID); err != nil {
@@ -919,8 +930,8 @@ func (s *Service) StartExecution(ctx context.Context, chainID, userID uint, init
 // в отличие от GetExecution/AdvanceStep (initiator-only, эти меняют state).
 //
 // limit — page size (1..100). Реальный объём упирается в plan.MaxSavedExecutions
-// (Free=0 эфемерно, Pro=10, Max=1000) — за пределами лимита старые записи
-// уже удалены planом ретеншна (TODO: ретеншн в repo).
+// (Free=3, Pro=50, Max=1000 — после миграции 000067) — за пределами лимита
+// старые записи уже удалены planом ретеншна (TODO: ретеншн в repo).
 func (s *Service) ListExecutions(ctx context.Context, chainID, userID uint, limit int) ([]models.PromptChainExecution, error) {
 	chain, err := s.chains.GetByID(ctx, chainID)
 	if err != nil {

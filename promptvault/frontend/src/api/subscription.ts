@@ -4,6 +4,7 @@ import type {
   Plan,
   Subscription,
   UsageSummary,
+  TeamUsageSummary,
   CheckoutResponse,
 } from "./types"
 
@@ -17,6 +18,11 @@ export function fetchSubscription(): Promise<Subscription | null> {
 
 export function fetchUsage(): Promise<UsageSummary> {
   return api<UsageSummary>("/subscription/usage")
+}
+
+// Pack TU: usage конкретной команды (team-pool квоты).
+export function fetchTeamUsage(slug: string): Promise<TeamUsageSummary> {
+  return api<TeamUsageSummary>(`/teams/${encodeURIComponent(slug)}/usage`)
 }
 
 export interface DowngradePreview {

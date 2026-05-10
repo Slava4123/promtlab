@@ -54,12 +54,12 @@ type CollectionResponse struct {
 func NewPromptResponse(p models.Prompt, pinStatus ...repo.PinStatus) PromptResponse {
 	tags := make([]TagResponse, 0, len(p.Tags))
 	for _, t := range p.Tags {
-		tags = append(tags, TagResponse{ID: t.ID, Name: t.Name, Color: t.Color})
+		tags = append(tags, TagResponse{ID: t.ID, Name: t.Name, Color: string(t.Color)})
 	}
 
 	cols := make([]CollectionResponse, 0, len(p.Collections))
 	for _, c := range p.Collections {
-		cols = append(cols, CollectionResponse{ID: c.ID, Name: c.Name, Color: c.Color, Icon: c.Icon})
+		cols = append(cols, CollectionResponse{ID: c.ID, Name: c.Name, Color: string(c.Color), Icon: c.Icon})
 	}
 
 	resp := PromptResponse{

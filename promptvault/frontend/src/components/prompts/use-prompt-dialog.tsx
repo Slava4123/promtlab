@@ -158,6 +158,17 @@ export function UsePromptDialog({ prompt, open, onOpenChange }: UsePromptDialogP
                   />
                 </div>
               ))}
+              <p className="text-[0.7rem] text-muted-foreground/70">
+                Чтобы оставить{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.7rem]">
+                  {"{{"}
+                </code>{" "}
+                буквально в финальном тексте, поставьте пробел внутри:{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.7rem]">
+                  {"{{ name }}"}
+                </code>{" "}
+                — такая запись не считается переменной.
+              </p>
             </div>
           )}
 

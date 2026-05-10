@@ -12,10 +12,21 @@ import (
 type Service struct {
 	trash repo.TrashRepository
 	teams repo.TeamRepository
+	// chains — Phase 16, опционально. nil = chains disabled (CHAINS_ENABLED=false),
+	// в этом случае проверка зависимости pomp→chain не выполняется (т.к. таблица
+	// prompt_chain_steps пустая, prompt всё равно нельзя удалить через FK).
+	chains repo.ChainRepository
 }
 
 func NewService(trash repo.TrashRepository, teams repo.TeamRepository) *Service {
 	return &Service{trash: trash, teams: teams}
+}
+
+// SetChains подключает chain repo для блокировки hard-delete prompt'а,
+// используемого в активной цепочке (FK без CASCADE → 409 вместо 500).
+// Вызывается из app.go только при cfg.Chains.Enabled.
+func (s *Service) SetChains(chains repo.ChainRepository) {
+	s.chains = chains
 }
 
 // ---------- List ----------
@@ -95,6 +106,18 @@ func (s *Service) permanentDeletePrompt(ctx context.Context, id, userID uint) er
 	p, err := s.trash.GetDeletedPrompt(ctx, id)
 	if err != nil {
 		return s.mapRepoErr(err)
+	}
+	// Phase 16: блокируем hard-delete если prompt используется в active цепочке.
+	// FK prompt_chain_steps.prompt_id без CASCADE даст 500 internal error без этой
+	// проверки; теперь возвращаем graceful 409.
+	if s.chains != nil {
+		used, err := s.chains.CountChainsUsingPrompt(ctx, id)
+		if err != nil {
+			return err
+		}
+		if used > 0 {
+			return ErrPromptUsedInChains
+		}
 	}
 	if err := s.checkOwnerOrEditor(ctx, p.UserID, p.TeamID, userID); err != nil {
 		return err

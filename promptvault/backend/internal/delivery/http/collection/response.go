@@ -30,7 +30,7 @@ func NewCollectionResponse(c models.Collection, newBadges []badgehttp.BadgeSumma
 		ID:                  c.ID,
 		Name:                c.Name,
 		Description:         c.Description,
-		Color:               c.Color,
+		Color:               string(c.Color),
 		Icon:                c.Icon,
 		TeamID:              c.TeamID,
 		CreatedAt:           c.CreatedAt,

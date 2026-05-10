@@ -34,10 +34,20 @@ func (s *Service) SetActivity(activity *activityuc.Service) {
 }
 
 func (s *Service) Create(ctx context.Context, userID uint, name, description, color, icon string, teamID *uint) (*models.Collection, []badgeuc.Badge, error) {
-	// Проверка квоты коллекций
+	// Pack T: scope-aware квота. Коллекции в команде идут в team-pool по плану owner'а.
 	if s.quotas != nil {
-		if err := s.quotas.CheckCollectionQuota(ctx, userID); err != nil {
-			return nil, nil, err
+		if teamID != nil {
+			team, err := s.teams.GetByID(ctx, *teamID)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := s.quotas.CheckTeamCollectionQuota(ctx, *teamID, team.CreatedBy); err != nil {
+				return nil, nil, err
+			}
+		} else {
+			if err := s.quotas.CheckCollectionQuota(ctx, userID); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 
@@ -59,7 +69,7 @@ func (s *Service) Create(ctx context.Context, userID uint, name, description, co
 		TeamID:      teamID,
 		Name:        name,
 		Description: description,
-		Color:       color,
+		Color:       models.HexColor(color),
 		Icon:        icon,
 	}
 	if err := s.collections.Create(ctx, c); err != nil {
@@ -147,7 +157,7 @@ func (s *Service) Update(ctx context.Context, id, userID uint, name, description
 		if !validHexColor.MatchString(color) {
 			return nil, ErrInvalidColor
 		}
-		c.Color = color
+		c.Color = models.HexColor(color)
 	}
 	if icon != "" {
 		if len(icon) > 30 {

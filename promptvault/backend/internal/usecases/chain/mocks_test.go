@@ -212,7 +212,16 @@ func (m *mockTeamRepo) CreateWithOwner(_ context.Context, _ *models.Team, _ uint
 func (m *mockTeamRepo) GetBySlug(_ context.Context, _ string) (*models.Team, error) {
 	panic("not used")
 }
-func (m *mockTeamRepo) GetByID(_ context.Context, _ uint) (*models.Team, error) { panic("not used") }
+// Pack T: chain.Service.Create в team-mode дёргает teams.GetByID для резолва
+// owner'а команды (для team-pool квоты). Прежняя panic("not used") заменена
+// на mock-aware реализацию.
+func (m *mockTeamRepo) GetByID(ctx context.Context, id uint) (*models.Team, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Team), args.Error(1)
+}
 func (m *mockTeamRepo) ListByUserID(_ context.Context, _ uint) ([]models.Team, error) {
 	panic("not used")
 }
@@ -284,12 +293,28 @@ func (m *mockPlanRepo) GetActive(ctx context.Context) ([]models.SubscriptionPlan
 
 type mockQuotaRepo struct{ mock.Mock }
 
-func (m *mockQuotaRepo) CountPrompts(ctx context.Context, userID uint) (int64, error) {
+func (m *mockQuotaRepo) CountPersonalPrompts(ctx context.Context, userID uint) (int64, error) {
 	args := m.Called(ctx, userID)
 	return args.Get(0).(int64), args.Error(1)
 }
-func (m *mockQuotaRepo) CountCollections(ctx context.Context, userID uint) (int64, error) {
+func (m *mockQuotaRepo) CountPersonalCollections(ctx context.Context, userID uint) (int64, error) {
 	args := m.Called(ctx, userID)
+	return args.Get(0).(int64), args.Error(1)
+}
+func (m *mockQuotaRepo) CountPersonalChains(ctx context.Context, userID uint) (int64, error) {
+	args := m.Called(ctx, userID)
+	return args.Get(0).(int64), args.Error(1)
+}
+func (m *mockQuotaRepo) CountTeamPrompts(ctx context.Context, teamID uint) (int64, error) {
+	args := m.Called(ctx, teamID)
+	return args.Get(0).(int64), args.Error(1)
+}
+func (m *mockQuotaRepo) CountTeamCollections(ctx context.Context, teamID uint) (int64, error) {
+	args := m.Called(ctx, teamID)
+	return args.Get(0).(int64), args.Error(1)
+}
+func (m *mockQuotaRepo) CountTeamChains(ctx context.Context, teamID uint) (int64, error) {
+	args := m.Called(ctx, teamID)
 	return args.Get(0).(int64), args.Error(1)
 }
 func (m *mockQuotaRepo) CountTeamsOwned(ctx context.Context, userID uint) (int64, error) {
@@ -315,12 +340,12 @@ func (m *mockQuotaRepo) GetTotalUsage(ctx context.Context, userID uint, featureT
 func (m *mockQuotaRepo) IncrementDailyUsage(ctx context.Context, userID uint, date time.Time, featureType string) error {
 	return m.Called(ctx, userID, date, featureType).Error(0)
 }
-func (m *mockQuotaRepo) CountChains(ctx context.Context, userID uint) (int64, error) {
-	args := m.Called(ctx, userID)
-	return args.Get(0).(int64), args.Error(1)
-}
 func (m *mockQuotaRepo) CountStepsByChain(ctx context.Context, chainID uint) (int64, error) {
 	args := m.Called(ctx, chainID)
+	return args.Get(0).(int64), args.Error(1)
+}
+func (m *mockQuotaRepo) DeleteOldDailyUsage(ctx context.Context, olderThanDays int) (int64, error) {
+	args := m.Called(ctx, olderThanDays)
 	return args.Get(0).(int64), args.Error(1)
 }
 

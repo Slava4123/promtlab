@@ -17,10 +17,12 @@ import (
 
 func TestToPublicPromptResponse_CopiesBranding(t *testing.T) {
 	branding := &models.BrandingInfo{
-		LogoURL:      "https://cdn.example/logo.png",
-		Tagline:      "QA Brand",
-		Website:      "https://example.com",
-		PrimaryColor: "#ff0066",
+		LogoURL:          "https://cdn.example/logo.png",
+		EffectiveLogoURL: "https://cdn.example/logo.png",
+		LogoSource:       "url",
+		Tagline:          "QA Brand",
+		Website:          "https://example.com",
+		PrimaryColor:     "#ff0066",
 	}
 	info := &shareuc.PublicPromptInfo{
 		Title:     "Example",
@@ -32,8 +34,11 @@ func TestToPublicPromptResponse_CopiesBranding(t *testing.T) {
 
 	resp := toPublicPromptResponse(info)
 
+	// MN-31: BrandingDTO теперь не зависит от модели. Проверяем mapping
+	// public-полей (без legacy LogoURL — public получает EffectiveLogoURL).
 	if assert.NotNil(t, resp.Branding, "Branding must be copied from usecase info to HTTP DTO") {
-		assert.Equal(t, branding.LogoURL, resp.Branding.LogoURL)
+		assert.Equal(t, branding.EffectiveLogoURL, resp.Branding.EffectiveLogoURL)
+		assert.Equal(t, branding.LogoSource, resp.Branding.LogoSource)
 		assert.Equal(t, branding.Tagline, resp.Branding.Tagline)
 		assert.Equal(t, branding.Website, resp.Branding.Website)
 		assert.Equal(t, branding.PrimaryColor, resp.Branding.PrimaryColor)

@@ -13,10 +13,13 @@ import { useQuotaStore } from "@/stores/quota-store"
 // Этот тест гарантирует: каждый известный backend-ключ имеет русский label
 // и benefit в QuotaExceededDialog.
 
-// Хуки checkout и useAuthStore подтягивают react-query и cookie — замокаем
-// минимально, чтобы rendering не падал.
+// Хуки checkout / usePlans и useAuthStore подтягивают react-query и cookie —
+// замокаем минимально, чтобы rendering не падал. usePlans → data:undefined
+// эмулирует first-render (plans ещё не загрузились) — buildHeadline вернёт
+// null, headline не покажется, но heading «Лимит X: used/limit» останется.
 vi.mock("@/hooks/use-subscription", () => ({
   useCheckout: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  usePlans: () => ({ data: undefined }),
 }))
 vi.mock("@/stores/auth-store", () => ({
   useAuthStore: <T,>(sel: (s: { user: { plan_id: string } }) => T) =>

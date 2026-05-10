@@ -22,6 +22,12 @@ import (
 	authuc "promptvault/internal/usecases/auth"
 )
 
+// oauthCookiePath — узкий scope OAuth-cookies. Покрывает endpoint'ы, которые
+// действительно их читают: /api/auth/oauth/<provider>{,/callback} и /api/auth/link/<provider>.
+// Раньше Path="/" означал, что cookies отправлялись на любой запрос
+// (XSS-vector через сторонние страницы /admin, /share/*).
+const oauthCookiePath = "/api/auth"
+
 type OAuthHandler struct {
 	oauth         *authuc.OAuthService
 	frontendURL   string
@@ -58,11 +64,11 @@ func (h *OAuthHandler) redirectWithTokens(w http.ResponseWriter, r *http.Request
 func (h *OAuthHandler) setOAuthCookies(w http.ResponseWriter, state, verifier string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "oauth_state", Value: state,
-		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
+		Path: oauthCookiePath, HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name: "oauth_verifier", Value: verifier,
-		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
+		Path: oauthCookiePath, HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
 	})
 }
 
@@ -83,7 +89,7 @@ func (h *OAuthHandler) maybeSetReferralCookie(w http.ResponseWriter, r *http.Req
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: "oauth_ref", Value: ref,
-		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
+		Path: oauthCookiePath, HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
 	})
 }
 
@@ -96,7 +102,7 @@ func (h *OAuthHandler) popReferralCookie(w http.ResponseWriter, r *http.Request)
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: "oauth_ref", Value: "",
-		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+		Path: oauthCookiePath, HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1,
 	})
 	return c.Value
 }
@@ -139,7 +145,7 @@ func (h *OAuthHandler) InitiateLink(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		Name: "oauth_link", Value: h.signLinkCookie(userID),
-		Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
+		Path: oauthCookiePath, HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 300,
 	})
 
 	utils.WriteOK(w, map[string]string{"redirect_url": authURL})
@@ -181,16 +187,16 @@ func (h *OAuthHandler) verifyLinkCookie(value string) (uint, bool) {
 
 func (h *OAuthHandler) clearOAuthCookies(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name: "oauth_state", Value: "", Path: "/", HttpOnly: true, MaxAge: -1,
+		Name: "oauth_state", Value: "", Path: oauthCookiePath, HttpOnly: true, MaxAge: -1,
 	})
 	http.SetCookie(w, &http.Cookie{
-		Name: "oauth_verifier", Value: "", Path: "/", HttpOnly: true, MaxAge: -1,
+		Name: "oauth_verifier", Value: "", Path: oauthCookiePath, HttpOnly: true, MaxAge: -1,
 	})
 }
 
 func (h *OAuthHandler) clearLinkCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name: "oauth_link", Value: "", Path: "/", HttpOnly: true, MaxAge: -1,
+		Name: "oauth_link", Value: "", Path: oauthCookiePath, HttpOnly: true, MaxAge: -1,
 	})
 }
 

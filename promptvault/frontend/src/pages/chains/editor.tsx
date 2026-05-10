@@ -357,7 +357,16 @@ function ChainEditorForm({
 
           <p className="mt-6 text-xs text-muted-foreground">
             Развилки (fork) — доступны на тарифе Max. Можно добавить любое
-            количество веток на любой глубине, в каждой — свои шаги.{" "}
+            количество веток на любой глубине, в каждой — свои шаги.
+            {!isMax && isPersonal && (
+              <>
+                {" "}
+                <Link to="/pricing" className="font-medium text-amber-600 underline hover:text-amber-700 dark:text-amber-500">
+                  Перейти на Max →
+                </Link>
+              </>
+            )}
+            {" "}
             <Link to={`/chains/${chainID}/canvas`} className="underline">
               Посмотреть как граф
             </Link>
@@ -693,7 +702,7 @@ function AddStepDialog({
         <DialogHeader>
           <DialogTitle>Добавить шаг</DialogTitle>
           <DialogDescription>
-            Выберите промпт. Output этого шага станет доступен последующим как переменная.
+            Выберите промпт. Ответ этого шага станет доступен последующим как переменная.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -755,10 +764,23 @@ function AddForkDialog({
 }
 
 interface BranchDraft {
+  /** Стабильный draft-id для React key — без него фокус прыгает при addBranch/removeBranch
+   *  (key={i} переиспользовал DOM-узел соседней ветки и input терял курсор). MN-51. */
+  _id: string
   label: string
   /** Существующий next_step_id ветки — сохраняется при редактировании, чтобы
    *  не оторвать подцепочку шагов от ветки. У новых веток nil. */
   next_step_id?: number | null
+}
+
+// branchDraftId — стабильный id для key={...}. Не криптографически уникальный,
+// просто чтобы не повторялся в одной форме. crypto.randomUUID для prod, fallback
+// для старых браузеров и jsdom.
+function branchDraftId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  return `b-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 // ForkDialog — общий диалог для создания и редактирования развилки. В режиме
@@ -780,8 +802,11 @@ function ForkDialog({
   initialBranches?: { label: string; next_step_id?: number | null }[]
 }) {
   const initial: BranchDraft[] = initialBranches?.length
-    ? initialBranches.map((b) => ({ label: b.label, next_step_id: b.next_step_id ?? null }))
-    : [{ label: "Ветка 1" }, { label: "Ветка 2" }]
+    ? initialBranches.map((b) => ({ _id: branchDraftId(), label: b.label, next_step_id: b.next_step_id ?? null }))
+    : [
+        { _id: branchDraftId(), label: "Ветка 1" },
+        { _id: branchDraftId(), label: "Ветка 2" },
+      ]
 
   const [name, setName] = useState(initialName)
   const [branches, setBranches] = useState<BranchDraft[]>(initial)
@@ -793,7 +818,7 @@ function ForkDialog({
     setBranches((prev) => prev.map((b, idx) => (idx === i ? { ...b, label: v } : b)))
   }
   const addBranch = () =>
-    setBranches((prev) => [...prev, { label: `Ветка ${prev.length + 1}`, next_step_id: null }])
+    setBranches((prev) => [...prev, { _id: branchDraftId(), label: `Ветка ${prev.length + 1}`, next_step_id: null }])
   const removeBranchImmediate = (i: number) => {
     setBranches((prev) => prev.filter((_, idx) => idx !== i))
   }
@@ -840,7 +865,7 @@ function ForkDialog({
             <Label>Ветки (минимум 2, без дубликатов)</Label>
             <div className="space-y-2">
               {branches.map((b, i) => (
-                <div key={i} className="flex gap-2">
+                <div key={b._id} className="flex gap-2">
                   <Input
                     value={b.label}
                     onChange={(e) => updateLabel(i, e.target.value)}

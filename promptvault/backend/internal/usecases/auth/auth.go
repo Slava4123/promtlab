@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -648,8 +649,11 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*models.Use
 		return nil, nil, err
 	}
 
-	// Проверяем nonce — если не совпадает, токен был отозван (logout)
-	if claims.Nonce != user.TokenNonce {
+	// Constant-time compare nonce защищает от timing-атаки на refresh-токен.
+	// Хотя оба значения уже подписаны JWT-секретом и подделать токен без
+	// этого секрета нельзя, defence-in-depth дешёвая (на 64-байт строке
+	// разница неощутима) и закрывает CR-7 part 1 finding из REVIEW v2.
+	if subtle.ConstantTimeCompare([]byte(claims.Nonce), []byte(user.TokenNonce)) != 1 {
 		return nil, nil, ErrInvalidToken
 	}
 

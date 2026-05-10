@@ -78,7 +78,7 @@ func (s *Service) Search(ctx context.Context, userID uint, teamID *uint, query s
 			ID:    c.ID,
 			Type:  "collection",
 			Title: c.Name,
-			Color: c.Color,
+			Color: string(c.Color),
 			Icon:  c.Icon,
 		})
 	}
@@ -93,7 +93,7 @@ func (s *Service) Search(ctx context.Context, userID uint, teamID *uint, query s
 			ID:    t.ID,
 			Type:  "tag",
 			Title: t.Name,
-			Color: t.Color,
+			Color: string(t.Color),
 		})
 	}
 

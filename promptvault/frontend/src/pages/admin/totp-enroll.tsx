@@ -143,7 +143,7 @@ export default function AdminTOTPEnrollPage() {
 
         <div className="space-y-3">
           <div>
-            <Label className="text-xs text-muted-foreground">Secret</Label>
+            <Label className="text-xs text-muted-foreground">Секретный ключ</Label>
             <div className="mt-1 flex items-center gap-2">
               <code className="flex-1 break-all rounded-md bg-muted/40 px-3 py-2 font-mono text-xs">
                 {enrollData.secret}
@@ -151,7 +151,7 @@ export default function AdminTOTPEnrollPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => copy(enrollData.secret, "Secret")}
+                onClick={() => copy(enrollData.secret, "Секретный ключ")}
               >
                 <Copy className="h-3.5 w-3.5" />
               </Button>

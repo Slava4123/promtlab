@@ -30,14 +30,10 @@ describe("api()", () => {
 
     expect(result).toEqual({ id: 1, name: "test" })
     expect(mockFetch).toHaveBeenCalledTimes(1)
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/prompts",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          "Content-Type": "application/json",
-        }),
-      }),
-    )
+    // MN-64: api() передаёт Headers instance, не plain object — проверяем через .get()
+    const call = mockFetch.mock.calls[0]
+    expect(call[0]).toBe("/api/prompts")
+    expect((call[1].headers as Headers).get("Content-Type")).toBe("application/json")
   })
 
   it("non-200 throws Error with server message", async () => {
@@ -73,14 +69,9 @@ describe("api()", () => {
 
     await api("/prompts")
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/prompts",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer my-token-123",
-        }),
-      }),
-    )
+    const call = mockFetch.mock.calls[0]
+    expect(call[0]).toBe("/api/prompts")
+    expect((call[1].headers as Headers).get("Authorization")).toBe("Bearer my-token-123")
   })
 
   it("auto-refresh on 401", async () => {
@@ -116,9 +107,9 @@ describe("api()", () => {
     expect(result).toEqual({ id: 1 })
     expect(mockFetch).toHaveBeenCalledTimes(3)
 
-    // The retry should use the new token
+    // The retry should use the new token (Headers API после MN-64).
     const retryCall = mockFetch.mock.calls[2]
-    expect(retryCall[1].headers["Authorization"]).toBe("Bearer new-token")
+    expect((retryCall[1].headers as Headers).get("Authorization")).toBe("Bearer new-token")
 
     // Access token should be updated
     expect(getAccessToken()).toBe("new-token")

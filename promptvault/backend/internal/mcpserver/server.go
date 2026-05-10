@@ -92,6 +92,7 @@ func NewMCPServer(
 	userSvc UserService,
 	activitySvc ActivityService, // Phase 14 B.3: optional, nil отключает team_activity_feed
 	analyticsSvc AnalyticsService, // Phase 14 B.3: optional
+	chainSvc ChainService, // Phase 16: optional, nil отключает chain-tools
 	quotas *quotauc.Service,
 	opts Options,
 ) *MCPServer {
@@ -99,7 +100,7 @@ func NewMCPServer(
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "promptvault",
-		Version: "v1.4.0",
+		Version: "v1.5.0",
 	}, &mcp.ServerOptions{
 		Instructions:      serverInstructions,
 		Logger:            logger,
@@ -137,11 +138,15 @@ func NewMCPServer(
 		users:       userSvc,
 		activity:    activitySvc,
 		analytics:   analyticsSvc,
+		chains:      chainSvc,
 		quotas:      quotas,
 		cache:       newListCache(30 * time.Second),
 		notifier:    notif,
 	}
 	tools.register(server)
+	if chainSvc != nil {
+		tools.registerChainTools(server)
+	}
 
 	resources := &resourceHandlers{
 		prompts:     promptSvc,

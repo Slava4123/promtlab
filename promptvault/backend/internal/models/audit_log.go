@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+// AuditAction / AuditTargetType — typed alias-ы для polей AuditLog (MN-30).
+// Раньше typed enums жили в usecases/audit/types.go, а в models — голый string.
+// Теперь типы в models, callers через type alias в usecases импортируют их же.
+type AuditAction string
+
+// AuditTargetType — тип сущности над которой совершается админ-действие.
+type AuditTargetType string
+
 // AuditLog — append-only журнал административных действий. Таблица в БД
 // защищена через REVOKE UPDATE, DELETE (см. миграцию 000018) — попытка
 // UPDATE или DELETE вернёт permission denied, что тестируется в
@@ -21,8 +29,8 @@ import (
 type AuditLog struct {
 	ID          uint            `gorm:"primaryKey" json:"id"`
 	AdminID     uint            `gorm:"not null;index" json:"admin_id"`
-	Action      string          `gorm:"size:50;not null" json:"action"`
-	TargetType  string          `gorm:"size:50;not null" json:"target_type"`
+	Action      AuditAction     `gorm:"size:50;not null" json:"action"`
+	TargetType  AuditTargetType `gorm:"size:50;not null" json:"target_type"`
 	TargetID    *uint           `json:"target_id,omitempty"`
 	BeforeState json.RawMessage `gorm:"type:jsonb" json:"before_state,omitempty"`
 	AfterState  json.RawMessage `gorm:"type:jsonb" json:"after_state,omitempty"`

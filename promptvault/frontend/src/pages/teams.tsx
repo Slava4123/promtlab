@@ -8,6 +8,7 @@ import { useTeams, useCreateTeam, useUpdateTeam, useDeleteTeam } from "@/hooks/u
 import { useQuotaStore } from "@/stores/quota-store"
 import { PageLayout } from "@/components/layout/page-layout"
 import { RoleBadge } from "@/components/teams/role-badge"
+import { TeamUsageMini } from "@/components/teams/team-usage-mini"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -169,6 +170,9 @@ export default function Teams() {
               <div className="flex items-center gap-1.5 text-[0.7rem] text-muted-foreground">
                 <Users className="h-3 w-3" />
                 <span>{t.member_count} {plural(t.member_count, "участник", "участника", "участников")}</span>
+              </div>
+              <div className="mt-2 border-t border-border/40 pt-2">
+                <TeamUsageMini slug={t.slug} />
               </div>
             </div>
           ))}

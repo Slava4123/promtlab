@@ -56,11 +56,11 @@ func daysLeft(deletedAt time.Time) int {
 func NewTrashPromptResponse(p models.Prompt) TrashPromptResponse {
 	tags := make([]TagBrief, 0, len(p.Tags))
 	for _, t := range p.Tags {
-		tags = append(tags, TagBrief{ID: t.ID, Name: t.Name, Color: t.Color})
+		tags = append(tags, TagBrief{ID: t.ID, Name: t.Name, Color: string(t.Color)})
 	}
 	cols := make([]CollectionBrief, 0, len(p.Collections))
 	for _, c := range p.Collections {
-		cols = append(cols, CollectionBrief{ID: c.ID, Name: c.Name, Color: c.Color})
+		cols = append(cols, CollectionBrief{ID: c.ID, Name: c.Name, Color: string(c.Color)})
 	}
 	return TrashPromptResponse{
 		ID:          p.ID,
@@ -89,7 +89,7 @@ func NewTrashCollectionResponse(c models.Collection) TrashCollectionResponse {
 		ID:          c.ID,
 		Name:        c.Name,
 		Description: c.Description,
-		Color:       c.Color,
+		Color:       string(c.Color),
 		Icon:        c.Icon,
 		DeletedAt:   c.DeletedAt.Time,
 		DaysLeft:    daysLeft(c.DeletedAt.Time),

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api, apiVoid } from "@/api/client"
 import type { ChangelogResponse } from "@/api/types"
+import { useAuthStore } from "@/stores/auth-store"
 
 export function useChangelog() {
   return useQuery({
@@ -18,10 +19,11 @@ export function useMarkChangelogSeen() {
   return useMutation({
     mutationFn: () => apiVoid("/changelog/seen", { method: "POST" }),
     onSuccess: () => {
-      // MN-49: ["auth"] не существует как queryKey (мы используем ["me"]).
-      // Использую существующий ключ + changelog для инвалидации badge'а.
+      // MN-49 финал: ["me"] тоже не зарегистрирован как useQuery — `me` живёт
+      // в auth-store (Zustand), не в TanStack cache. Зовём fetchMe напрямую,
+      // чтобы user.LastChangelogSeenAt в store обновился и badge скрылся.
       qc.invalidateQueries({ queryKey: ["changelog"] })
-      qc.invalidateQueries({ queryKey: ["me"] })
+      void useAuthStore.getState().fetchMe()
     },
   })
 }

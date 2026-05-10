@@ -9,9 +9,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useChains, useDeleteChain } from "@/hooks/use-chains"
 import { useCurrentTeamRole } from "@/hooks/use-team-role"
 import { useWorkspaceStore } from "@/stores/workspace-store"
-import { ChainTemplateCard } from "@/components/chains/chain-template-card"
 import { ChainCard } from "@/components/chains/chain-card"
-import { CHAIN_TEMPLATES } from "@/lib/chain-templates"
 
 export default function ChainsPage() {
   const team = useWorkspaceStore((s) => s.team)
@@ -34,12 +32,10 @@ export default function ChainsPage() {
             {teamName ? `Цепочки — ${teamName}` : "Цепочки промптов"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Связывайте промпты в последовательности — output одного шага становится переменной для следующего.
+            Связывайте промпты в последовательности — ответ одного шага становится переменной для следующего.
           </p>
         </div>
-        {/* В empty-state верхнюю CTA скрываем — основное действие есть в галерее
-            шаблонов и «Создать с нуля». В filled-state CTA остаётся как primary. */}
-        {canWrite && !isEmpty && (
+        {canWrite && (
           <Button variant="brand" asChild>
             <Link to="/chains/new">
               <Plus className="mr-2 h-4 w-4" />
@@ -58,35 +54,27 @@ export default function ChainsPage() {
       )}
 
       {isEmpty && canWrite && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="mb-3 text-sm font-medium text-foreground">Начните с шаблона</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {CHAIN_TEMPLATES.map((tpl) => (
-                <ChainTemplateCard key={tpl.id} template={tpl} teamId={teamId} />
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-border/50" />
-            <span className="text-[0.72rem] uppercase tracking-wider text-muted-foreground">или</span>
-            <div className="h-px flex-1 bg-border/50" />
-          </div>
-
-          <div className="flex justify-center">
-            <Button variant="outline" asChild>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <Link2 className="mb-4 h-12 w-12 text-muted-foreground" aria-hidden="true" />
+            <p className="mb-2 text-base font-medium text-foreground">
+              {teamName ? `В команде «${teamName}» пока нет цепочек` : "Пока нет цепочек"}
+            </p>
+            <p className="mb-6 max-w-md text-sm text-muted-foreground">
+              Связывайте промпты в последовательности — ответ одного шага становится переменной для следующего.
+            </p>
+            <Button variant="brand" asChild>
               <Link to="/chains/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Создать с нуля
+                Создать первую цепочку
               </Link>
             </Button>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Viewer в команде: галерею шаблонов скрываем — у viewer'а нет canWrite.
-          Показываем «команда без цепочек» с подсказкой к owner/editor'у. */}
+      {/* Viewer в команде: создавать не может — показываем плейсхолдер
+          с подсказкой обратиться к owner/editor'у. */}
       {isEmpty && !canWrite && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">

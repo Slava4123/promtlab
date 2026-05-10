@@ -53,6 +53,13 @@ func (m *mockPromptRepo) GetByID(ctx context.Context, id uint) (*models.Prompt, 
 	}
 	return args.Get(0).(*models.Prompt), args.Error(1)
 }
+func (m *mockPromptRepo) GetMeta(ctx context.Context, id uint) (*models.Prompt, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Prompt), args.Error(1)
+}
 
 // Stubs for the rest of PromptRepository interface.
 func (m *mockPromptRepo) Create(ctx context.Context, p *models.Prompt) error {
@@ -289,6 +296,66 @@ func TestGetPublicPrompt_NotFound(t *testing.T) {
 
 	_, err := svc.GetPublicPrompt(ctx, "ps_invalid", ViewMeta{})
 	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+// MN-8: TTL expired → ErrLinkExpired (handler маппит → 410 Gone).
+func TestGetPublicPrompt_TTLExpired_ReturnsErrLinkExpired(t *testing.T) {
+	svc, sr, _, _ := setupService()
+	ctx := context.Background()
+
+	pastDate := time.Now().Add(-time.Hour) // истекло час назад
+	sr.On("GetByToken", ctx, "ps_expired").Return(&models.ShareLink{
+		ID: 1, Token: "ps_expired", IsActive: true,
+		ExpiresAt: &pastDate,
+		Prompt: models.Prompt{
+			ID: 1, Title: "Test", Content: "Hello",
+			User: models.User{Name: "Иван"},
+		},
+	}, nil)
+
+	_, err := svc.GetPublicPrompt(ctx, "ps_expired", ViewMeta{})
+	assert.ErrorIs(t, err, ErrLinkExpired)
+}
+
+// MN-8: ExpiresAt=NULL означает «бессрочно» — должен открываться нормально.
+func TestGetPublicPrompt_NoExpiry_OK(t *testing.T) {
+	svc, sr, _, _ := setupService()
+	ctx := context.Background()
+
+	sr.On("GetByToken", ctx, "ps_forever").Return(&models.ShareLink{
+		ID: 1, Token: "ps_forever", IsActive: true,
+		ExpiresAt: nil, // Max-эксклюзив
+		Prompt: models.Prompt{
+			ID: 1, Title: "Forever", Content: "Hello",
+			User: models.User{Name: "Иван"},
+		},
+	}, nil)
+	sr.On("IncrementViewCount", mock.Anything, uint(1)).Return(nil)
+
+	info, err := svc.GetPublicPrompt(ctx, "ps_forever", ViewMeta{})
+	require.NoError(t, err)
+	assert.Equal(t, "Forever", info.Title)
+}
+
+// MN-8: ExpiresAt в будущем — должен открываться нормально.
+func TestGetPublicPrompt_FutureExpiry_OK(t *testing.T) {
+	svc, sr, _, _ := setupService()
+	ctx := context.Background()
+
+	future := time.Now().Add(7 * 24 * time.Hour)
+	sr.On("GetByToken", ctx, "ps_active").Return(&models.ShareLink{
+		ID: 1, Token: "ps_active", IsActive: true,
+		ExpiresAt: &future,
+		Prompt: models.Prompt{
+			ID: 1, Title: "Active", Content: "Hello",
+			User: models.User{Name: "Иван"},
+		},
+	}, nil)
+	sr.On("IncrementViewCount", mock.Anything, uint(1)).Return(nil)
+
+	info, err := svc.GetPublicPrompt(ctx, "ps_active", ViewMeta{})
+	require.NoError(t, err)
+	assert.Equal(t, "Active", info.Title)
 }
 
 func TestGetByPromptID(t *testing.T) {

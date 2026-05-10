@@ -44,6 +44,7 @@ type Service struct {
 	badges      *badgeuc.Service
 	plans       repo.PlanRepository
 	subs        repo.SubscriptionRepository
+	feedbacks   repo.FeedbackRepository
 	notifier    TierChangeNotifier
 	frontendURL string
 }

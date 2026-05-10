@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
+import { assertNever } from "@/lib/assert-never"
 import { useAuthStore } from "@/stores/auth-store"
 import { popCheckoutIntent, useCheckout } from "@/hooks/use-subscription"
 import { readReferralCookie } from "@/lib/referral"
@@ -112,6 +113,10 @@ export default function SignIn() {
         case "totp_enrollment_required":
           navigate("/admin/totp")
           return
+        default:
+          // MN-61: exhaustive check — TypeScript отвергнет компиляцию,
+          // если в LoginResult добавится новый kind без case ветки.
+          assertNever(result, "LoginResult")
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ошибка входа"
@@ -155,7 +160,7 @@ export default function SignIn() {
           </div>
           <h1 className="text-xl font-semibold text-foreground">Двухфакторная проверка</h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Введите 6-значный код из приложения Authenticator или один из backup-кодов
+            Введите 6-значный код из приложения Authenticator или один из резервных кодов
           </p>
         </div>
         <form onSubmit={onTOTPSubmit} className="space-y-4">

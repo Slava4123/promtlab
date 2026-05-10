@@ -43,10 +43,22 @@ func (s *Service) SetActivity(activity *activityuc.Service) {
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Prompt, []badgeuc.Badge, error) {
-	// Проверка квоты промптов
+	// Pack T: квота зависит от scope. Промпты в команде идут в team-pool
+	// (лимит из плана owner'а), личные — в personal по плану юзера.
+	// Это исправляет «Free участник в Pro команде = bottleneck» (миграция 000070).
 	if s.quotas != nil {
-		if err := s.quotas.CheckPromptQuota(ctx, in.UserID); err != nil {
-			return nil, nil, err
+		if in.TeamID != nil {
+			team, err := s.teams.GetByID(ctx, *in.TeamID)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := s.quotas.CheckTeamPromptQuota(ctx, *in.TeamID, team.CreatedBy); err != nil {
+				return nil, nil, err
+			}
+		} else {
+			if err := s.quotas.CheckPromptQuota(ctx, in.UserID); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -98,9 +97,9 @@ func sampleClient() *models.OAuthClient {
 		ID:                      1,
 		ClientID:                "pvoci_test123",
 		ClientName:              "Test Client",
-		RedirectURIs:            pq.StringArray{"https://claude.ai/api/mcp/auth_callback"},
-		GrantTypes:              pq.StringArray{"authorization_code", "refresh_token"},
-		ResponseTypes:           pq.StringArray{"code"},
+		RedirectURIs:            models.StringArray{"https://claude.ai/api/mcp/auth_callback"},
+		GrantTypes:              models.StringArray{"authorization_code", "refresh_token"},
+		ResponseTypes:           models.StringArray{"code"},
 		TokenEndpointAuthMethod: "none",
 		Scope:                   "mcp:read mcp:write",
 	}

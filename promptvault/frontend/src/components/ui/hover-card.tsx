@@ -5,9 +5,13 @@ import * as HoverCardPrimitive from "@radix-ui/react-hover-card"
 
 import { cn } from "@/lib/utils"
 
+// MN-52: @radix-ui/react-hover-card — единственный @radix-ui dep в проекте
+// (остальной UI на Base UI). Сохраняем намеренно: Base UI Popover/Tooltip
+// требует click, а hover-card нужен hover-trigger UX (chains/nodes preview
+// при наведении в graph editor — UX-эквивалентов в Base UI нет).
+// Bundle impact <5KB gzip; миграция была бы UX-breaking.
 // MN-53: убран React.forwardRef wrapper — в React 19 ref передаётся как
 // обычный prop (https://react.dev/blog/2024/12/05/react-19#ref-as-a-prop).
-// Уменьшает bundle (нет forwardRef polyfill) и упрощает типизацию.
 const HoverCard = HoverCardPrimitive.Root
 const HoverCardTrigger = HoverCardPrimitive.Trigger
 

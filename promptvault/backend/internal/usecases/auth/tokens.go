@@ -21,12 +21,16 @@ func (s *Service) ValidateAccessToken(token string) (*Claims, error) {
 // 401 expired → попробовать refresh, 401 invalid → forced re-login.
 func (s *Service) ValidateToken(tokenStr string, expectedType TokenType) (*Claims, error) {
 	claims := &Claims{}
+	// jwt.WithValidMethods — defence-in-depth от algorithm confusion.
+	// Type-assertion на *jwt.SigningMethodHMAC ниже отвергает RS256/ES256/none,
+	// но WithValidMethods отвергает их раньше, до самого парсинга claims.
+	// Аутентичный список ["HS256"] (мы только им подписываем — см. tokens.go:78).
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
 		}
 		return s.secret, nil
-	})
+	}, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return nil, ErrExpiredToken

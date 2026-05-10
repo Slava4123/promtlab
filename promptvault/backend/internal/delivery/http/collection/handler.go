@@ -71,7 +71,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		"id":           c.ID,
 		"name":         c.Name,
 		"description":  c.Description,
-		"color":        c.Color,
+		"color":        string(c.Color),
 		"icon":         c.Icon,
 		"prompt_count": count,
 		"created_at":   c.CreatedAt,

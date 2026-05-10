@@ -231,7 +231,7 @@ export default function CollectionView() {
             <div className="flex items-center justify-between">
               <div>
                 <DialogTitle>Добавить в коллекцию</DialogTitle>
-                <p className="mt-0.5 text-[0.75rem] text-muted-foreground">Выберите промпты для добавления в "{collection.name}"</p>
+                <p className="mt-0.5 text-[0.75rem] text-muted-foreground">Выберите промпты для добавления в «{collection.name}»</p>
               </div>
               {selected.size > 0 && (
                 <span className="rounded-full bg-brand/15 px-2.5 py-0.5 text-xs font-medium text-brand-muted-foreground">

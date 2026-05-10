@@ -31,6 +31,13 @@ type SubscriptionPlan struct {
 	MaxChains            int             `gorm:"not null;default:0" json:"max_chains"`
 	MaxStepsPerChain     int             `gorm:"not null;default:0" json:"max_steps_per_chain"`
 	MaxSavedExecutions   int             `gorm:"not null;default:0" json:"max_saved_executions"`
+	// Pack T (миграция 000070): team-pool квоты. Лимит на ресурсы внутри
+	// одной команды, берётся из плана owner'а команды. Free=50/10/3,
+	// Pro=2000/400/20, Max=50000/5000/500. Personal квоты считают только
+	// промпты с team_id IS NULL — ресурсы в командах учитываются по team-pool.
+	MaxTeamPrompts       int             `gorm:"not null;default:0" json:"max_team_prompts"`
+	MaxTeamCollections   int             `gorm:"not null;default:0" json:"max_team_collections"`
+	MaxTeamChains        int             `gorm:"not null;default:0" json:"max_team_chains"`
 	Features             json.RawMessage `gorm:"type:jsonb;not null;default:'[]'" json:"features"`
 	SortOrder            int             `gorm:"not null;default:0" json:"sort_order"`
 	IsActive             bool            `gorm:"not null;default:true" json:"is_active"`
@@ -100,6 +107,26 @@ type Subscription struct {
 	Plan SubscriptionPlan `gorm:"foreignKey:PlanID" json:"plan,omitzero"`
 }
 
+// NewSubscription — конструктор активной подписки с правильно заполненным
+// CurrentPeriodStart/End. MN-32: до этого callers (subscription.activate)
+// собирали через struct literal с time.Now() inline — легко забыть AutoRenew
+// или поставить Status=paused вместо active.
+//
+// rebillID — выдан банком после первого рекуррентного платежа (Recurrent=Y);
+// "" для одноразовых.
+func NewSubscription(userID uint, planID string, periodDays int, rebillID string) *Subscription {
+	now := time.Now()
+	return &Subscription{
+		UserID:             userID,
+		PlanID:             planID,
+		Status:             SubStatusActive,
+		CurrentPeriodStart: now,
+		CurrentPeriodEnd:   now.AddDate(0, 0, periodDays),
+		RebillId:           rebillID,
+		AutoRenew:          true,
+	}
+}
+
 // Validate проверяет инварианты Subscription.
 //
 // MJ-27: до этого fix'а инварианты держались только в комментариях,
@@ -152,31 +179,84 @@ const (
 	PaymentRefunded  PaymentStatus = "refunded"
 )
 
+// PaymentProvider — платёжный провайдер. MN-28: typed для compile-time
+// защиты от опечаток (раньше `if pay.Provider == "tbnak"` молча проходил).
+type PaymentProvider string
+
+const (
+	PaymentProviderTBank PaymentProvider = "tbank"
+)
+
+func (p PaymentProvider) IsValid() bool {
+	switch p {
+	case PaymentProviderTBank:
+		return true
+	}
+	return false
+}
+
+// Currency — валюта платежа. ISO 4217 трёхбуквенный код.
+// MN-28: typed alias. Текущий список — что мы реально поддерживаем.
+type Currency string
+
+const (
+	CurrencyRUB Currency = "RUB"
+)
+
+func (c Currency) IsValid() bool {
+	switch c {
+	case CurrencyRUB:
+		return true
+	}
+	return false
+}
+
 // Payment — запись о платеже. Unique index на (provider, external_id)
 // обеспечивает idempotency при обработке webhook.
 type Payment struct {
-	ID              uint            `gorm:"primaryKey" json:"id"`
-	UserID          uint            `gorm:"not null" json:"user_id"`
-	SubscriptionID  *uint           `json:"subscription_id,omitempty"`
-	ExternalID      string          `gorm:"size:100;not null" json:"external_id"`
-	IdempotencyKey  string          `gorm:"size:100;not null;uniqueIndex" json:"idempotency_key"`
-	AmountKop       int             `gorm:"not null" json:"amount_kop"`
-	Currency        string          `gorm:"size:3;not null;default:RUB" json:"currency"`
-	Status          PaymentStatus   `gorm:"size:20;not null;default:pending" json:"status"`
-	Provider        string          `gorm:"size:20;not null;default:tbank" json:"provider"`
-	ProviderData    json.RawMessage `gorm:"type:jsonb" json:"provider_data,omitempty"`
-	CreatedAt       time.Time       `json:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
+	ID             uint            `gorm:"primaryKey" json:"id"`
+	UserID         uint            `gorm:"not null" json:"user_id"`
+	SubscriptionID *uint           `json:"subscription_id,omitempty"`
+	ExternalID     string          `gorm:"size:100;not null" json:"external_id"`
+	IdempotencyKey string          `gorm:"size:100;not null;uniqueIndex" json:"idempotency_key"`
+	AmountKop      int             `gorm:"not null" json:"amount_kop"`
+	Currency       Currency        `gorm:"size:3;not null;default:RUB" json:"currency"`
+	Status         PaymentStatus   `gorm:"size:20;not null;default:pending" json:"status"`
+	Provider       PaymentProvider `gorm:"size:20;not null;default:tbank" json:"provider"`
+	ProviderData   json.RawMessage `gorm:"type:jsonb" json:"provider_data,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+}
+
+// FeatureType — тип ресурса для DailyFeatureUsage. MN-29: typed alias
+// (раньше жил как const string в usecases/quota/types.go, в models — голый string).
+type FeatureType string
+
+const (
+	// FeatureExtension — браузерное расширение (вызовы API).
+	FeatureExtension FeatureType = "extension"
+	// FeatureMCP — MCP-tool calls (write-операции).
+	FeatureMCP FeatureType = "mcp"
+	// FeatureShareCreate — дневной счётчик создания share-ссылок (fixed window UTC, Phase 14).
+	FeatureShareCreate FeatureType = "share_create"
+)
+
+func (f FeatureType) IsValid() bool {
+	switch f {
+	case FeatureExtension, FeatureMCP, FeatureShareCreate:
+		return true
+	}
+	return false
 }
 
 // DailyFeatureUsage — персистентный счётчик дневного использования.
 // feature_type: "extension", "mcp". Composite PK (user_id, usage_date, feature_type).
 // Исторически существовал "ai" — строки остались в БД от предыдущих версий, но новые не создаются.
 type DailyFeatureUsage struct {
-	UserID      uint      `gorm:"primaryKey;not null" json:"user_id"`
-	UsageDate   time.Time `gorm:"primaryKey;type:date;not null" json:"usage_date"`
-	FeatureType string    `gorm:"primaryKey;size:20;not null" json:"feature_type"`
-	Count       int       `gorm:"not null;default:0" json:"count"`
+	UserID      uint        `gorm:"primaryKey;not null" json:"user_id"`
+	UsageDate   time.Time   `gorm:"primaryKey;type:date;not null" json:"usage_date"`
+	FeatureType FeatureType `gorm:"primaryKey;size:20;not null" json:"feature_type"`
+	Count       int         `gorm:"not null;default:0" json:"count"`
 }
 
 func (DailyFeatureUsage) TableName() string { return "daily_feature_usage" }

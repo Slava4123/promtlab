@@ -12,8 +12,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { useQuotaStore } from "@/stores/quota-store"
 import { useAuthStore } from "@/stores/auth-store"
-import { useCheckout } from "@/hooks/use-subscription"
+import { useCheckout, usePlans } from "@/hooks/use-subscription"
 import { PlanBadge } from "./plan-badge"
+import type { Plan } from "@/api/types"
 
 // Человеко-читаемое название ресурса для заголовка диалога.
 // Должно покрывать ВСЕ quotaType, что отдаёт backend (см. quota.go newQuotaExceeded calls).
@@ -27,6 +28,11 @@ const quotaLabels: Record<string, string> = {
   mcp_daily: "MCP-вызовов на сегодня",
   chains: "цепочек",
   chain_steps: "шагов в цепочке",
+  // Pack T: team-pool квоты (миграция 000070). Лимит на ресурсы внутри одной
+  // команды по плану owner'а — отличается от personal-лимита текущего юзера.
+  team_prompts: "промптов в команде",
+  team_collections: "коллекций в команде",
+  team_chains: "цепочек в команде",
 }
 
 // Форма существительного для headline ("500 X на Pro"). Отличается от quotaLabel
@@ -42,64 +48,80 @@ const quotaHeadlineNoun: Record<string, string> = {
   chain_steps: "шагов в цепочке",
 }
 
-// Per-resource данные: лимиты на Pro/Max и общая «выгода» в одну строку.
-// Числа выровнены с миграцией 000046_concrete_plan_limits. При изменении
-// миграции — обновить и здесь (или в будущем подтянуть через usePlans()).
+// Per-resource маркетинговые данные. Числа лимитов больше НЕ хранятся здесь —
+// тянутся через usePlans() из /api/plans (live из БД). Это убирает рассинхрон
+// между миграциями (000046, 000067, …) и фронтом — раньше при апдейте лимита
+// в SQL нужно было ручками править и хардкод тут.
 //
 // maxAction — что Max-юзер может сделать сам, чтобы вписаться в лимит.
-// Для дневных лимитов (daily_shares, ext_daily, mcp_daily) maxAction = null —
-// юзер ничего не может, счётчик сбросится в полночь UTC. В этом случае
-// primary-кнопка не показывается, остаётся только «Связаться с поддержкой».
+// Для дневных лимитов (ext_daily, mcp_daily) maxAction = null — юзер ничего
+// не может, счётчик сбросится в полночь UTC. В этом случае primary-кнопка
+// не показывается, остаётся только «Связаться с поддержкой».
 type ResourceMeta = {
-  proLimit: string
-  maxLimit: string
   detail: string
   maxAction: { label: string; href: string; icon: LucideIcon } | null
 }
 
 const resourceMeta: Record<string, ResourceMeta> = {
   prompts: {
-    proLimit: "500", maxLimit: "10 000",
     detail: "Храните всю библиотеку без ограничений.",
     maxAction: { label: "Удалить лишние промпты", href: "/dashboard", icon: Trash2 },
   },
   collections: {
-    proLimit: "100", maxLimit: "1 000",
     detail: "Группируйте промпты по командам, клиентам, проектам.",
     maxAction: { label: "Удалить лишние коллекции", href: "/collections", icon: Trash2 },
   },
   teams: {
-    proLimit: "5", maxLimit: "50",
     detail: "Разделяйте промпты между проектами и клиентами.",
     maxAction: { label: "Удалить лишние команды", href: "/teams", icon: Trash2 },
   },
   team_members: {
-    proLimit: "10", maxLimit: "50",
     detail: "Max подходит для агентств и студий с большими командами.",
     maxAction: { label: "Открыть команды", href: "/teams", icon: ArrowRight },
   },
   // Phase 16-Y: share_links / daily_shares УДАЛЕНЫ — share больше не имеет
   // квот, ссылки живут по TTL (30 дней default).
   ext_daily: {
-    proLimit: "100", maxLimit: "500",
     detail: "Вставляйте промпты прямо в ChatGPT, Claude, Gemini, Perplexity.",
     maxAction: null,
   },
   mcp_daily: {
-    proLimit: "100", maxLimit: "500",
     detail: "Используйте промпты в Claude Desktop, Cursor, Windsurf, Cline.",
     maxAction: null,
   },
   chains: {
-    proLimit: "5", maxLimit: "100",
     detail: "Стройте многошаговые пайплайны и переиспользуйте их в любом AI-клиенте.",
     maxAction: { label: "Удалить лишние цепочки", href: "/chains", icon: Trash2 },
   },
   chain_steps: {
-    proLimit: "10", maxLimit: "50",
     detail: "Сложные сценарии — исследование → анализ → черновик → проверка без обрыва.",
     maxAction: { label: "Открыть цепочки", href: "/chains", icon: ArrowRight },
   },
+}
+
+// Маппинг quota_type из ответа backend → имя поля в Plan. Должен покрывать
+// все ключи из resourceMeta. Если нового quota_type здесь нет, headline
+// просто не отрендерится (return null) — degradate gracefully.
+const QUOTA_TO_PLAN_FIELD: Record<string, keyof Plan> = {
+  prompts: "max_prompts",
+  collections: "max_collections",
+  teams: "max_teams",
+  team_members: "max_team_members",
+  ext_daily: "max_ext_uses_daily",
+  mcp_daily: "max_mcp_uses_daily",
+  chains: "max_chains",
+  chain_steps: "max_steps_per_chain",
+}
+
+// formatPlanLimit — резолв лимита из живого Plan и форматирование с разрядами.
+// undefined plan / unknown quotaType → null (хедлайн не показываем).
+function formatPlanLimit(plan: Plan | undefined, quotaType: string): string | null {
+  if (!plan) return null
+  const field = QUOTA_TO_PLAN_FIELD[quotaType]
+  if (!field) return null
+  const value = plan[field]
+  if (typeof value !== "number") return null
+  return value.toLocaleString("ru-RU")
 }
 
 const planCTA: Record<"pro" | "max", { label: string; pricePerDay: string }> = {
@@ -121,12 +143,28 @@ function pickTargetPlan(currentPlan: string): "pro" | "max" | null {
 // Free юзер: "500 X на Pro, 10 000 на Max" (полная вилка).
 // Pro юзер:  "10 000 X на Max" (без упоминания Pro — он уже там).
 // Max юзер:  null (карточка не показывается).
-function buildHeadline(quotaType: string, target: "pro" | "max" | null): string | null {
-  const meta = resourceMeta[quotaType]
-  if (!meta) return null
+//
+// Числа берём из live-планов (usePlans) — миграции апдейтят БД, фронт
+// тут же показывает актуальное значение. Если plans ещё грузятся (proLimit
+// или maxLimit === null) — headline не показываем, чтобы не моргать «—».
+function buildHeadline(
+  quotaType: string,
+  target: "pro" | "max" | null,
+  proPlan: Plan | undefined,
+  maxPlan: Plan | undefined,
+): string | null {
+  if (!resourceMeta[quotaType]) return null
   const noun = quotaHeadlineNoun[quotaType] ?? quotaType
-  if (target === "max") return `${meta.maxLimit} ${noun} на Max`
-  if (target === "pro") return `${meta.proLimit} ${noun} на Pro, ${meta.maxLimit} на Max`
+  const proLimit = formatPlanLimit(proPlan, quotaType)
+  const maxLimit = formatPlanLimit(maxPlan, quotaType)
+  if (target === "max") {
+    if (!maxLimit) return null
+    return `${maxLimit} ${noun} на Max`
+  }
+  if (target === "pro") {
+    if (!proLimit || !maxLimit) return null
+    return `${proLimit} ${noun} на Pro, ${maxLimit} на Max`
+  }
   return null
 }
 
@@ -135,11 +173,18 @@ export function QuotaExceededDialog() {
   const navigate = useNavigate()
   const checkout = useCheckout()
   const planId = useAuthStore((s) => s.user?.plan_id ?? "free")
+  // Live планы из /api/plans (TanStack Query кэш 60min). Заменяет хардкод
+  // proLimit/maxLimit из старой версии, синхронизированный с миграциями
+  // вручную. Теперь — single source of truth: миграция апдейтит цифры,
+  // фронт сам подтягивает.
+  const { data: plans } = usePlans()
+  const proPlan = plans?.find((p) => p.id === "pro")
+  const maxPlan = plans?.find((p) => p.id === "max")
 
   const resourceLabel = quotaType ? (quotaLabels[quotaType] ?? quotaType) : ""
   const target = pickTargetPlan(planId)
   const meta = quotaType ? resourceMeta[quotaType] : undefined
-  const headline = quotaType ? buildHeadline(quotaType, target) : null
+  const headline = quotaType ? buildHeadline(quotaType, target, proPlan, maxPlan) : null
   const hasUsage = typeof used === "number" && typeof limit === "number" && limit > 0
   const isMaxUser = target === null
 

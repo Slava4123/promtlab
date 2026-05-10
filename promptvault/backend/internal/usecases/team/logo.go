@@ -127,7 +127,7 @@ func (s *Service) UploadLogo(ctx context.Context, slug string, userID uint, body
 	if err := s.logos.Upsert(ctx, file); err != nil {
 		return nil, err
 	}
-	if err := s.teams.UpdateBrandLogoSource(ctx, team.ID, "file"); err != nil {
+	if err := s.teams.UpdateBrandLogoSource(ctx, team.ID, string(models.LogoSourceFile)); err != nil {
 		return nil, err
 	}
 	return file, nil
@@ -155,7 +155,7 @@ func (s *Service) DeleteLogo(ctx context.Context, slug string, userID uint) erro
 	if err := s.logos.Delete(ctx, team.ID); err != nil {
 		return err
 	}
-	return s.teams.UpdateBrandLogoSource(ctx, team.ID, "none")
+	return s.teams.UpdateBrandLogoSource(ctx, team.ID, string(models.LogoSourceNone))
 }
 
 // GetLogo — public-отдача bytes для GET endpoint.
@@ -172,7 +172,7 @@ func (s *Service) GetLogo(ctx context.Context, slug string) (*models.TeamLogoFil
 	if err != nil {
 		return nil, err
 	}
-	if team.BrandLogoSource != "file" {
+	if team.BrandLogoSource != models.LogoSourceFile {
 		return nil, repo.ErrNotFound
 	}
 	owner, err := s.users.GetByID(ctx, team.CreatedBy)

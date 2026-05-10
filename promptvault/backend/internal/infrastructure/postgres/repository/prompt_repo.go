@@ -42,6 +42,18 @@ func (r *promptRepo) GetByID(ctx context.Context, id uint) (*models.Prompt, erro
 	return &prompt, nil
 }
 
+// GetMeta — без Preload. MN-37: ~3× быстрее чем GetByID на access-checks.
+func (r *promptRepo) GetMeta(ctx context.Context, id uint) (*models.Prompt, error) {
+	var prompt models.Prompt
+	if err := r.db.WithContext(ctx).First(&prompt, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repo.ErrNotFound
+		}
+		return nil, err
+	}
+	return &prompt, nil
+}
+
 func (r *promptRepo) Update(ctx context.Context, prompt *models.Prompt) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(prompt).Association("Tags").Replace(prompt.Tags); err != nil {
@@ -160,6 +172,19 @@ func (r *promptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uin
 		scopeArgs = []any{*teamID}
 	}
 
+	// MN-47: pre-filter через CTE. Раньше PG отбирал ВСЕ matches FTS+pg_trgm,
+	// потом сортировал по ts_rank_cd × similarity — для большого корпуса это
+	// heap recheck для всех hits. Теперь:
+	//   1. CTE candidates выбирает первые preFilterLimit row'ов по cheap-индексу
+	//      (search_tsv GIN + updated_at) без сложного score-расчёта.
+	//   2. Внешний SELECT считает hybrid-score только для отобранных кандидатов
+	//      и сортирует по нему.
+	// preFilterLimit = max(limit*10, 100) — даём окно для re-rank без потери
+	// good matches. Limit на final SELECT гарантирует, что ответ не растёт.
+	preFilterLimit := limit * 10
+	if preFilterLimit < 100 {
+		preFilterLimit = 100
+	}
 	var rawSQL string
 	rawArgs := append([]any{}, scopeArgs...)
 	if r.trgmAvailable {
@@ -168,26 +193,36 @@ func (r *promptRepo) SearchByQuery(ctx context.Context, userID uint, teamID *uin
 		// (single percent — GORM Raw() может неоднозначно его экранировать),
 		// порог 0.3 эмпирически — ловит typos типа "резмюе" → "резюме".
 		rawSQL = `
-		SELECT id FROM prompts
-		WHERE ` + scopeWhere + ` AND deleted_at IS NULL
-		  AND (search_tsv @@ websearch_to_tsquery('russian_unaccent', ?)
-		       OR similarity(title::text, ?::text) > 0.3)
+		WITH candidates AS (
+			SELECT id, search_tsv, title, updated_at FROM prompts
+			WHERE ` + scopeWhere + ` AND deleted_at IS NULL
+			  AND (search_tsv @@ websearch_to_tsquery('russian_unaccent', ?)
+			       OR similarity(title::text, ?::text) > 0.3)
+			ORDER BY updated_at DESC
+			LIMIT ?
+		)
+		SELECT id FROM candidates
 		ORDER BY (
 			ts_rank_cd(search_tsv, websearch_to_tsquery('russian_unaccent', ?), 32) * 0.7 +
 			COALESCE(similarity(title::text, ?::text), 0) * 0.3
 		) DESC, updated_at DESC
 		LIMIT ?`
-		rawArgs = append(rawArgs, query, query, query, query, limit)
+		rawArgs = append(rawArgs, query, query, preFilterLimit, query, query, limit)
 	} else {
 		// Без pg_trgm — только FTS (никаких % операторов и similarity()).
 		rawSQL = `
-		SELECT id FROM prompts
-		WHERE ` + scopeWhere + ` AND deleted_at IS NULL
-		  AND search_tsv @@ websearch_to_tsquery('russian_unaccent', ?)
+		WITH candidates AS (
+			SELECT id, search_tsv, updated_at FROM prompts
+			WHERE ` + scopeWhere + ` AND deleted_at IS NULL
+			  AND search_tsv @@ websearch_to_tsquery('russian_unaccent', ?)
+			ORDER BY updated_at DESC
+			LIMIT ?
+		)
+		SELECT id FROM candidates
 		ORDER BY ts_rank_cd(search_tsv, websearch_to_tsquery('russian_unaccent', ?), 32) DESC,
 		         updated_at DESC
 		LIMIT ?`
-		rawArgs = append(rawArgs, query, query, limit)
+		rawArgs = append(rawArgs, query, preFilterLimit, query, limit)
 	}
 
 	if err := r.db.WithContext(ctx).Raw(rawSQL, rawArgs...).Scan(&ids).Error; err != nil {

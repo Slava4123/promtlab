@@ -138,7 +138,7 @@ func (s *Service) GetBrandingForShare(ctx context.Context, teamID uint) (*models
 func buildBrandingInfo(team *models.Team) *models.BrandingInfo {
 	info := &models.BrandingInfo{
 		LogoURL:      team.BrandLogoURL,
-		LogoSource:   team.BrandLogoSource,
+		LogoSource:   string(team.BrandLogoSource),
 		Tagline:      team.BrandTagline,
 		Website:      team.BrandWebsite,
 		PrimaryColor: team.BrandPrimaryColor,

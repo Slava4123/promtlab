@@ -5,6 +5,8 @@
 .env.glitchtip
 .env.local
 .env.*.local
+.env.test
+*/.env.test
 
 # Go
 backend/tmp/
@@ -48,3 +50,9 @@ backups/*.sql.gz
 
 # Alertmanager Telegram secrets — bot_token / chat_id files (создаются на VPS на Шаге D Phase 15).
 infra/alertmanager/secrets/
+
+# Локальные временные артефакты разработки и code review tools.
+# tmp-test/ — fixtures для ad-hoc проверок (большие бинарники, тестовые
+# изображения и т.д.). .review/ — JSON-выгрузки code-review tools.
+tmp-test/
+.review/

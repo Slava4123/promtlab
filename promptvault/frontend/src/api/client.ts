@@ -77,18 +77,21 @@ export async function api<T>(
 ): Promise<T> {
   const url = `${API_BASE}${path}`
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
+  // MN-64: типизированно через Headers API. Раньше `as Record<string,string>`
+  // молча проглатывал case когда caller передавал `Headers` instance или
+  // tuple-array — некоторые headers просто терялись.
+  const headers = new Headers(options.headers)
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json")
   }
 
   if (accessToken) {
-    headers["Authorization"] = `Bearer ${accessToken}`
+    headers.set("Authorization", `Bearer ${accessToken}`)
   }
 
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-    if (tz) headers["X-Timezone"] = tz
+    if (tz) headers.set("X-Timezone", tz)
   } catch {
     // Intl unavailable — streak will use UTC fallback
   }
@@ -114,7 +117,7 @@ export async function api<T>(
   if (res.status === 401 && !isAuthEndpoint && accessToken) {
     try {
       await ensureFreshToken()
-      headers["Authorization"] = `Bearer ${accessToken}`
+      headers.set("Authorization", `Bearer ${accessToken}`)
       res = await fetch(url, { ...options, headers, credentials })
     } catch {
       throw new Error("Сессия истекла, войдите снова")

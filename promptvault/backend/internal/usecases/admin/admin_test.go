@@ -404,7 +404,7 @@ func TestFreezeUser_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, models.StatusFrozen, fx.adminRepo.updatedStatus[2])
 	require.Len(t, fx.auditRepo.entries, 1)
-	assert.Equal(t, "freeze_user", fx.auditRepo.entries[0].Action)
+	assert.Equal(t, "freeze_user", string(fx.auditRepo.entries[0].Action))
 }
 
 func TestFreezeUser_CannotFreezeSelf(t *testing.T) {
@@ -449,7 +449,7 @@ func TestUnfreezeUser_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, models.StatusActive, fx.adminRepo.updatedStatus[2])
 	require.Len(t, fx.auditRepo.entries, 1)
-	assert.Equal(t, "unfreeze_user", fx.auditRepo.entries[0].Action)
+	assert.Equal(t, "unfreeze_user", string(fx.auditRepo.entries[0].Action))
 }
 
 func TestUnfreezeUser_IdempotentWhenActive(t *testing.T) {
@@ -472,7 +472,7 @@ func TestGrantBadge_Success(t *testing.T) {
 	_, unlocked := fx.badgeRepo.unlocked[2]["first_prompt"]
 	assert.True(t, unlocked)
 	require.Len(t, fx.auditRepo.entries, 1)
-	assert.Equal(t, "grant_badge", fx.auditRepo.entries[0].Action)
+	assert.Equal(t, "grant_badge", string(fx.auditRepo.entries[0].Action))
 }
 
 func TestGrantBadge_UnknownBadge(t *testing.T) {
@@ -509,7 +509,7 @@ func TestRevokeBadge_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, fx.badgeRepo.unlocked[2])
 	require.Len(t, fx.auditRepo.entries, 2)
-	assert.Equal(t, "revoke_badge", fx.auditRepo.entries[1].Action)
+	assert.Equal(t, "revoke_badge", string(fx.auditRepo.entries[1].Action))
 }
 
 func TestRevokeBadge_UnknownBadge(t *testing.T) {
@@ -533,7 +533,7 @@ func TestChangeTier_Success_NoActiveSub(t *testing.T) {
 	require.Len(t, fx.auditRepo.entries, 1)
 
 	entry := fx.auditRepo.entries[0]
-	assert.Equal(t, "change_tier", entry.Action)
+	assert.Equal(t, "change_tier", string(entry.Action))
 	// AuditLog payload — JSON-marshalled, сравним поля через json.Unmarshal.
 	var after map[string]any
 	require.NoError(t, json.Unmarshal(entry.AfterState, &after))

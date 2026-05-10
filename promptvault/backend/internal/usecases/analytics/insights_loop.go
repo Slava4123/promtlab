@@ -3,12 +3,22 @@ package analytics
 import (
 	"context"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/pkg/safeloop"
 )
+
+// insightsParallelism — кол-во concurrent ComputeInsights worker'ов в loop'е.
+// MN-46: раньше per-user serial — на 50 Max-юзерах × ~2с/юзер = 100с.
+// 4 worker'а → ~25с на ту же выборку, при этом PG не задыхается (на VPS 4GB
+// pool=15 connections, оставляем запас на active webhook'и и API).
+const insightsParallelism = 4
 
 // InsightsComputeLoop — ежесуточный пересчёт Smart Insights для Max-юзеров.
 // Идёт по списку активных Max-подписчиков (users.plan_id LIKE 'max%') и
@@ -71,39 +81,58 @@ func (l *InsightsComputeLoop) compute() {
 		metrics.InsightsRefresh.WithLabelValues("error").Inc()
 		return
 	}
-	var okCount, failCount, teamOk, teamFail int
+	// MN-46: errgroup с лимитом insightsParallelism — параллельно считаем
+	// несколько Max-юзеров. Atomic-счётчики защищают агрегаты от data race.
+	var (
+		okCount   atomic.Int64
+		failCount atomic.Int64
+		teamOk    atomic.Int64
+		teamFail  atomic.Int64
+		mu        sync.Mutex // защита для slog.Warn вывода
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(insightsParallelism)
 	for _, uid := range ids {
-		// 1. Personal scope.
-		if cerr := l.svc.ComputeInsights(ctx, uid, nil); cerr != nil {
-			failCount++
-			metrics.InsightsRefresh.WithLabelValues("error").Inc()
-		} else {
-			okCount++
-			metrics.InsightsRefresh.WithLabelValues("success").Inc()
-		}
-
-		// 2. Team scope — только команды, где юзер owner.
-		teams, terr := l.teams.ListOwnedTeams(ctx, uid)
-		if terr != nil {
-			slog.WarnContext(ctx, "analytics.insights_loop.list_owned_teams_failed",
-				"user_id", uid, "error", terr)
-			metrics.InsightsTeamRun.WithLabelValues("error").Inc()
-			continue
-		}
-		for _, team := range teams {
-			tid := team.ID
-			if cerr := l.svc.ComputeInsights(ctx, uid, &tid); cerr != nil {
-				slog.WarnContext(ctx, "analytics.insights_loop.team_compute_failed",
-					"user_id", uid, "team_id", tid, "error", cerr)
-				metrics.InsightsTeamRun.WithLabelValues("error").Inc()
-				teamFail++
+		uid := uid
+		g.Go(func() error {
+			// 1. Personal scope.
+			if cerr := l.svc.ComputeInsights(gctx, uid, nil); cerr != nil {
+				failCount.Add(1)
+				metrics.InsightsRefresh.WithLabelValues("error").Inc()
 			} else {
-				metrics.InsightsTeamRun.WithLabelValues("success").Inc()
-				teamOk++
+				okCount.Add(1)
+				metrics.InsightsRefresh.WithLabelValues("success").Inc()
 			}
-		}
+
+			// 2. Team scope — только команды, где юзер owner.
+			teams, terr := l.teams.ListOwnedTeams(gctx, uid)
+			if terr != nil {
+				mu.Lock()
+				slog.WarnContext(gctx, "analytics.insights_loop.list_owned_teams_failed",
+					"user_id", uid, "error", terr)
+				mu.Unlock()
+				metrics.InsightsTeamRun.WithLabelValues("error").Inc()
+				return nil
+			}
+			for _, team := range teams {
+				tid := team.ID
+				if cerr := l.svc.ComputeInsights(gctx, uid, &tid); cerr != nil {
+					mu.Lock()
+					slog.WarnContext(gctx, "analytics.insights_loop.team_compute_failed",
+						"user_id", uid, "team_id", tid, "error", cerr)
+					mu.Unlock()
+					metrics.InsightsTeamRun.WithLabelValues("error").Inc()
+					teamFail.Add(1)
+				} else {
+					metrics.InsightsTeamRun.WithLabelValues("success").Inc()
+					teamOk.Add(1)
+				}
+			}
+			return nil
+		})
 	}
+	_ = g.Wait()
 	slog.Info("analytics.insights_loop.run",
-		"ok", okCount, "failed", failCount, "total", len(ids),
-		"team_ok", teamOk, "team_failed", teamFail)
+		"ok", okCount.Load(), "failed", failCount.Load(), "total", len(ids),
+		"team_ok", teamOk.Load(), "team_failed", teamFail.Load())
 }

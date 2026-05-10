@@ -112,50 +112,56 @@ func (r *analyticsRepo) PromptsUpdatedPerDay(ctx context.Context, userID uint, t
 }
 
 // Contributors — топ авторов команды по суммарной активности
-// (prompts_created + prompts_edited + uses). Raw SQL с тремя
-// LEFT JOIN subquery'ями через CTE-подобный шаблон — чище чем
-// цепочка GORM-выражений.
+// (prompts_created + prompts_edited + uses).
+//
+// MN-40: переписано на UNION ALL + GROUP BY с COUNT(*) FILTER. Раньше было
+// 3 отдельных subquery LEFT JOIN — каждая делала свой проход по prompts /
+// prompt_versions / prompt_usage_log + GROUP BY перед join'ом. На больших
+// таблицах PG читал все три полностью, даже если у юзера активности почти
+// не было. Теперь — один проход через UNION ALL aggregated по user_id.
 func (r *analyticsRepo) Contributors(ctx context.Context, teamID uint, rng repo.DateRange, limit int) ([]repo.ContributorRow, error) {
 	if limit < 1 || limit > 50 {
 		limit = 10
 	}
 	const query = `
+WITH activity AS (
+    SELECT user_id, 'created' AS kind FROM prompts
+    WHERE team_id = ? AND created_at >= ? AND created_at < ? AND deleted_at IS NULL
+    UNION ALL
+    SELECT pv.changed_by AS user_id, 'edited' AS kind FROM prompt_versions pv
+    JOIN prompts p ON p.id = pv.prompt_id
+    WHERE p.team_id = ? AND pv.created_at >= ? AND pv.created_at < ? AND p.deleted_at IS NULL
+    UNION ALL
+    SELECT user_id, 'used' AS kind FROM prompt_usage_log
+    WHERE team_id = ? AND used_at >= ? AND used_at < ?
+),
+agg AS (
+    SELECT
+        user_id,
+        COUNT(*) FILTER (WHERE kind = 'created') AS prompts_created,
+        COUNT(*) FILTER (WHERE kind = 'edited')  AS prompts_edited,
+        COUNT(*) FILTER (WHERE kind = 'used')    AS uses
+    FROM activity
+    GROUP BY user_id
+)
 SELECT
     u.id    AS user_id,
     u.email AS email,
     u.name  AS name,
-    COALESCE(created.cnt, 0) AS prompts_created,
-    COALESCE(edited.cnt, 0)  AS prompts_edited,
-    COALESCE(uses.cnt, 0)    AS uses
+    COALESCE(agg.prompts_created, 0) AS prompts_created,
+    COALESCE(agg.prompts_edited,  0) AS prompts_edited,
+    COALESCE(agg.uses,            0) AS uses
 FROM users u
 INNER JOIN team_members tm ON tm.user_id = u.id AND tm.team_id = ?
-LEFT JOIN (
-    SELECT user_id, COUNT(*) AS cnt
-    FROM prompts
-    WHERE team_id = ? AND created_at >= ? AND created_at < ? AND deleted_at IS NULL
-    GROUP BY user_id
-) created ON created.user_id = u.id
-LEFT JOIN (
-    SELECT pv.changed_by AS user_id, COUNT(*) AS cnt
-    FROM prompt_versions pv
-    JOIN prompts p ON p.id = pv.prompt_id
-    WHERE p.team_id = ? AND pv.created_at >= ? AND pv.created_at < ? AND p.deleted_at IS NULL
-    GROUP BY pv.changed_by
-) edited ON edited.user_id = u.id
-LEFT JOIN (
-    SELECT user_id, COUNT(*) AS cnt
-    FROM prompt_usage_log
-    WHERE team_id = ? AND used_at >= ? AND used_at < ?
-    GROUP BY user_id
-) uses ON uses.user_id = u.id
-ORDER BY (COALESCE(created.cnt,0) + COALESCE(edited.cnt,0) + COALESCE(uses.cnt,0)) DESC
+LEFT JOIN agg ON agg.user_id = u.id
+ORDER BY (COALESCE(agg.prompts_created,0) + COALESCE(agg.prompts_edited,0) + COALESCE(agg.uses,0)) DESC
 LIMIT ?`
 	var rows []repo.ContributorRow
 	err := r.db.WithContext(ctx).Raw(query,
+		teamID, rng.From, rng.To,
+		teamID, rng.From, rng.To,
+		teamID, rng.From, rng.To,
 		teamID,
-		teamID, rng.From, rng.To,
-		teamID, rng.From, rng.To,
-		teamID, rng.From, rng.To,
 		limit,
 	).Scan(&rows).Error
 	return rows, err

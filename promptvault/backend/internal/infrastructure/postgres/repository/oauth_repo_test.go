@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,9 +29,9 @@ func createTestClient(t *testing.T, clients repo.OAuthClientRepository) *models.
 	c := &models.OAuthClient{
 		ClientID:                "pvoci_test_" + t.Name(),
 		ClientName:              "Test Client",
-		RedirectURIs:            pq.StringArray{"https://claude.ai/api/mcp/auth_callback"},
-		GrantTypes:              pq.StringArray{"authorization_code", "refresh_token"},
-		ResponseTypes:           pq.StringArray{"code"},
+		RedirectURIs:            models.StringArray{"https://claude.ai/api/mcp/auth_callback"},
+		GrantTypes:              models.StringArray{"authorization_code", "refresh_token"},
+		ResponseTypes:           models.StringArray{"code"},
 		TokenEndpointAuthMethod: "none",
 		Scope:                   "mcp:read mcp:write",
 		IsDynamic:               true,

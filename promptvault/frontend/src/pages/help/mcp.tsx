@@ -170,7 +170,7 @@ const CATALOGS: Catalog[] = [
   },
   {
     name: "Smithery",
-    description: "Маркетплейс MCP-серверов с one-click установкой в Claude/Cursor",
+    description: "Маркетплейс MCP-серверов с установкой в один клик в Claude/Cursor",
     url: "https://smithery.ai/server/@slava24122003/promptvault",
     status: "ready",
   },
@@ -308,7 +308,7 @@ export default function HelpMCPPage() {
         {/* --- Что доступно: Tools --- */}
         <Section icon={Terminal} title="Что MCP умеет (30 tool)">
           <p className="mb-4 text-sm text-muted-foreground">
-            Все операции работают и в личном пространстве, и в команде (через параметр <code className="rounded bg-muted px-1 text-[0.78em]">team_id</code>). Запись недоступна для роли <strong>viewer</strong>.
+            Все операции работают и в личном пространстве, и в команде (через параметр <code className="rounded bg-muted px-1 text-[0.78em]">team_id</code>). Запись недоступна для роли <strong>читателя</strong>.
           </p>
           <ToolGroup icon={Search} title="Чтение" colorClass="text-emerald-500" tools={TOOLS_READ} viewerOk />
           <ToolGroup icon={PenSquare} title="Запись" colorClass="text-amber-500" tools={TOOLS_WRITE} />
@@ -316,9 +316,9 @@ export default function HelpMCPPage() {
         </Section>
 
         {/* --- Resources & Prompts --- */}
-        <Section icon={Sparkles} title="Resources и Prompts">
+        <Section icon={Sparkles} title="Ресурсы и промпты">
           <div className="mb-5">
-            <h3 className="mb-2 text-sm font-semibold text-foreground">Resources</h3>
+            <h3 className="mb-2 text-sm font-semibold text-foreground">Ресурсы</h3>
             <p className="mb-3 text-xs text-muted-foreground">URI, которые LLM подгружает как контекст без явной команды.</p>
             <div className="space-y-1">
               {RESOURCES.map(([uri, desc]) => (
@@ -330,7 +330,7 @@ export default function HelpMCPPage() {
             </div>
           </div>
           <div>
-            <h3 className="mb-2 text-sm font-semibold text-foreground">Prompts</h3>
+            <h3 className="mb-2 text-sm font-semibold text-foreground">Промпты</h3>
             <p className="mb-3 text-xs text-muted-foreground">Готовые шаблоны, которые клиент может вставить как сообщение.</p>
             <div className="rounded-lg border border-border bg-card/50 px-3 py-2">
               <code className="text-[0.78rem] text-brand-muted-foreground">use_prompt</code>
@@ -360,9 +360,9 @@ export default function HelpMCPPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                <tr><td className="px-3 py-2 font-medium">owner</td><td className="px-3 py-2 text-emerald-500">✓</td><td className="px-3 py-2 text-emerald-500">✓</td></tr>
-                <tr><td className="px-3 py-2 font-medium">editor</td><td className="px-3 py-2 text-emerald-500">✓</td><td className="px-3 py-2 text-emerald-500">✓</td></tr>
-                <tr><td className="px-3 py-2 font-medium">viewer</td><td className="px-3 py-2 text-emerald-500">✓</td><td className="px-3 py-2 text-muted-foreground">—</td></tr>
+                <tr><td className="px-3 py-2 font-medium">Владелец</td><td className="px-3 py-2 text-emerald-500">✓</td><td className="px-3 py-2 text-emerald-500">✓</td></tr>
+                <tr><td className="px-3 py-2 font-medium">Редактор</td><td className="px-3 py-2 text-emerald-500">✓</td><td className="px-3 py-2 text-emerald-500">✓</td></tr>
+                <tr><td className="px-3 py-2 font-medium">Читатель</td><td className="px-3 py-2 text-emerald-500">✓</td><td className="px-3 py-2 text-muted-foreground">—</td></tr>
               </tbody>
             </table>
           </div>
@@ -429,7 +429,7 @@ export default function HelpMCPPage() {
         </Section>
 
         {/* --- Лимиты --- */}
-        <Section icon={Zap} title="Rate limits">
+        <Section icon={Zap} title="Лимиты запросов">
           <div className="grid gap-3 sm:grid-cols-3">
             <LimitCard label="API-ключей на пользователя" value="до 5" />
             <LimitCard label="Запросов в минуту с IP" value="120" />
@@ -454,7 +454,7 @@ export default function HelpMCPPage() {
           />
           <Trouble
             title="«read-only access» / 403 на write-операции"
-            body={<>Ваша роль в команде — <strong>viewer</strong>. Попросите owner или editor повысить вам права.</>}
+            body={<>Ваша роль в команде — <strong>читатель</strong>. Попросите владельца или редактора повысить вам права.</>}
           />
           <Trouble
             title="«too many requests» / 429"

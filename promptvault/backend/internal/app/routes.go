@@ -302,6 +302,7 @@ func (a *App) MountRoutes(r chi.Router) {
 					r.Get("/", a.teamHandler.GetBySlug)
 					r.Put("/", a.teamHandler.Update)
 					r.Delete("/", a.teamHandler.Delete)
+					r.Get("/usage", a.teamUsageHandler.Get)        // Pack TU: team-pool usage
 					r.Get("/activity", a.teamActivityHandler.List) // Phase 14 B.4
 					r.Get("/branding", a.teamBrandingHandler.Get) // Phase 14 D
 					r.Put("/branding", a.teamBrandingHandler.Set) // Phase 14 D

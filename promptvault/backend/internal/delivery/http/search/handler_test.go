@@ -27,6 +27,10 @@ func (m *mPromptRepo) GetByID(ctx context.Context, id uint) (*models.Prompt, err
 	args := m.Called(ctx, id)
 	return args.Get(0).(*models.Prompt), args.Error(1)
 }
+func (m *mPromptRepo) GetMeta(ctx context.Context, id uint) (*models.Prompt, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(*models.Prompt), args.Error(1)
+}
 func (m *mPromptRepo) Update(ctx context.Context, p *models.Prompt) error {
 	return m.Called(ctx, p).Error(0)
 }
