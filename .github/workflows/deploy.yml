@@ -387,13 +387,11 @@ jobs:
             fi
 
             echo "=== Pulling images from GHCR ==="
-            # MN-76: раньше `set -a; source .env.prod; set +a` экспортил ВСЕ vars
-            # из .env.prod в shell environment (включая JWT_SECRET, TBANK_PASSWORD,
-            # SENTRY_DSN). Любая subprocess-команда увидела бы их через `printenv`.
-            # Сейчас вытаскиваем точечно только то, что нужно скрипту deploy.
-            # Docker compose читает остальные через `env_file: .env` без shell exposure.
-            POSTGRES_USER=$(grep -E '^POSTGRES_USER=' .env.prod | head -1 | cut -d= -f2-)
-            export POSTGRES_USER
+            # Phase TU-fix: убрали `POSTGRES_USER=$(grep ...)` — managed PG
+            # (Timeweb) не задаёт POSTGRES_USER в .env.prod, grep возвращал
+            # exit 1 → `set -euo pipefail` ронял весь deploy. Раньше эта
+            # переменная нужна была для `pg_isready -U "$POSTGRES_USER"`,
+            # сейчас pg_isready убран (нет local postgres).
 
             # Сохраняем текущие images как :prev для отката
             docker tag ghcr.io/slava4123/promtlab-api:latest ghcr.io/slava4123/promtlab-api:prev 2>/dev/null || true
