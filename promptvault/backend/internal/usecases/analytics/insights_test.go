@@ -53,28 +53,37 @@ func uintToStr(v uint) string {
 	}
 	return string(buf[i:])
 }
+// inc — thread-safe инкремент r.calls[key]. Все методы trackingAnalyticsRepo
+// вызываются из errgroup-горутин (compute() параллелит per-user), без mutex
+// race detector ловит конкурентную запись в map (Go 1.25.10).
+func (r *trackingAnalyticsRepo) inc(key string) {
+	r.mu.Lock()
+	r.calls[key]++
+	r.mu.Unlock()
+}
+
 func (r *trackingAnalyticsRepo) GetTrendingPrompts(_ context.Context, _ uint, _ *uint, _ float64, _ bool, _ int) ([]repo.TrendRow, error) {
-	r.calls["GetTrendingPrompts"]++
+	r.inc("GetTrendingPrompts")
 	return []repo.TrendRow{{PromptID: 1, Title: "x", UsesLast: 5, UsesPrevious: 1}}, nil
 }
 func (r *trackingAnalyticsRepo) MostEditedPrompts(_ context.Context, _ uint, _ *uint, _ int) ([]repo.PromptUsageRow, error) {
-	r.calls["MostEditedPrompts"]++
+	r.inc("MostEditedPrompts")
 	return []repo.PromptUsageRow{{PromptID: 1, Title: "x", Uses: 0}}, nil
 }
 func (r *trackingAnalyticsRepo) PossibleDuplicates(_ context.Context, _ uint, _ *uint, _ float32, _ int) ([]repo.DuplicatePair, error) {
-	r.calls["PossibleDuplicates"]++
+	r.inc("PossibleDuplicates")
 	return []repo.DuplicatePair{{PromptAID: 1, PromptBID: 2, Similarity: 0.9}}, nil
 }
 func (r *trackingAnalyticsRepo) OrphanTags(_ context.Context, _ uint, _ *uint, _ int) ([]repo.TagRow, error) {
-	r.calls["OrphanTags"]++
+	r.inc("OrphanTags")
 	return []repo.TagRow{{TagID: 1, Name: "x"}}, nil
 }
 func (r *trackingAnalyticsRepo) EmptyCollections(_ context.Context, _ uint, _ *uint, _ int) ([]repo.CollectionRow, error) {
-	r.calls["EmptyCollections"]++
+	r.inc("EmptyCollections")
 	return []repo.CollectionRow{{CollectionID: 1, Name: "x"}}, nil
 }
 func (r *trackingAnalyticsRepo) UpsertInsight(_ context.Context, in *models.SmartInsight) error {
-	r.calls["UpsertInsight:"+in.InsightType]++
+	r.inc("UpsertInsight:" + in.InsightType)
 	return nil
 }
 

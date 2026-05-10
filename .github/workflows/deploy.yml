@@ -101,10 +101,12 @@ jobs:
         # MN-73: vitest --coverage генерит lcov+text-summary. text-summary
         # выводится в job log (видно % сразу), lcov upload'им как artifact
         # для downstream-тулов (PR comments через GH actions, история).
-        # @vitest/coverage-v8 ставится on-demand через npx, чтобы не тащить
-        # его в каждый dev npm ci (provider тяжёлый, ~30 MB).
+        # @vitest/coverage-v8 ставится on-demand через npm install --no-save,
+        # чтобы не тащить его в каждый dev npm ci (provider тяжёлый, ~30 MB).
+        # Раньше пробовали `npx --yes @vitest/coverage-v8 --version` — у пакета
+        # нет CLI executable, npx падал с «could not determine executable».
         run: |
-          npx --yes @vitest/coverage-v8@4.1.2 --version >/dev/null
+          npm install --no-save @vitest/coverage-v8@4.1.2
           npx vitest run --coverage --coverage.reporter=text-summary --coverage.reporter=lcov
 
       - name: Upload coverage artifact
