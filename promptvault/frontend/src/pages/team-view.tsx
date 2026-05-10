@@ -301,8 +301,9 @@ export default function TeamView() {
           </DialogHeader>
 
           <div className="space-y-2">
-            <label className="text-[0.8rem] font-medium text-foreground">Название</label>
+            <label htmlFor="team-edit-name" className="text-[0.8rem] font-medium text-foreground">Название</label>
             <input
+              id="team-edit-name"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               autoFocus
@@ -312,8 +313,9 @@ export default function TeamView() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[0.8rem] font-medium text-foreground">Описание</label>
+            <label htmlFor="team-edit-description" className="text-[0.8rem] font-medium text-foreground">Описание</label>
             <textarea
+              id="team-edit-description"
               value={editDescription}
               onChange={(e) => setEditDescription(e.target.value)}
               rows={2}

@@ -223,11 +223,14 @@ export default function Collections() {
 
           {/* Иконка */}
           <div className="space-y-2">
-            <label className="text-[0.8rem] font-medium text-foreground">Иконка</label>
-            <div className="flex flex-wrap gap-1.5">
+            <span id="collection-icon-label" className="block text-[0.8rem] font-medium text-foreground">Иконка</span>
+            <div role="radiogroup" aria-labelledby="collection-icon-label" className="flex flex-wrap gap-1.5">
               {ICON_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={icon === opt.value || (!icon && opt.value === "folder")}
                   onClick={() => setIcon(opt.value)}
                   title={opt.label}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${icon === opt.value || (!icon && opt.value === "folder") ? "ring-2 ring-brand bg-muted/60" : "bg-muted/30 hover:bg-muted"}`}
@@ -240,8 +243,9 @@ export default function Collections() {
 
           {/* Название */}
           <div className="space-y-2">
-            <label className="text-[0.8rem] font-medium text-foreground">Название</label>
+            <label htmlFor="collection-name" className="text-[0.8rem] font-medium text-foreground">Название</label>
             <input
+              id="collection-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Например: Код-ревью"
@@ -253,11 +257,15 @@ export default function Collections() {
 
           {/* Цвет */}
           <div className="space-y-2">
-            <label className="text-[0.8rem] font-medium text-foreground">Цвет</label>
-            <div className="flex gap-2">
+            <span id="collection-color-label" className="block text-[0.8rem] font-medium text-foreground">Цвет</span>
+            <div role="radiogroup" aria-labelledby="collection-color-label" className="flex gap-2">
               {COLORS.map((c) => (
                 <button
                   key={c.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={color === c.value}
+                  aria-label={c.label}
                   onClick={() => setColor(c.value)}
                   className={`h-7 w-7 rounded-full transition-[transform,box-shadow] ${color === c.value ? "ring-2 ring-white ring-offset-2 ring-offset-background scale-110" : "hover:scale-110"}`}
                   style={{ background: c.value }}
@@ -269,8 +277,9 @@ export default function Collections() {
 
           {/* Описание */}
           <div className="space-y-2">
-            <label className="text-[0.8rem] font-medium text-foreground">Описание <span className="text-muted-foreground">(необязательно)</span></label>
+            <label htmlFor="collection-description" className="text-[0.8rem] font-medium text-foreground">Описание <span className="text-muted-foreground">(необязательно)</span></label>
             <textarea
+              id="collection-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Для чего эта коллекция?"

@@ -400,7 +400,7 @@ export default function PromptEditor() {
             </div>
 
             <div className="space-y-2">
-              <label className="flex items-center gap-1.5 text-[0.8rem] font-medium text-foreground">
+              <span className="flex items-center gap-1.5 text-[0.8rem] font-medium text-foreground">
                 <FolderOpen className="h-3 w-3 text-violet-400/60" />
                 Коллекции
                 <span className="text-muted-foreground">(необяз.)</span>
@@ -418,7 +418,7 @@ export default function PromptEditor() {
                     </>
                   )}
                 />
-              </label>
+              </span>
               <Controller
                 name="collection_ids"
                 control={control}
@@ -435,14 +435,14 @@ export default function PromptEditor() {
 
           {/* Теги */}
           <div className="space-y-2">
-            <label className="flex items-center gap-1.5 text-[0.8rem] font-medium text-foreground">
+            <span className="flex items-center gap-1.5 text-[0.8rem] font-medium text-foreground">
               <Tag className="h-3 w-3 text-violet-400/60" />
               Теги
               <span className="text-muted-foreground">(необяз.)</span>
               <InfoTooltip ariaLabel="Что такое теги?">
                 Метки для фильтрации и поиска по библиотеке. В отличие от коллекций — плоские, без иерархии. Удобно для кросс-категорий: «срочно», «черновик», «en».
               </InfoTooltip>
-            </label>
+            </span>
             <Controller
               name="tag_ids"
               control={control}
@@ -461,6 +461,7 @@ export default function PromptEditor() {
               <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 text-sm">
                 <input
                   type="checkbox"
+                  aria-label="Публичный промпт"
                   checked={field.value}
                   onChange={(e) => field.onChange(e.target.checked)}
                   className="mt-0.5 h-4 w-4 cursor-pointer accent-brand"

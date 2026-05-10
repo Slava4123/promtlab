@@ -66,8 +66,9 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
         </DialogHeader>
 
         <div className="space-y-2 relative">
-          <label className="text-[0.8rem] font-medium text-foreground">Email или @ник</label>
+          <label htmlFor="invite-email" className="text-[0.8rem] font-medium text-foreground">Email или @ник</label>
           <input
+            id="invite-email"
             ref={inputRef}
             type="text"
             value={query}
@@ -114,11 +115,14 @@ export function InviteDialog({ open, onClose, onInvite, isPending }: InviteDialo
         </div>
 
         <div className="space-y-2">
-          <label className="text-[0.8rem] font-medium text-foreground">Роль</label>
-          <div className="flex gap-2">
+          <span id="invite-role-label" className="block text-[0.8rem] font-medium text-foreground">Роль</span>
+          <div role="radiogroup" aria-labelledby="invite-role-label" className="flex gap-2">
             {(["editor", "viewer"] as const).map((r) => (
               <button
                 key={r}
+                type="button"
+                role="radio"
+                aria-checked={role === r}
                 onClick={() => setRole(r)}
                 className={`flex-1 rounded-lg px-3 py-2 text-[0.8rem] font-medium transition-colors ${
                   role === r

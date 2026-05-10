@@ -185,10 +185,10 @@ export function APIKeysSection() {
             <div className="space-y-3 pt-1 border-t border-border/60">
               {/* Team */}
               <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground">
+                <span className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground">
                   <Users className="h-3 w-3" />
                   Команда
-                </label>
+                </span>
                 <Select value={teamId} onValueChange={(v) => setTeamId(v ?? NO_TEAM_VALUE)}>
                   <SelectTrigger className="h-9 w-full">
                     <SelectValue>
@@ -214,10 +214,10 @@ export function APIKeysSection() {
 
               {/* Allowed tools */}
               <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground">
+                <span className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground">
                   <Wrench className="h-3 w-3" />
                   Разрешённые инструменты
-                </label>
+                </span>
                 <Popover open={toolsOpen} onOpenChange={setToolsOpen}>
                   <PopoverTrigger
                     type="button"

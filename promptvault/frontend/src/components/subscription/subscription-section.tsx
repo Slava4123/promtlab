@@ -16,7 +16,7 @@ import {
   useSetAutoRenew,
 } from "@/hooks/use-subscription"
 import { useAuthStore } from "@/stores/auth-store"
-import type { PlanID } from "@/api/types"
+import { asPlanID } from "@/api/types"
 
 function formatDateRu(iso: string): string {
   return new Date(iso).toLocaleDateString("ru-RU", {
@@ -28,7 +28,9 @@ function formatDateRu(iso: string): string {
 
 export function SubscriptionSection() {
   const navigate = useNavigate()
-  const planId = useAuthStore((s) => s.user?.plan_id ?? "free") as PlanID
+  // MN-60: asPlanID — runtime guard вместо `as PlanID` cast. Невалидный
+  // plan_id (rollback / ручная правка / future tier) → safe fallback "free".
+  const planId = asPlanID(useAuthStore((s) => s.user?.plan_id))
   const { data: subscription, isLoading: subLoading } = useSubscription()
   const { data: usage, isLoading: usageLoading } = useUsage()
   const cancelMutation = useCancelSubscription()
@@ -135,6 +137,7 @@ export function SubscriptionSection() {
             <label className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3 text-sm">
               <input
                 type="checkbox"
+                aria-label="Автопродление подписки"
                 checked={subscription.auto_renew}
                 disabled={autoRenewMutation.isPending}
                 onChange={(e) => autoRenewMutation.mutate(e.target.checked)}
@@ -154,23 +157,29 @@ export function SubscriptionSection() {
           {usage && <UsageMeters usage={usage} />}
 
           <div className="flex flex-wrap gap-2">
-            {planId === "free" ? (
+            {planId === "free" && (
               <Button size="sm" onClick={() => navigate("/pricing")}>
-                Получить Pro за 19₽/день
+                Получить Pro за 20₽/день
               </Button>
-            ) : (
-              !subscription?.cancel_at_period_end && !isPaused && (
-                <>
-                  {isActivePaid && (
-                    <Button variant="outline" size="sm" onClick={() => setPauseOpen(true)}>
-                      Приостановить
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" onClick={() => setCancelOpen(true)}>
-                    Отменить подписку
+            )}
+            {/* Pro-юзеру предлагаем апгрейд на Max — на самой странице подписки.
+                Раньше юзер должен был угадать что для апгрейда надо идти в /pricing. */}
+            {(planId === "pro" || planId === "pro_yearly") && !subscription?.cancel_at_period_end && !isPaused && (
+              <Button size="sm" onClick={() => navigate("/pricing")}>
+                Перейти на Max за 43₽/день
+              </Button>
+            )}
+            {planId !== "free" && !subscription?.cancel_at_period_end && !isPaused && (
+              <>
+                {isActivePaid && (
+                  <Button variant="outline" size="sm" onClick={() => setPauseOpen(true)}>
+                    Приостановить
                   </Button>
-                </>
-              )
+                )}
+                <Button variant="outline" size="sm" onClick={() => setCancelOpen(true)}>
+                  Отменить подписку
+                </Button>
+              </>
             )}
             <Button variant="ghost" size="sm" onClick={() => navigate("/pricing")}>
               Все тарифы <ExternalLink className="h-3.5 w-3.5" />

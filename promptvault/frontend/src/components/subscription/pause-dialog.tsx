@@ -58,6 +58,7 @@ export function PauseDialog({ open, onOpenChange, onConfirm, isPending = false }
                 type="radio"
                 name="pause-months"
                 value={m}
+                aria-label={m === 1 ? "1 месяц" : `${m} месяца`}
                 checked={months === m}
                 onChange={() => setMonths(m)}
                 className="mt-0.5 h-4 w-4 cursor-pointer accent-brand"
