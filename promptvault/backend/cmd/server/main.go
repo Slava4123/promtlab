@@ -25,6 +25,7 @@ import (
 	corsmw "promptvault/internal/middleware/cors"
 	loggermw "promptvault/internal/middleware/logger"
 	metricsmw "promptvault/internal/middleware/metrics"
+	"promptvault/internal/middleware/secheaders"
 	sentrymw "promptvault/internal/middleware/sentry"
 )
 
@@ -114,6 +115,15 @@ func main() {
 	// и до MountRoutes, чтобы покрывать все handlers (включая /metrics само).
 	// Path label нормализуется до Chi route pattern (см. metrics.routePattern).
 	r.Use(metricsmw.Middleware)
+	// MJ-12: security headers — global middleware, ставится здесь, до любых
+	// route registrations. chi запрещает r.Use() после регистрации routes,
+	// поэтому раньше панику ловили в MountRoutes (когда pprof и /api/health
+	// уже были зарегистрированы).
+	r.Use(secheaders.New(secheaders.Options{
+		HSTS:                  cfg.Server.IsProd(),
+		HSTSMaxAge:            31536000, // 1 год
+		HSTSIncludeSubdomains: true,
+	}))
 
 	if cfg.Server.IsDev() {
 		r.HandleFunc("/debug/pprof/", pprof.Index)
