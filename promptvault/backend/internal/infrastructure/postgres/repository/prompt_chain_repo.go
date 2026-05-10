@@ -230,9 +230,12 @@ func (r *chainRepo) ReorderSteps(ctx context.Context, chainID uint, stepIDs []ui
 			return err
 		}
 		for i, stepID := range stepIDs {
+			// UpdateColumn вместо Update — partial UPDATE position не должен
+			// триггерить BeforeSave/Validate (см. RelinkPromptPredecessors
+			// для контекста: hook падает на zero-value struct с step_type="").
 			res := tx.Model(&models.PromptChainStep{}).
 				Where("id = ? AND chain_id = ?", stepID, chainID).
-				Update("position", i+1)
+				UpdateColumn("position", i+1)
 			if res.Error != nil {
 				return res.Error
 			}
@@ -246,10 +249,17 @@ func (r *chainRepo) ReorderSteps(ctx context.Context, chainID uint, stepIDs []ui
 
 // RelinkPromptPredecessors переключает все next_step_id, ссылавшиеся на fromID,
 // на toID (или NULL). Один UPDATE — атомарно.
+//
+// UpdateColumn (а не Update) — чтобы НЕ триггерить BeforeSave hook'а
+// PromptChainStep.Validate(): hook валидирует sum-type инвариант
+// step_type/prompt_id/conditions, но получает zero-value struct (мы
+// делаем partial UPDATE без Model'а с данными), и Validate() падает на
+// step_type="" с ошибкой "unknown step_type". UpdateColumn пропускает
+// hooks — корректное поведение для prefiltered UPDATE без полей сущности.
 func (r *chainRepo) RelinkPromptPredecessors(ctx context.Context, chainID, fromID uint, toID *uint) error {
 	return r.db.WithContext(ctx).Model(&models.PromptChainStep{}).
 		Where("chain_id = ? AND next_step_id = ?", chainID, fromID).
-		Update("next_step_id", toID).Error
+		UpdateColumn("next_step_id", toID).Error
 }
 
 // InTransaction оборачивает fn в gorm-транзакцию. Внутри fn получает
