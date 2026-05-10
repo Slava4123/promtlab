@@ -397,9 +397,18 @@ jobs:
             docker tag ghcr.io/slava4123/promtlab-api:latest ghcr.io/slava4123/promtlab-api:prev 2>/dev/null || true
             docker tag ghcr.io/slava4123/promtlab-frontend:latest ghcr.io/slava4123/promtlab-frontend:prev 2>/dev/null || true
 
-            docker compose -f docker-compose.prod.yml pull
+            # Phase TU-fix: алиас compose-команды с явным --env-file. Без него
+            # docker compose читает interpolation `${CERTBOT_EMAIL}` etc. ТОЛЬКО
+            # из shell env или файла `.env` (default name) — НЕ из `.env.prod`.
+            # Раньше старый jonasal/nginx-certbot:4-alpine терпимо относился к
+            # пустым переменным (warning, но nginx стартовал). Новый 5-alpine
+            # после MN-74 split-stage Dockerfile-bump стал строже и kills nginx
+            # через SIGTERM при undefined CERTBOT_EMAIL → frontend в crashloop.
+            DC="docker compose --env-file .env.prod -f docker-compose.prod.yml"
 
-            echo "=== Deploying (staged: db → api → frontend) ==="
+            $DC pull
+
+            echo "=== Deploying (staged: api → all) ==="
             # MN-77: Раньше был один `docker compose up -d`, который параллельно
             # стартует все контейнеры. Frontend мог подняться до того как api
             # прошёл миграции — пользователи видели 502/timeout от proxy /api.
@@ -407,15 +416,15 @@ jobs:
             # Раньше скрипт делал `up -d postgres` + `pg_isready` — оба падали с
             # «no such service: postgres». Сейчас сразу api (миграции у managed
             # PG всегда доступны), затем остальное.
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans api
+            $DC up -d --remove-orphans api
             sleep 5
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            $DC up -d --remove-orphans
 
             echo "=== Health check ==="
             sleep 15
             OK=false
             for i in 1 2 3 4 5; do
-              HEALTH=$(docker compose -f docker-compose.prod.yml exec -T api wget -qO- http://localhost:8080/api/health 2>&1 || true)
+              HEALTH=$($DC exec -T api wget -qO- http://localhost:8080/api/health 2>&1 || true)
               if echo "$HEALTH" | grep -q '"ok"'; then
                 echo "Health check PASSED (attempt $i): $HEALTH"
                 OK=true
@@ -432,7 +441,7 @@ jobs:
               echo "=== Health check FAILED, rolling back to :prev ==="
               docker tag ghcr.io/slava4123/promtlab-api:prev ghcr.io/slava4123/promtlab-api:latest
               docker tag ghcr.io/slava4123/promtlab-frontend:prev ghcr.io/slava4123/promtlab-frontend:latest
-              docker compose -f docker-compose.prod.yml up -d --remove-orphans
+              $DC up -d --remove-orphans
               echo "=== Rolled back to previous version ==="
               exit 1
             fi
