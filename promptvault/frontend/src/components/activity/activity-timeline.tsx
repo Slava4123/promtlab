@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import { Loader2 } from "lucide-react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { Button } from "@/components/ui/button"
 import { ActivityItem } from "./activity-item"
 import { Separator } from "@/components/ui/separator"
@@ -29,7 +30,19 @@ export function ActivityTimeline({
   hasFilter = false,
   onClearFilter,
 }: ActivityTimelineProps) {
+  const parentRef = useRef<HTMLDivElement | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  // MJ-19 final: виртуализация через @tanstack/react-virtual. Pattern из
+  // admin/audit-log MobileAuditList. estimateSize=85px — средняя высота
+  // ActivityItem (avatar 32px + 2 строки текста). measureElement уточняет
+  // реальную высоту динамически.
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 85,
+    overscan: 5,
+  })
 
   useEffect(() => {
     if (!autoLoad || !hasMore) return
@@ -74,13 +87,31 @@ export function ActivityTimeline({
   }
 
   return (
-    <div className="flex flex-col">
-      {items.map((item, idx) => (
-        <div key={item.id}>
-          <ActivityItem item={item} />
-          {idx < items.length - 1 && <Separator />}
-        </div>
-      ))}
+    <div ref={parentRef} className="max-h-[70vh] overflow-auto">
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {virtualizer.getVirtualItems().map((vRow) => {
+          const item = items[vRow.index]
+          const isLast = vRow.index === items.length - 1
+          return (
+            <div
+              key={item.id}
+              ref={virtualizer.measureElement}
+              data-index={vRow.index}
+              className="absolute left-0 top-0 w-full"
+              style={{ transform: `translateY(${vRow.start}px)` }}
+            >
+              <ActivityItem item={item} />
+              {!isLast && <Separator />}
+            </div>
+          )
+        })}
+      </div>
       {hasMore && (
         <div ref={sentinelRef} className="flex justify-center py-4">
           {isFetching ? (

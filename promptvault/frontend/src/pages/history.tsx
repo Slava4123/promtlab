@@ -1,22 +1,29 @@
 import { useRef, useEffect, useCallback, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { Clock, FileText, Loader2 } from "lucide-react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { useHistory } from "@/hooks/use-history"
 import { PageLayout } from "@/components/layout/page-layout"
 import { useWorkspaceStore } from "@/stores/workspace-store"
 import type { UsageLogEntry } from "@/api/types"
 
-function groupByDay(items: UsageLogEntry[]) {
-  const groups: { label: string; items: UsageLogEntry[] }[] = []
+// MJ-19 final: flat row-list для virtualizer.
+// Группы → entries уплощаются в один массив с маркерами header/row,
+// чтобы useVirtualizer мог индексировать однородно. estimateSize'ы
+// разные (40 / 65) выбираются по type.
+type FlatRow =
+  | { type: "header"; label: string }
+  | { type: "row"; entry: UsageLogEntry }
+
+function buildFlatRows(items: UsageLogEntry[]): FlatRow[] {
+  const rows: FlatRow[] = []
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const yesterday = new Date(today.getTime() - 86400000)
   const weekAgo = new Date(today.getTime() - 7 * 86400000)
 
   let currentLabel = ""
-  let currentItems: UsageLogEntry[] = []
-
   for (const item of items) {
     const d = new Date(item.used_at)
     const itemDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -34,20 +41,12 @@ function groupByDay(items: UsageLogEntry[]) {
     }
 
     if (label !== currentLabel) {
-      if (currentItems.length > 0) {
-        groups.push({ label: currentLabel, items: currentItems })
-      }
+      rows.push({ type: "header", label })
       currentLabel = label
-      currentItems = [item]
-    } else {
-      currentItems.push(item)
     }
+    rows.push({ type: "row", entry: item })
   }
-  if (currentItems.length > 0) {
-    groups.push({ label: currentLabel, items: currentItems })
-  }
-
-  return groups
+  return rows
 }
 
 export default function History() {
@@ -63,6 +62,7 @@ export default function History() {
     fetchNextPage,
   } = useHistory(teamId)
 
+  const parentRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const handleIntersect = useCallback(
     (entries: IntersectionObserverEntry[]) => {
@@ -82,7 +82,14 @@ export default function History() {
   }, [handleIntersect])
 
   const allItems = useMemo(() => data?.pages.flatMap((p) => p.items) ?? [], [data])
-  const groups = useMemo(() => groupByDay(allItems), [allItems])
+  const flatRows = useMemo(() => buildFlatRows(allItems), [allItems])
+
+  const virtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: (index) => (flatRows[index]?.type === "header" ? 40 : 65),
+    overscan: 8,
+  })
 
   return (
     <PageLayout
@@ -105,50 +112,68 @@ export default function History() {
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {groups.map((group) => (
-            <div key={group.label}>
-              <h2 className="mb-2 text-[0.75rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                {group.label}
-              </h2>
-              <div className="space-y-2">
-                {group.items.map((entry) => (
-                  <button
-                    key={entry.id}
-                    onClick={() => navigate(`/prompts/${entry.prompt_id}`)}
-                    className="group flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left transition-[transform,box-shadow] hover:-translate-y-0.5 hover:border-violet-500/15 hover:shadow-md"
+        <>
+          <div ref={parentRef} className="max-h-[75vh] overflow-auto">
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {virtualizer.getVirtualItems().map((vRow) => {
+                const row = flatRows[vRow.index]
+                return (
+                  <div
+                    key={vRow.key}
+                    ref={virtualizer.measureElement}
+                    data-index={vRow.index}
+                    className="absolute left-0 top-0 w-full"
+                    style={{ transform: `translateY(${vRow.start}px)` }}
                   >
-                    <span className="shrink-0 text-[0.7rem] tabular-nums text-muted-foreground">
-                      {new Date(entry.used_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-500/[0.08] ring-1 ring-violet-500/10">
-                      <FileText className="h-3 w-3 text-violet-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[0.8rem] font-medium text-foreground">
-                        {entry.prompt.title}
-                      </p>
-                      {entry.prompt.tags.length > 0 && (
-                        <div className="mt-0.5 flex gap-1">
-                          {entry.prompt.tags.slice(0, 3).map((tag) => (
-                            <span
-                              key={tag.id}
-                              className="rounded-full px-1.5 py-px text-[0.58rem]"
-                              style={{ backgroundColor: tag.color + "18", color: tag.color + "cc" }}
-                            >
-                              {tag.name}
-                            </span>
-                          ))}
+                    {row.type === "header" ? (
+                      <h2 className="mb-2 mt-3 text-[0.75rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {row.label}
+                      </h2>
+                    ) : (
+                      <button
+                        onClick={() => navigate(`/prompts/${row.entry.prompt_id}`)}
+                        className="group mb-2 flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left transition-[transform,box-shadow] hover:-translate-y-0.5 hover:border-violet-500/15 hover:shadow-md"
+                      >
+                        <span className="shrink-0 text-[0.7rem] tabular-nums text-muted-foreground">
+                          {new Date(row.entry.used_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-500/[0.08] ring-1 ring-violet-500/10">
+                          <FileText className="h-3 w-3 text-violet-400" />
                         </div>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[0.8rem] font-medium text-foreground">
+                            {row.entry.prompt.title}
+                          </p>
+                          {row.entry.prompt.tags.length > 0 && (
+                            <div className="mt-0.5 flex gap-1">
+                              {row.entry.prompt.tags.slice(0, 3).map((tag) => (
+                                <span
+                                  key={tag.id}
+                                  className="rounded-full px-1.5 py-px text-[0.58rem]"
+                                  style={{ backgroundColor: tag.color + "18", color: tag.color + "cc" }}
+                                >
+                                  {tag.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          ))}
+          </div>
 
-          {/* Sentinel */}
+          {/* Sentinel — снаружи virtualizer'а: не входит в виртуализированный
+              поток, наблюдается IntersectionObserver'ом для autoload. */}
           <div ref={sentinelRef} className="flex justify-center py-4">
             {isFetchingNextPage && (
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -157,7 +182,7 @@ export default function History() {
               <p className="text-[0.75rem] text-muted-foreground">Вся история загружена</p>
             )}
           </div>
-        </div>
+        </>
       )}
     </PageLayout>
   )
