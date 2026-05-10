@@ -1,6 +1,6 @@
 module promptvault
 
-go 1.25.7
+go 1.25.10
 
 require (
 	github.com/fogleman/gg v1.3.0
