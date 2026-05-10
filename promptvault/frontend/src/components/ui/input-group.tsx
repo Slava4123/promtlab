@@ -47,6 +47,10 @@ function InputGroupAddon({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
+    // shadcn input-group: addon-кликабельность нужна для UX (фокус на input при
+    // клике на иконку слева/справа). role="group" + onClick = warning, но реально
+    // клик пробрасывается на input, не на сам group. ESLint-disable точечно.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- Decorative addon, click forward'ится на nested input.
     <div
       role="group"
       data-slot="input-group-addon"

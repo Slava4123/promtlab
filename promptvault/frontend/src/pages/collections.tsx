@@ -169,10 +169,18 @@ export default function Collections() {
           {collections.map((c) => (
             <div
               key={c.id}
-              className="group cursor-pointer rounded-xl border border-border bg-card p-5 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5"
+              role="button"
+              tabIndex={0}
+              className="group cursor-pointer rounded-xl border border-border bg-card p-5 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = `${c.color || "#8b5cf6"}30`; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px -8px rgba(0,0,0,0.5), 0 0 0 1px ${c.color || "#8b5cf6"}15` }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = `${c.color || "#8b5cf6"}15`; (e.currentTarget as HTMLElement).style.boxShadow = "none" }}
               onClick={() => navigate(`/collections/${c.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  navigate(`/collections/${c.id}`)
+                }
+              }}
             >
               <div className="mb-3 flex items-start justify-between">
                 <div

@@ -55,7 +55,12 @@ export function MemberList({ members, currentUserRole, currentUserId, onChangeRo
 
               {menuOpen === m.user_id && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(null)} />
+                  <div
+                    role="presentation"
+                    aria-hidden="true"
+                    className="fixed inset-0 z-40"
+                    onClick={() => setMenuOpen(null)}
+                  />
                   <div
                     className="absolute right-0 top-8 z-50 w-44 rounded-xl py-1 shadow-xl border border-border bg-popover"
                   >

@@ -77,8 +77,16 @@ export function TagInput({ selectedTagIds, onChange }: TagInputProps) {
   return (
     <div ref={containerRef} className="relative">
       <div
-        className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 min-h-[40px]"
+        role="button"
+        tabIndex={0}
+        className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 min-h-[40px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
         onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            setOpen(true)
+          }
+        }}
       >
         {selectedTags.map((tag) => (
           <span

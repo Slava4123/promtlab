@@ -29,7 +29,9 @@ export function PromptCard({ prompt, onToggleFavorite, onTogglePin, onClick, onU
   const isPinned = prompt.pinned_personal || prompt.pinned_team
   return (
     <div
-      className={`group cursor-pointer overflow-hidden rounded-xl border p-4 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 ${
+      role="button"
+      tabIndex={0}
+      className={`group cursor-pointer overflow-hidden rounded-xl border p-4 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 ${
         isPinned
           ? "border-violet-500/20 bg-violet-500/[0.02] hover:border-violet-500/30 hover:shadow-lg"
           : prompt.favorite
@@ -37,6 +39,12 @@ export function PromptCard({ prompt, onToggleFavorite, onTogglePin, onClick, onU
             : "border-border bg-card hover:border-violet-500/15 hover:shadow-lg"
       }`}
       onClick={() => onClick(prompt.id)}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+          e.preventDefault()
+          onClick(prompt.id)
+        }
+      }}
       style={style}
     >
       {/* Header: icon + title + star */}

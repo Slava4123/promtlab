@@ -125,8 +125,16 @@ export default function Teams() {
           {teams.map((t) => (
             <div
               key={t.id}
-              className="group cursor-pointer rounded-xl border border-border bg-card p-5 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand/20 hover:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5),0_0_0_1px_rgba(139,92,246,0.1)]"
+              role="button"
+              tabIndex={0}
+              className="group cursor-pointer rounded-xl border border-border bg-card p-5 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand/20 hover:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5),0_0_0_1px_rgba(139,92,246,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
               onClick={() => navigate(`/teams/${t.slug}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  navigate(`/teams/${t.slug}`)
+                }
+              }}
             >
               <div className="mb-3 flex items-start justify-between">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-muted ring-1 ring-inset ring-brand/15">
@@ -175,8 +183,9 @@ export default function Teams() {
           </DialogHeader>
 
           <div className="space-y-2">
-            <label className="text-[0.8rem] font-medium text-foreground">Название</label>
+            <label htmlFor="team-name" className="text-[0.8rem] font-medium text-foreground">Название</label>
             <input
+              id="team-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Например: Backend-разработка"
@@ -187,8 +196,9 @@ export default function Teams() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[0.8rem] font-medium text-foreground">Описание <span className="text-muted-foreground">(необязательно)</span></label>
+            <label htmlFor="team-description" className="text-[0.8rem] font-medium text-foreground">Описание <span className="text-muted-foreground">(необязательно)</span></label>
             <textarea
+              id="team-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Чем занимается команда?"

@@ -48,10 +48,11 @@ export function NotificationCenter() {
   )
 
   // unread = всё что не помечено в localStorage И живо в текущем списке.
-  const unread = useMemo(
-    () => allNotifications.filter((n) => !isRead(n.id)),
-    [allNotifications, readBump],
-  )
+  // readBump в deps намеренный — bumpRead() заставляет useMemo пере-вычислить
+  // фильтр после mark-as-read (localStorage без событий, ESLint не видит implicit
+  // dep через isRead → localStorage).
+  /* eslint-disable-next-line react-hooks/exhaustive-deps -- readBump trigger для re-evaluate filter после localStorage mark-as-read. */
+  const unread = useMemo(() => allNotifications.filter((n) => !isRead(n.id)), [allNotifications, readBump])
 
   // Чистим устаревшие read-id (когда usage изменился, старый quota-id больше
   // не появляется — мы из localStorage его удалим).

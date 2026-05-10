@@ -37,6 +37,7 @@ export function ActivityTimeline({
   // admin/audit-log MobileAuditList. estimateSize=85px — средняя высота
   // ActivityItem (avatar 32px + 2 строки текста). measureElement уточняет
   // реальную высоту динамически.
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual API возвращает функции, которые React Compiler пометит как unsafe; pattern принят (см. admin/audit-log:192).
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,

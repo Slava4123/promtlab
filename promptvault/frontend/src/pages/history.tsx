@@ -84,6 +84,7 @@ export default function History() {
   const allItems = useMemo(() => data?.pages.flatMap((p) => p.items) ?? [], [data])
   const flatRows = useMemo(() => buildFlatRows(allItems), [allItems])
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual API возвращает функции, которые React Compiler пометит как unsafe; pattern принят (см. admin/audit-log:192).
   const virtualizer = useVirtualizer({
     count: flatRows.length,
     getScrollElement: () => parentRef.current,

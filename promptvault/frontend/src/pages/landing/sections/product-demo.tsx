@@ -65,7 +65,8 @@ export function ProductDemoSection() {
             {/* Tabs */}
             <div
               role="tablist"
-              className="mb-6 flex items-center gap-1 rounded-lg border border-border/30 bg-card/20 p-1"
+              tabIndex={0}
+              className="mb-6 flex items-center gap-1 rounded-lg border border-border/30 bg-card/20 p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
               onKeyDown={handleKeyDown}
             >
               {demoTabs.map((tab, i) => (

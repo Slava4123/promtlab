@@ -12,7 +12,7 @@ import sql from "highlight.js/lib/languages/sql"
 import markdown from "highlight.js/lib/languages/markdown"
 import css from "highlight.js/lib/languages/css"
 import xml from "highlight.js/lib/languages/xml"
-import type { ComponentProps } from "react"
+import { memo, type ComponentProps } from "react"
 import "./prompt-content.css"
 import { cn } from "@/lib/utils"
 
@@ -70,7 +70,11 @@ interface PromptContentProps {
 
 // AnchorLink — принудительно target="_blank" + rel="noopener noreferrer"
 // для всех ссылок внутри промпта, защита от tabnabbing.
+//
+// jsx-a11y/anchor-has-content: ESLint статически не видит, что ReactMarkdown
+// передаст children через {...props}. Disable точечно на JSX-строку.
 function AnchorLink(props: ComponentProps<"a">) {
+  // eslint-disable-next-line jsx-a11y/anchor-has-content
   return <a {...props} target="_blank" rel="noopener noreferrer" />
 }
 
@@ -80,8 +84,12 @@ function AnchorLink(props: ComponentProps<"a">) {
  * XSS-санитайзинг через rehype-sanitize, типографика через @tailwindcss/typography.
  *
  * Используется в shared-prompt, public-prompt, preview-диалогах.
+ *
+ * MN-41: обёрнуто в React.memo. Markdown re-парсится при каждом rerender'е
+ * родителя (rehype/remark — heavy compile chain). После memo: re-render
+ * только при смене content или className.
  */
-export function PromptContent({ content, className }: PromptContentProps) {
+function PromptContentBase({ content, className }: PromptContentProps) {
   return (
     <div className={cn("prose prose-neutral dark:prose-invert max-w-none break-words", className)}>
       <ReactMarkdown
@@ -97,3 +105,5 @@ export function PromptContent({ content, className }: PromptContentProps) {
     </div>
   )
 }
+
+export const PromptContent = memo(PromptContentBase)

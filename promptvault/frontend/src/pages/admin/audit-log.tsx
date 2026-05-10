@@ -1,5 +1,6 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Loader2 } from "lucide-react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -180,41 +181,71 @@ function DesktopAuditTable({ items }: { items: AuditEntry[] }) {
 }
 
 // ===== Mobile card list =====
-
+//
+// MJ-19: виртуализация через @tanstack/react-virtual. На странице 30 entries
+// сейчас оверкилл, но при увеличении page_size до 100 (или при переходе на
+// infinite-scroll) — это hot-path. Pattern одинаковый для других длинных
+// списков (history, member-list, prompts-grid). estimateSize=140px — средняя
+// высота карточки с одной-двумя строками after_state.
 function MobileAuditList({ items }: { items: AuditEntry[] }) {
+  const parentRef = useRef<HTMLDivElement>(null)
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual API возвращает функции, которые React Compiler пометит как unsafe; pattern принят как pilot.
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 140,
+    overscan: 5,
+  })
+
   return (
-    <ul className="space-y-2">
-      {items.map((e) => (
-        <li
-          key={e.id}
-          className="space-y-1.5 rounded-xl border border-border bg-background p-3"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="rounded-md bg-muted/30 px-1.5 py-0.5 text-[0.7rem] font-medium">
-              {e.action}
-            </span>
-            <span className="text-[0.65rem] tabular-nums text-muted-foreground">
-              {new Date(e.created_at).toLocaleString("ru-RU")}
-            </span>
-          </div>
-          <div className="text-[0.72rem] text-muted-foreground">
-            <span>admin #{e.admin_id}</span>
-            <span> → </span>
-            <span>
-              {e.target_type}
-              {e.target_id != null && ` #${e.target_id}`}
-            </span>
-          </div>
-          {e.after_state != null && (
-            <div className="break-all rounded-md bg-muted/20 p-2 font-mono text-[0.65rem] text-muted-foreground">
-              {formatJSONState(e.after_state)}
+    <div ref={parentRef} className="max-h-[70vh] overflow-auto">
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {virtualizer.getVirtualItems().map((vRow) => {
+          const e = items[vRow.index]
+          return (
+            <div
+              key={e.id}
+              ref={virtualizer.measureElement}
+              data-index={vRow.index}
+              className="absolute left-0 top-0 w-full pb-2"
+              style={{ transform: `translateY(${vRow.start}px)` }}
+            >
+              <div className="space-y-1.5 rounded-xl border border-border bg-background p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="rounded-md bg-muted/30 px-1.5 py-0.5 text-[0.7rem] font-medium">
+                    {e.action}
+                  </span>
+                  <span className="text-[0.65rem] tabular-nums text-muted-foreground">
+                    {new Date(e.created_at).toLocaleString("ru-RU")}
+                  </span>
+                </div>
+                <div className="text-[0.72rem] text-muted-foreground">
+                  <span>admin #{e.admin_id}</span>
+                  <span> → </span>
+                  <span>
+                    {e.target_type}
+                    {e.target_id != null && ` #${e.target_id}`}
+                  </span>
+                </div>
+                {e.after_state != null && (
+                  <div className="break-all rounded-md bg-muted/20 p-2 font-mono text-[0.65rem] text-muted-foreground">
+                    {formatJSONState(e.after_state)}
+                  </div>
+                )}
+                <div className="font-mono text-[0.65rem] text-muted-foreground">
+                  {e.ip}
+                </div>
+              </div>
             </div>
-          )}
-          <div className="font-mono text-[0.65rem] text-muted-foreground">
-            {e.ip}
-          </div>
-        </li>
-      ))}
-    </ul>
+          )
+        })}
+      </div>
+    </div>
   )
 }
