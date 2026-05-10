@@ -405,16 +405,10 @@ jobs:
             # MN-77: Раньше был один `docker compose up -d`, который параллельно
             # стартует все контейнеры. Frontend мог подняться до того как api
             # прошёл миграции — пользователи видели 502/timeout от proxy /api.
-            # Поэтапный rollout: postgres up first (с healthcheck wait), затем
-            # api (даём ему добежать до listening), затем frontend.
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans postgres
-            for i in 1 2 3 4 5 6 7 8 9 10; do
-              if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "$POSTGRES_USER" >/dev/null 2>&1; then
-                echo "postgres ready (attempt $i)"
-                break
-              fi
-              sleep 2
-            done
+            # Phase TU-fix: postgres у нас MANAGED (Timeweb), его нет в compose.
+            # Раньше скрипт делал `up -d postgres` + `pg_isready` — оба падали с
+            # «no such service: postgres». Сейчас сразу api (миграции у managed
+            # PG всегда доступны), затем остальное.
             docker compose -f docker-compose.prod.yml up -d --remove-orphans api
             sleep 5
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
