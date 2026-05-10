@@ -4,19 +4,12 @@
 //   - mini-graph SVG для визуальной структуры (prompt = квадрат, fork = ромб, +N для длинных)
 //   - badges metadata строкой (3 шага · 1 ветвление · 12 запусков) с RU склонением
 
-import { Link, useNavigate } from "react-router-dom"
-import { History, MoreHorizontal, Network, Pencil, PlayCircle, Trash2 } from "lucide-react"
+import { Link } from "react-router-dom"
+import { History, Network, Pencil, PlayCircle, Trash2 } from "lucide-react"
 
 import type { Chain } from "@/api/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { pluralizeRu } from "@/lib/pluralize"
 import { ChainMiniGraph } from "./chain-mini-graph"
 
@@ -31,7 +24,6 @@ interface ChainCardProps {
 }
 
 export function ChainCard({ chain, canWrite, isViewer, onDelete }: ChainCardProps) {
-  const navigate = useNavigate()
   const stepCount = chain.step_count ?? 0
   const hasBranching = chain.has_branching ?? false
   const runsCount = chain.saved_runs_count ?? 0
@@ -41,38 +33,8 @@ export function ChainCard({ chain, canWrite, isViewer, onDelete }: ChainCardProp
 
   return (
     <Card className="flex flex-col">
-      <CardHeader className="flex-row items-start justify-between gap-2 space-y-0 pb-2">
+      <CardHeader className="pb-2">
         <CardTitle className="line-clamp-1 text-base">{chain.name}</CardTitle>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className="-mr-2 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Дополнительные действия"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => navigate(`/chains/${chain.id}/canvas`)}>
-              <Network className="mr-2 h-4 w-4" />
-              Дерево
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate(`/chains/${chain.id}/runs`)}>
-              <History className="mr-2 h-4 w-4" />
-              История
-            </DropdownMenuItem>
-            {canWrite && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => onDelete(chain.id, chain.name)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Удалить
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
         {chain.description && (
@@ -94,7 +56,7 @@ export function ChainCard({ chain, canWrite, isViewer, onDelete }: ChainCardProp
             </>
           )}
         </p>
-        <div className="mt-auto flex flex-wrap gap-2 pt-1">
+        <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
           <Button size="sm" variant="brand" asChild>
             <Link to={`/chains/${chain.id}/run`}>
               <PlayCircle className="mr-2 h-4 w-4" />
@@ -107,6 +69,28 @@ export function ChainCard({ chain, canWrite, isViewer, onDelete }: ChainCardProp
               {isViewer ? "Просмотр" : "Редактор"}
             </Link>
           </Button>
+          <Button size="sm" variant="outline" asChild title="Открыть граф">
+            <Link to={`/chains/${chain.id}/canvas`} aria-label="Открыть граф цепочки">
+              <Network className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button size="sm" variant="outline" asChild title="История запусков">
+            <Link to={`/chains/${chain.id}/runs`} aria-label="История запусков">
+              <History className="h-4 w-4" />
+            </Link>
+          </Button>
+          {canWrite && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDelete(chain.id, chain.name)}
+              aria-label="Удалить цепочку"
+              title="Удалить цепочку"
+              className="ml-auto text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
