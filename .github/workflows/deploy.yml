@@ -235,6 +235,7 @@ jobs:
             VITE_SENTRY_ENVIRONMENT=production
             VITE_SENTRY_RELEASE=${{ github.sha }}
             VITE_SENTRY_TRACES_SAMPLE_RATE=${{ vars.VITE_SENTRY_TRACES_SAMPLE_RATE || '0.0' }}
+            VITE_CHAINS_ENABLED=${{ vars.VITE_CHAINS_ENABLED || 'true' }}
           # MN-74: split-stage Dockerfile (deps + builder + runtime). deps stage
           # кэшируется через GHA (npm ci ~60s → ~5s cache hit). Builder stage
           # перестраивается на каждый deploy потому что build-args (VITE_SENTRY_*)

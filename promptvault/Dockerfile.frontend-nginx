@@ -25,6 +25,11 @@ ARG VITE_SENTRY_DSN=""
 ARG VITE_SENTRY_ENVIRONMENT=production
 ARG VITE_SENTRY_RELEASE=dev
 ARG VITE_SENTRY_TRACES_SAMPLE_RATE=0.0
+# Phase 16 Chains feature flag (dark launch). При true — App.tsx регистрирует
+# роуты /chains/*, app-sidebar показывает пункт «Цепочки», pricing.tsx и
+# quota-exceeded-dialog показывают chain-лимиты. Backend независимо включается
+# через CHAINS_ENABLED=true в .env.prod.
+ARG VITE_CHAINS_ENABLED=false
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/package.json frontend/package-lock.json ./
@@ -32,13 +37,14 @@ COPY frontend/ .
 
 # Vite читает env vars ТОЛЬКО из .env* файлов, не из Docker ENV / process.env.
 # Создаём .env.production явно — Vite автоматически загрузит при `vite build`
-# (mode=production) и заменит import.meta.env.VITE_SENTRY_* на литералы в bundle.
-RUN printf 'VITE_SENTRY_ENABLED=%s\nVITE_SENTRY_DSN=%s\nVITE_SENTRY_ENVIRONMENT=%s\nVITE_SENTRY_RELEASE=%s\nVITE_SENTRY_TRACES_SAMPLE_RATE=%s\n' \
+# (mode=production) и заменит import.meta.env.VITE_* на литералы в bundle.
+RUN printf 'VITE_SENTRY_ENABLED=%s\nVITE_SENTRY_DSN=%s\nVITE_SENTRY_ENVIRONMENT=%s\nVITE_SENTRY_RELEASE=%s\nVITE_SENTRY_TRACES_SAMPLE_RATE=%s\nVITE_CHAINS_ENABLED=%s\n' \
     "$VITE_SENTRY_ENABLED" \
     "$VITE_SENTRY_DSN" \
     "$VITE_SENTRY_ENVIRONMENT" \
     "$VITE_SENTRY_RELEASE" \
     "$VITE_SENTRY_TRACES_SAMPLE_RATE" \
+    "$VITE_CHAINS_ENABLED" \
     > .env.production && \
     npm run build
 
