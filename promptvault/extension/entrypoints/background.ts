@@ -2,21 +2,76 @@
 
 import { defineBackground } from 'wxt/utils/define-background';
 import {
+  acceptInvitation,
+  advanceChainStep,
+  cancelSubscription,
+  changePassword,
+  createApiKey,
+  declineInvitation,
+  createCollection,
+  createPrompt,
   createShareLink,
+  createTag,
+  createTeam,
+  deactivateShareLink,
+  deleteApiKey,
+  deleteCollection,
+  deletePrompt,
+  deleteTag,
+  deleteTeam,
+  duplicatePrompt,
+  emptyTrash,
+  getChain,
+  getChangelog,
+  getCurrentSubscription,
+  getExecution,
+  getInsights,
   getMe,
+  getPersonalAnalytics,
   getPinnedPrompts,
   getPrompt,
   getRecentPrompts,
+  getShareLink,
   getStreak,
+  getStreakDetail,
+  getTeam,
+  getUsageSummary,
   health,
   incrementUsage,
+  inviteTeamMember,
+  listApiKeys,
+  listBadges,
+  listChains,
   listCollections,
+  listExecutions,
+  listMyInvitations,
+  listPlans,
   listPrompts,
   listTags,
   listTeams,
+  listTrash,
+  listUsageHistory,
+  listVersions,
+  markChangelogRead,
+  pauseSubscription,
+  permanentDeleteTrashCollection,
+  permanentDeleteTrashPrompt,
+  refreshInsights,
+  removeTeamMember,
+  restoreTrashCollection,
+  restoreTrashPrompt,
+  resumeSubscription,
+  revertVersion,
   search,
+  startChainExecution,
+  submitFeedback,
   toggleFavorite,
   togglePin,
+  updateCollection,
+  updatePrompt,
+  updateProfile,
+  updateTeam,
+  updateTeamMemberRole,
   validateKey,
 } from '../lib/api';
 import { ApiError } from '../lib/types';
@@ -43,8 +98,39 @@ export default defineBackground(() => {
     ?.setPanelBehavior?.({ openPanelOnActionClick: true })
     .catch((err) => console.warn('sidePanel.setPanelBehavior failed', err));
 
-  chrome.runtime.onInstalled.addListener(() => {
-    console.info('PromptVault extension installed');
+  chrome.runtime.onInstalled.addListener((details) => {
+    console.info('PromptVault extension installed', details.reason);
+    setupContextMenus();
+    // Re-inject content scripts во все открытые AI-вкладки. Без этого
+    // MV3 не обновляет существующие scripts при extension reload — юзер
+    // получает stale content script → sendMessage → no_target errors.
+    void reinjectContentScripts();
+  });
+
+  // Re-create при старте, на случай если onInstalled не выполнился.
+  setupContextMenus();
+
+  chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId !== 'pv-save-selection') return;
+    const selection = info.selectionText ?? '';
+    const pageUrl = info.pageUrl ?? tab?.url ?? '';
+    if (!selection.trim()) return;
+    await chrome.storage.session?.set({
+      'pv.pendingCapture': {
+        content: selection,
+        sourceUrl: pageUrl,
+        capturedAt: Date.now(),
+      },
+    });
+    try {
+      if (tab?.windowId !== undefined) {
+        await (chrome.sidePanel as unknown as { open: (o: { windowId: number }) => Promise<void> })?.open?.({
+          windowId: tab.windowId,
+        });
+      }
+    } catch {
+      // ignore
+    }
   });
 
   chrome.runtime.onMessage.addListener(
@@ -58,8 +144,6 @@ export default defineBackground(() => {
         .then((data) => sendResponse({ ok: true, data }))
         .catch((err: unknown) => {
           const resp = toErrorResponse(err);
-          // Логируем в Sentry только реально неожиданные ошибки (unknown).
-          // Известные коды (no_target, no_history, etc.) — нормальный flow.
           if (!resp.ok && resp.error === 'unknown') {
             captureException(err, { msgType: msg.type });
           }
@@ -72,6 +156,20 @@ export default defineBackground(() => {
 
 async function handleRequest(msg: BgRequest): Promise<unknown> {
   switch (msg.type) {
+    // --- Auth / Me ---
+    case 'api.getMe':
+      return getMe();
+    case 'api.validateKey':
+      return validateKey(msg.key);
+    case 'api.health':
+      return health();
+    case 'api.updateProfile':
+      return updateProfile(msg.body);
+    case 'api.changePassword':
+      await changePassword(msg.oldPassword, msg.newPassword);
+      return { ok: true };
+
+    // --- Prompts list ---
     case 'api.fetchPrompts':
       return listPrompts(msg.page ?? 1, msg.pageSize ?? 100, msg.filter ?? undefined);
     case 'api.searchPrompts':
@@ -82,6 +180,17 @@ async function handleRequest(msg: BgRequest): Promise<unknown> {
       return getPinnedPrompts(msg.limit, msg.filter ?? undefined);
     case 'api.getRecent':
       return getRecentPrompts(msg.limit, msg.filter ?? undefined);
+
+    // --- Prompts mutations ---
+    case 'api.createPrompt':
+      return createPrompt(msg.body);
+    case 'api.updatePrompt':
+      return updatePrompt(msg.id, msg.body);
+    case 'api.deletePrompt':
+      await deletePrompt(msg.id);
+      return { ok: true };
+    case 'api.duplicatePrompt':
+      return duplicatePrompt(msg.id);
     case 'api.incrementUsage':
       await incrementUsage(msg.promptId);
       return { ok: true };
@@ -89,22 +198,159 @@ async function handleRequest(msg: BgRequest): Promise<unknown> {
       return toggleFavorite(msg.promptId);
     case 'api.togglePin':
       return togglePin(msg.promptId);
-    case 'api.getMe':
-      return getMe();
-    case 'api.validateKey':
-      return validateKey(msg.key);
-    case 'api.health':
-      return health();
-    case 'api.listTeams':
-      return listTeams();
-    case 'api.listCollections':
-      return listCollections(msg.teamId ?? null);
-    case 'api.listTags':
-      return listTags(msg.teamId ?? null);
-    case 'api.getStreak':
-      return getStreak();
+
+    // --- Versions ---
+    case 'api.listVersions':
+      return listVersions(msg.promptId, msg.limit, msg.offset);
+    case 'api.revertVersion':
+      return revertVersion(msg.promptId, msg.versionId);
+
+    // --- Trash ---
+    case 'api.listTrash':
+      return listTrash();
+    case 'api.restoreTrashPrompt':
+      return restoreTrashPrompt(msg.id);
+    case 'api.restoreTrashCollection':
+      return restoreTrashCollection(msg.id);
+    case 'api.permanentDeleteTrashPrompt':
+      await permanentDeleteTrashPrompt(msg.id);
+      return { ok: true };
+    case 'api.permanentDeleteTrashCollection':
+      await permanentDeleteTrashCollection(msg.id);
+      return { ok: true };
+    case 'api.emptyTrash':
+      await emptyTrash();
+      return { ok: true };
+
+    // --- Share ---
+    case 'api.getShareLink':
+      return getShareLink(msg.promptId);
     case 'api.createShareLink':
       return createShareLink(msg.promptId);
+    case 'api.deactivateShareLink':
+      await deactivateShareLink(msg.promptId);
+      return { ok: true };
+
+    // --- History / Analytics ---
+    case 'api.listUsageHistory':
+      return listUsageHistory(msg.limit, msg.offset);
+    case 'api.getPersonalAnalytics':
+      return getPersonalAnalytics(msg.range);
+    case 'api.getInsights':
+      return getInsights();
+    case 'api.refreshInsights':
+      return refreshInsights();
+
+    // --- Collections CRUD ---
+    case 'api.listCollections':
+      return listCollections(msg.teamId ?? null);
+    case 'api.createCollection':
+      return createCollection(msg.body);
+    case 'api.updateCollection':
+      return updateCollection(msg.id, msg.body);
+    case 'api.deleteCollection':
+      await deleteCollection(msg.id);
+      return { ok: true };
+
+    // --- Tags CRUD ---
+    case 'api.listTags':
+      return listTags(msg.teamId ?? null);
+    case 'api.createTag':
+      return createTag(msg.body);
+    case 'api.deleteTag':
+      await deleteTag(msg.id);
+      return { ok: true };
+
+    // --- Teams ---
+    case 'api.listTeams':
+      return listTeams();
+    case 'api.getTeam':
+      return getTeam(msg.slug);
+    case 'api.createTeam':
+      return createTeam(msg.body);
+    case 'api.updateTeam':
+      return updateTeam(msg.slug, msg.body);
+    case 'api.deleteTeam':
+      await deleteTeam(msg.slug);
+      return { ok: true };
+    case 'api.inviteTeamMember':
+      await inviteTeamMember(msg.slug, { email: msg.email, role: msg.role });
+      return { ok: true };
+    case 'api.removeTeamMember':
+      await removeTeamMember(msg.slug, msg.memberId);
+      return { ok: true };
+    case 'api.updateTeamMemberRole':
+      await updateTeamMemberRole(msg.slug, msg.memberId, msg.role);
+      return { ok: true };
+
+    // --- Invitations ---
+    case 'api.listMyInvitations':
+      return listMyInvitations();
+    case 'api.acceptInvitation':
+      await acceptInvitation(msg.invitationId);
+      return { ok: true };
+    case 'api.declineInvitation':
+      await declineInvitation(msg.invitationId);
+      return { ok: true };
+
+    // --- Feedback ---
+    case 'api.submitFeedback':
+      return submitFeedback(msg.body);
+
+    // --- Streak / Badges / Changelog ---
+    case 'api.getStreak':
+      return getStreak();
+    case 'api.getStreakDetail':
+      return getStreakDetail();
+    case 'api.listBadges':
+      return listBadges();
+    case 'api.getChangelog':
+      return getChangelog();
+    case 'api.markChangelogRead':
+      await markChangelogRead();
+      return { ok: true };
+
+    // --- Subscription ---
+    case 'api.listPlans':
+      return listPlans();
+    case 'api.getCurrentSubscription':
+      return getCurrentSubscription();
+    case 'api.getUsageSummary':
+      return getUsageSummary();
+    case 'api.cancelSubscription':
+      await cancelSubscription();
+      return { ok: true };
+    case 'api.pauseSubscription':
+      await pauseSubscription();
+      return { ok: true };
+    case 'api.resumeSubscription':
+      await resumeSubscription();
+      return { ok: true };
+
+    // --- API Keys ---
+    case 'api.listApiKeys':
+      return listApiKeys();
+    case 'api.createApiKey':
+      return createApiKey(msg.body);
+    case 'api.deleteApiKey':
+      await deleteApiKey(msg.id);
+      return { ok: true };
+
+    // --- Chains ---
+    case 'api.listChains':
+      return listChains(msg.teamId ?? null);
+    case 'api.getChain':
+      return getChain(msg.id);
+    case 'api.startChainExecution':
+      return startChainExecution(msg.chainId, msg.initialVars);
+    case 'api.getExecution':
+      return getExecution(msg.execId);
+    case 'api.advanceChainStep':
+      return advanceChainStep(msg.execId, msg.stepOutput, msg.chosenBranchIndex);
+    case 'api.listExecutions':
+      return listExecutions(msg.chainId);
+
+    // --- Content commands ---
     case 'cmd.insertPrompt':
       return insertIntoActiveTab(msg.text);
     case 'cmd.insertPromptAll':
@@ -113,8 +359,10 @@ async function handleRequest(msg: BgRequest): Promise<unknown> {
       return undoInActiveTab();
     case 'cmd.getActiveHost':
       return getActiveHost();
-    default:
-      throw new Error('unknown message type');
+    default: {
+      const exhaust: never = msg;
+      throw new Error(`unknown message type: ${JSON.stringify(exhaust)}`);
+    }
   }
 }
 
@@ -218,6 +466,59 @@ async function undoInActiveTab(): Promise<{ ok: true }> {
     return { ok: true };
   }
   throw Object.assign(new Error('undo failed'), { code: 'unknown' });
+}
+
+function setupContextMenus(): void {
+  if (!chrome.contextMenus) return;
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: 'pv-save-selection',
+      title: 'ПромтЛаб: сохранить как промпт',
+      contexts: ['selection'],
+    });
+  });
+}
+
+// Маппинг host → content-script file (берётся из output WXT после build).
+// Re-inject обходит ограничение MV3 «scripts не обновляются при reload extension».
+const HOST_SCRIPTS: Array<{ pattern: string; file: string }> = [
+  { pattern: 'https://chatgpt.com/*', file: 'content-scripts/chatgpt.js' },
+  { pattern: 'https://claude.ai/*', file: 'content-scripts/claude.js' },
+  { pattern: 'https://gemini.google.com/*', file: 'content-scripts/gemini.js' },
+  { pattern: 'https://www.perplexity.ai/*', file: 'content-scripts/perplexity.js' },
+  { pattern: 'https://alice.yandex.ru/*', file: 'content-scripts/yandex.js' },
+  { pattern: 'https://ya.ru/*', file: 'content-scripts/yandex.js' },
+  { pattern: 'https://yandex.ru/alice*', file: 'content-scripts/yandex.js' },
+  { pattern: 'https://giga.chat/*', file: 'content-scripts/gigachat.js' },
+  { pattern: 'https://developers.sber.ru/*', file: 'content-scripts/gigachat.js' },
+  { pattern: 'https://chat.deepseek.com/*', file: 'content-scripts/deepseek.js' },
+  { pattern: 'https://chat.mistral.ai/*', file: 'content-scripts/mistral.js' },
+  { pattern: 'https://le-chat.mistral.ai/*', file: 'content-scripts/mistral.js' },
+  { pattern: 'https://chat.qwen.ai/*', file: 'content-scripts/qwen.js' },
+];
+
+async function reinjectContentScripts(): Promise<void> {
+  if (!chrome.scripting?.executeScript) return;
+  for (const { pattern, file } of HOST_SCRIPTS) {
+    try {
+      const tabs = await chrome.tabs.query({ url: pattern });
+      for (const tab of tabs) {
+        if (typeof tab.id !== 'number') continue;
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: [file],
+          });
+          console.info(`reinjected ${file} into tab ${tab.id} (${tab.url})`);
+        } catch (err) {
+          // Игнорируем ошибки (например chrome-extension://, chrome://, etc.)
+          console.warn(`reinject ${file} failed for tab ${tab.id}:`, err);
+        }
+      }
+    } catch (err) {
+      console.warn(`tabs.query failed for ${pattern}:`, err);
+    }
+  }
 }
 
 function toErrorResponse(err: unknown): BgResponse {

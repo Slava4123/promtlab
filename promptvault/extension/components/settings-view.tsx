@@ -128,12 +128,12 @@ export function SettingsView({ apiKey, apiBase, theme, onBack }: Props) {
             ) : health === 'ok' ? (
               <>
                 <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                <span className="text-xs">Backend доступен</span>
+                <span className="text-xs">Сервер доступен</span>
               </>
             ) : (
               <>
                 <XCircle className="h-4 w-4 text-(--color-destructive)" />
-                <span className="text-xs">Backend недоступен</span>
+                <span className="text-xs">Сервер недоступен</span>
               </>
             )}
             <div className="flex-1" />

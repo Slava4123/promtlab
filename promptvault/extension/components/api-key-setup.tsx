@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react';
+import { ExternalLink, Sparkles, KeyRound } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { sendBg } from '../lib/bg-client';
 import { setApiKey, setApiBase } from '../lib/storage';
 import { ApiError } from '../lib/types';
+import { openWebPage, deriveFrontendUrl } from '../lib/utils';
 
 interface Props {
   initialBase: string;
@@ -50,14 +52,47 @@ export function ApiKeySetup({ initialBase }: Props) {
     }
   }
 
+  // Web app живёт на frontendUrl (в prod: тот же host что apiBase;
+  // в dev :8080 backend → :5173 frontend).
+  const frontendUrl = deriveFrontendUrl(base);
+  const baseHost = frontendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') || 'promtlabs.ru';
+
+  function openExternal(path: string) {
+    openWebPage(base, path);
+  }
+
   return (
-    <div className="flex h-full flex-col gap-4 p-5">
+    <div className="flex h-full flex-col gap-4 p-5 overflow-y-auto">
       <div className="space-y-2">
-        <h1 className="text-lg font-semibold">ПромтЛаб</h1>
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-(--color-primary)" />
+          <h1 className="text-lg font-semibold">ПромтЛаб</h1>
+        </div>
         <p className="text-sm text-(--color-muted-foreground)">
-          Чтобы расширение получило доступ к вашей библиотеке промптов, создайте API-ключ
-          в настройках аккаунта и вставьте его ниже.
+          Подключите расширение к вашему аккаунту через API-ключ.
         </p>
+      </div>
+
+      {/* Quick links для нового юзера */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => openExternal('/sign-up?from=extension')}
+          className="flex flex-col items-start gap-1 rounded-md border border-(--color-border) bg-(--color-card) p-2.5 text-left hover:bg-(--color-muted)/40"
+        >
+          <ExternalLink className="h-3.5 w-3.5 text-(--color-primary)" />
+          <div className="text-xs font-medium">Создать аккаунт</div>
+          <div className="text-[10px] text-(--color-muted-foreground)">На {baseHost}</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => openExternal('/settings/integrations?from=extension')}
+          className="flex flex-col items-start gap-1 rounded-md border border-(--color-border) bg-(--color-card) p-2.5 text-left hover:bg-(--color-muted)/40"
+        >
+          <KeyRound className="h-3.5 w-3.5 text-(--color-primary)" />
+          <div className="text-xs font-medium">Получить ключ</div>
+          <div className="text-[10px] text-(--color-muted-foreground)">Настройки → API-ключи</div>
+        </button>
       </div>
 
       <form onSubmit={onSubmit} className="flex flex-1 flex-col gap-4">
@@ -98,10 +133,17 @@ export function ApiKeySetup({ initialBase }: Props) {
           </div>
         ) : null}
 
-        <div className="mt-auto">
+        <div className="mt-auto space-y-2">
           <Button type="submit" disabled={loading || !key} className="w-full">
             {loading ? 'Проверяю…' : 'Подключить'}
           </Button>
+          <button
+            type="button"
+            onClick={() => openExternal('/forgot-password')}
+            className="block w-full text-center text-[10px] text-(--color-muted-foreground) hover:underline"
+          >
+            Забыли пароль?
+          </button>
         </div>
       </form>
     </div>

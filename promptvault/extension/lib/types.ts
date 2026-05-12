@@ -1,80 +1,91 @@
-// Типы API PromptVault, минимальный набор нужный extension.
-// Точные shape-определения — см. backend/internal/delivery/http/prompt/response.go
+// Re-export из @pv/shared — single source of truth.
+// Существующий код extension импортирует типы через './types' — оставляем для backward-compat.
 
-export interface TagDTO {
-  id: number;
-  name: string;
-  color: string;
-}
+export {
+  ApiError,
+  // Core DTOs
+  type Tag,
+  type TagDTO,
+  type Collection,
+  type CollectionDTO,
+  type Prompt,
+  type PaginatedPrompts,
+  type PaginatedResponse,
+  type Team,
+  type TeamDTO,
+  type TeamRole,
+  type TeamDetail,
+  type TeamMember,
+  type TeamInvitation,
+  type FeedbackRequest,
+  type FeedbackResponse,
+  type StreakResponse,
+  type StreakDTO,
+  type SearchResultItem,
+  type SearchResponse,
+  type Suggestion,
+  type SuggestResponse,
+  type MeResponse,
+  type User,
+  type UserRole,
+  type UserStatus,
+  type PinResult,
+  type PromptVersion,
+  type BadgeSummary,
+  type Badge,
+  type BadgeCategory,
+  type BadgeListResponse,
+  type PlanID,
+  type Plan,
+  type Subscription,
+  type SubscriptionStatus,
+  type UsageSummary,
+  type TeamUsageSummary,
+  type QuotaInfo,
+  type Chain,
+  type ChainDetail,
+  type ChainStep,
+  type ChainStepType,
+  type ChainStepPreview,
+  type ChainStepPromptSummary,
+  type ChainConditions,
+  type ConditionBranch,
+  type ChainExecution,
+  type ChainExecutionStatus,
+  type ChainExecutionSummary,
+  type ChainExecutionListResponse,
+  type ChainSnapshot,
+  type ChainListResponse,
+  type VariableMapping,
+  type VariableSource,
+  type APIKey,
+  type APIKeyListResponse,
+  type CreatedAPIKey,
+  type CreateAPIKeyRequest,
+  type ShareLink,
+  type PublicPrompt,
+  type TrashPrompt,
+  type TrashCollection,
+  type TrashCounts,
+  type TrashListResponse,
+  type ChangelogEntry,
+  type ChangelogResponse,
+  type LinkedAccount,
+  type UpdateProfileRequest,
+  type ChangePasswordRequest,
+  type AuthResponse,
+  type AdminLoginStepResponse,
+  type VerifyTOTPResponse,
+  type TOTPEnrollResponse,
+  type TOTPStatusResponse,
+  type TokenPair,
+  type UsageLogEntry,
+  type CollectionResponse,
+  type IncrementUsageResponse,
+  isPlanID,
+  asPlanID,
+} from "@pv/shared/types"
 
-export interface CollectionDTO {
-  id: number;
-  name: string;
-  color?: string;
-  icon?: string;
-  prompts_count?: number;
-}
-
-export interface TeamDTO {
-  id: number;
-  slug: string;
-  name: string;
-  description?: string;
-  role?: string;
-}
-
-export interface StreakDTO {
-  current_streak: number;
-  longest_streak: number;
-  last_activity_at?: string | null;
-}
-
-export interface Prompt {
-  id: number;
-  title: string;
-  content: string;
-  model?: string;
-  favorite: boolean;
-  pinned_personal: boolean;
-  pinned_team: boolean;
-  usage_count: number;
-  last_used_at?: string | null;
-  tags: TagDTO[];
-  collections: CollectionDTO[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PaginatedPrompts {
-  items: Prompt[];
-  total: number;
-  page?: number;
-  page_size?: number;
-  has_more?: boolean;
-}
-
-export interface SearchResult {
-  prompts: Array<{ id: number; type: 'prompt'; title: string; description: string }>;
-  collections: Array<{ id: number; type: 'collection'; title: string; color?: string; icon?: string }>;
-  tags: Array<{ id: number; type: 'tag'; title: string; color?: string }>;
-}
-
-export interface MeResponse {
-  id: number;
-  email: string;
-  username?: string;
-  name?: string;
-  role?: string;
-}
-
-export class ApiError extends Error {
-  status: number;
-  code?: string;
-
-  constructor(message: string, status: number, code?: string) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.code = code;
-  }
-}
+// Legacy alias: ранее `SearchResult` в extension имел структуру массивов
+// (как сейчас `SearchResponse` в shared). Сохраняем имя для backward-compat.
+export type { SearchResponse as SearchResult } from "@pv/shared/types"

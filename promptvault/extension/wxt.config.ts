@@ -1,5 +1,10 @@
 import { defineConfig } from 'wxt';
 import tailwindcss from '@tailwindcss/vite';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const sharedDir = path.resolve(__dirname, '../shared/src');
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -10,15 +15,24 @@ export default defineConfig({
     name: 'ПромтЛаб — библиотека AI-промптов',
     short_name: 'ПромтЛаб',
     description:
-      'Быстрый доступ к вашей библиотеке промптов прямо в ChatGPT, Claude, Gemini, Perplexity. Требует аккаунт promtlabs.ru.',
-    version: '0.1.0',
+      'Полный клиент ПромтЛаба: библиотека, цепочки, команды и подписка на 9 AI-сайтах (ChatGPT, Claude, Gemini, Perplexity, Yandex GPT, GigaChat, DeepSeek, Mistral, Qwen). Требует аккаунт promtlabs.ru.',
+    version: '1.0.0',
     minimum_chrome_version: '116',
-    permissions: ['sidePanel', 'storage', 'activeTab', 'scripting'],
+    permissions: ['sidePanel', 'storage', 'activeTab', 'scripting', 'contextMenus'],
     host_permissions: [
       'https://chatgpt.com/*',
       'https://claude.ai/*',
       'https://gemini.google.com/*',
       'https://www.perplexity.ai/*',
+      'https://alice.yandex.ru/*',
+      'https://ya.ru/*',
+      'https://yandex.ru/alice*',
+      'https://giga.chat/*',
+      'https://developers.sber.ru/*',
+      'https://chat.deepseek.com/*',
+      'https://chat.mistral.ai/*',
+      'https://le-chat.mistral.ai/*',
+      'https://chat.qwen.ai/*',
       'https://promtlabs.ru/*',
       'https://*.promtlabs.ru/*',
       // GlitchTip endpoint для Sentry envelope (см. lib/sentry-envelope.ts).
@@ -53,5 +67,10 @@ export default defineConfig({
   },
   vite: () => ({
     plugins: [tailwindcss()],
+    resolve: {
+      alias: {
+        '@pv/shared': sharedDir,
+      },
+    },
   }),
 });

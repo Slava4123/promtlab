@@ -2,6 +2,7 @@
 
 import { findTargetInput, type SupportedHost } from './selectors';
 import { insertPrompt } from './insert';
+import { extractLastAIResponse } from './chat-selectors';
 import type { ContentCommand, ContentResponse } from './messages';
 
 // Хранит текст последней вставки — используется undo операцией
@@ -37,6 +38,16 @@ export function installContentHandler(host: SupportedHost): void {
             type: 'content.failed',
             reason: result.reason || 'unknown',
           });
+        }
+        return false;
+      }
+
+      if (msg?.type === 'content.captureLastAIResponse') {
+        const text = extractLastAIResponse(host);
+        if (text) {
+          sendResponse({ type: 'content.captured', text });
+        } else {
+          sendResponse({ type: 'content.notFound' });
         }
         return false;
       }

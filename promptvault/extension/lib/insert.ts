@@ -71,17 +71,22 @@ function insertIntoContentEditable(el: HTMLElement, text: string): InsertResult 
     // best effort
   }
 
-  // Primary: execCommand('insertText')
+  // Primary: execCommand('insertText').
+  // ВАЖНО: если execCommand вернул true — считаем успехом БЕЗ verifyContains.
+  // Lexical/ProseMirror/Quill обновляют DOM асинхронно (через React/Vue reconciler),
+  // и synchronous verifyContains после execCommand может не увидеть текст —
+  // это приводило к двойной вставке (paste fallback срабатывал поверх execCommand).
   try {
     const ok = document.execCommand('insertText', false, text);
-    if (ok && verifyContains(el, text)) {
+    if (ok) {
       return { success: true, strategy: 'execCommand' };
     }
   } catch {
     // fallthrough
   }
 
-  // Fallback: simulated paste (works on Lexical, ProseMirror, Quill via their paste handlers)
+  // Fallback: simulated paste (если execCommand вернул false — это значит
+  // редактор не support'нул его, например Lexical в старых версиях).
   try {
     const dt = new DataTransfer();
     dt.setData('text/plain', text);
@@ -91,6 +96,8 @@ function insertIntoContentEditable(el: HTMLElement, text: string): InsertResult 
       cancelable: true,
     });
     el.dispatchEvent(evt);
+    // verifyContains нужен для paste fallback, потому что некоторые редакторы
+    // игнорируют synthetic ClipboardEvent (CSP, custom paste handler).
     if (verifyContains(el, text)) {
       return { success: true, strategy: 'paste' };
     }

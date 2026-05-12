@@ -10,6 +10,8 @@ import { ActiveTabBadge } from './active-tab-badge';
 import { WorkspaceSelector } from './workspace-selector';
 import { CollectionSelector } from './collection-selector';
 import { StreakBadge } from './streak-badge';
+import { QuotaIndicator } from './quota-indicator';
+import { NotificationCenter } from './notification-center';
 import {
   useInfinitePromptList,
   usePinned,
@@ -59,19 +61,22 @@ export function Home({ onSelect, onOpenSettings, highlightedId }: Props) {
 
   const allPrompts: Prompt[] = useMemo(() => {
     if (searching) {
-      return (searchResult.data?.prompts ?? []).map((r) => ({
-        id: r.id,
-        title: r.title,
-        content: r.description,
-        favorite: false,
-        pinned_personal: false,
-        pinned_team: false,
-        usage_count: 0,
-        tags: [],
-        collections: [],
-        created_at: '',
-        updated_at: '',
-      }));
+      return (searchResult.data?.prompts ?? []).map(
+        (r): Prompt => ({
+          id: r.id,
+          title: r.title,
+          content: r.description ?? '',
+          favorite: false,
+          pinned_personal: false,
+          pinned_team: false,
+          usage_count: 0,
+          tags: [],
+          collections: [],
+          created_at: '',
+          updated_at: '',
+          is_public: false,
+        }),
+      );
     }
     return list.data?.pages.flatMap((p) => p.items) ?? [];
   }, [searching, searchResult.data, list.data]);
@@ -175,6 +180,8 @@ export function Home({ onSelect, onOpenSettings, highlightedId }: Props) {
         <ActiveTabBadge state={activeTab} />
         <StreakBadge />
         <div className="flex-1" />
+        <NotificationCenter />
+        <QuotaIndicator />
         <Button
           type="button"
           variant="ghost"

@@ -2,6 +2,7 @@ import { Users, User as UserIcon } from 'lucide-react';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectLabel,
   SelectSeparator,
@@ -42,15 +43,17 @@ export function WorkspaceSelector({ workspaceId, teams, onChange }: Props) {
         {teams.length > 0 ? (
           <>
             <SelectSeparator />
-            <SelectLabel>Команды</SelectLabel>
-            {teams.map((t) => (
-              <SelectItem key={t.id} value={String(t.id)}>
-                <span className="flex items-center gap-2">
-                  <Users className="h-3.5 w-3.5 text-(--color-muted-foreground)" />
-                  {t.name}
-                </span>
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel>Команды</SelectLabel>
+              {teams.map((t) => (
+                <SelectItem key={t.id} value={String(t.id)}>
+                  <span className="flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5 text-(--color-muted-foreground)" />
+                    {t.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </>
         ) : null}
       </SelectContent>

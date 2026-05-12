@@ -49,10 +49,7 @@ export function addBreadcrumb(
 export function captureException(err: unknown, context?: Record<string, unknown>): void {
   const payload = {
     event_id: generateEventID(),
-    error:
-      err instanceof Error
-        ? { name: err.name, message: err.message, stack: err.stack }
-        : String(err),
+    error: serializeError(err),
     context: scrubPII(context ?? {}),
     breadcrumbs: breadcrumbs.map((b) => ({ ...b, data: scrubPII(b.data ?? {}) })),
     release,
@@ -67,13 +64,57 @@ export function captureException(err: unknown, context?: Record<string, unknown>
   console.error('[sentry]', payload);
   if (!dsn) return;
 
-  // Best-effort fire-and-forget. Ошибки fetch/rate-limit не пробрасываем —
-  // отправка телеметрии не должна ломать работу расширения.
-  void sendEnvelope(dsn, payload).then((result) => {
+  // sendEnvelope ожидает узкий тип error (string | {name,message,stack}).
+  // serializeError может вернуть произвольный object — приводим к строке.
+  const env = {
+    ...payload,
+    error:
+      typeof payload.error === 'object' &&
+      payload.error !== null &&
+      'name' in payload.error &&
+      'message' in payload.error
+        ? (payload.error as { name: string; message: string; stack?: string })
+        : typeof payload.error === 'string'
+          ? payload.error
+          : JSON.stringify(payload.error),
+  };
+  void sendEnvelope(dsn, env).then((result) => {
     if (!result.sent) {
       console.warn('[sentry] envelope not sent', result.reason);
     }
   });
+}
+
+/**
+ * Сериализация unknown-error в читаемое представление.
+ * Раньше `String(err)` давал «[object Object]» — теряли всю инфу о баге.
+ */
+function serializeError(err: unknown): unknown {
+  if (err instanceof Error) {
+    return { name: err.name, message: err.message, stack: err.stack };
+  }
+  if (typeof err === 'string') return err;
+  if (err && typeof err === 'object') {
+    try {
+      // Сохраняем .message и .code если есть — типичные для нашего code: 'no_target'.
+      const obj = err as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      if (typeof obj.message === 'string') out.message = obj.message;
+      if (typeof obj.code === 'string') out.code = obj.code;
+      if (typeof obj.name === 'string') out.name = obj.name;
+      // Остальное — best-effort JSON.
+      try {
+        const stringified = JSON.stringify(err);
+        if (stringified !== '{}') out.raw = stringified;
+      } catch {
+        // ignore circular refs
+      }
+      return out;
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
 }
 
 /**

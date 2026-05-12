@@ -11,6 +11,29 @@ import {
   type StreakDTO,
   type TagDTO,
   type TeamDTO,
+  type PromptVersion,
+  type ShareLink,
+  type TrashListResponse,
+  type Collection,
+  type Tag,
+  type Team,
+  type TeamDetail,
+  type UsageSummary,
+  type Plan,
+  type Subscription,
+  type APIKeyListResponse,
+  type CreatedAPIKey,
+  type CreateAPIKeyRequest,
+  type BadgeListResponse,
+  type ChangelogResponse,
+  type StreakResponse,
+  type ChainListResponse,
+  type ChainDetail,
+  type ChainExecution,
+  type ChainExecutionListResponse,
+  type TeamInvitation,
+  type FeedbackRequest,
+  type FeedbackResponse,
 } from './types';
 
 const EXTENSION_VERSION = chrome.runtime.getManifest?.().version ?? '0.1.0';
@@ -53,7 +76,17 @@ async function request<T>(
 
   if (!res.ok) {
     if (res.status === 401) throw new ApiError('unauthorized', 401, 'unauthorized');
+    if (res.status === 402) {
+      const body = await safeJson(res);
+      throw new ApiError(body?.message ?? 'quota exceeded', 402, 'quota_exceeded');
+    }
+    if (res.status === 403) throw new ApiError('forbidden', 403, 'forbidden');
     if (res.status === 404) throw new ApiError('not found', 404, 'not_found');
+    if (res.status === 409) throw new ApiError('conflict', 409, 'conflict');
+    if (res.status === 422) {
+      const body = await safeJson(res);
+      throw new ApiError(body?.message ?? 'validation', 422, 'validation');
+    }
     if (res.status === 429) throw new ApiError('rate limited', 429, 'rate_limited');
     throw new ApiError(`http ${res.status}`, res.status, 'network');
   }
@@ -65,10 +98,38 @@ async function request<T>(
   }
 }
 
-// --- API методы ---
+async function safeJson(res: Response): Promise<{ message?: string } | null> {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// --- Auth/Me ---
 
 export async function getMe(): Promise<MeResponse> {
   return request<MeResponse>('/api/auth/me');
+}
+
+export interface UpdateProfileBody {
+  name?: string;
+  username?: string;
+  avatar_url?: string;
+}
+
+export async function updateProfile(body: UpdateProfileBody): Promise<MeResponse> {
+  return request<MeResponse>('/api/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  await request<void>('/api/auth/password', {
+    method: 'PUT',
+    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+  });
 }
 
 export async function health(): Promise<{ ok: true }> {
@@ -76,10 +137,36 @@ export async function health(): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+export async function validateKey(
+  apiKey: string,
+  apiBase?: string,
+): Promise<MeResponse> {
+  const { apiBase: storedBase } = await getSettings();
+  const base = apiBase ?? storedBase;
+  const headers = new Headers();
+  headers.set('Authorization', `Bearer ${apiKey}`);
+  headers.set('X-Client', `chrome-extension/${EXTENSION_VERSION}`);
+  headers.set('Accept', 'application/json');
+
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/auth/me`, { headers });
+  } catch {
+    throw new ApiError('network error', 0, 'network');
+  }
+  if (res.status === 401) throw new ApiError('unauthorized', 401, 'unauthorized');
+  if (!res.ok) throw new ApiError(`http ${res.status}`, res.status, 'network');
+  return (await res.json()) as MeResponse;
+}
+
+// --- Prompts list / filters ---
+
 export interface PromptFilter {
   teamId?: number | null;
   collectionId?: number | null;
   tagIds?: number[];
+  favorite?: boolean;
+  search?: string;
 }
 
 function applyFilter(params: URLSearchParams, filter?: PromptFilter): void {
@@ -89,6 +176,8 @@ function applyFilter(params: URLSearchParams, filter?: PromptFilter): void {
   if (filter.tagIds && filter.tagIds.length > 0) {
     params.set('tag_ids', filter.tagIds.join(','));
   }
+  if (filter.favorite) params.set('favorite_only', 'true');
+  if (filter.search) params.set('q', filter.search);
 }
 
 export async function listPrompts(
@@ -133,12 +222,207 @@ export async function search(q: string, filter?: PromptFilter): Promise<SearchRe
   return request<SearchResult>(`/api/search?${params}`);
 }
 
-// ===== Teams, collections, tags, streaks =====
+// --- Prompts CRUD (Phase 1) ---
 
-export async function listTeams(): Promise<TeamDTO[]> {
-  const data = await request<TeamDTO[] | { items: TeamDTO[] }>('/api/teams');
-  return Array.isArray(data) ? data : (data.items ?? []);
+export interface CreatePromptBody {
+  title: string;
+  content: string;
+  model?: string;
+  collection_ids?: number[];
+  tag_ids?: number[];
+  team_id?: number | null;
+  is_public?: boolean;
+  description?: string;
 }
+
+export async function createPrompt(body: CreatePromptBody): Promise<Prompt> {
+  return request<Prompt>('/api/prompts', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export interface UpdatePromptBody extends Partial<CreatePromptBody> {
+  change_note?: string;
+}
+
+export async function updatePrompt(id: number, body: UpdatePromptBody): Promise<Prompt> {
+  return request<Prompt>(`/api/prompts/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deletePrompt(id: number): Promise<void> {
+  await request<void>(`/api/prompts/${id}`, { method: 'DELETE' });
+}
+
+// NOTE: backend не имеет /duplicate endpoint — реализуем client-side через
+// GET + POST. Сохранение в той же команде/коллекциях/тегах, is_public сброшен.
+export async function duplicatePrompt(id: number): Promise<Prompt> {
+  const original = await getPrompt(id);
+  return createPrompt({
+    title: `${original.title} (копия)`,
+    content: original.content,
+    model: original.model,
+    collection_ids: original.collections.map((c) => c.id),
+    tag_ids: original.tags.map((t) => t.id),
+    is_public: false,
+  });
+}
+
+// --- History (usage timeline) ---
+
+// Mirror backend response (см. backend/.../prompt/response.go UsageLogResponse).
+// `prompt` — nested полный PromptResponse; берём отсюда title и model.
+export interface UsageHistoryItem {
+  id: number;
+  prompt_id: number;
+  prompt: {
+    id: number;
+    title: string;
+    model?: string;
+    tags?: Tag[];
+  };
+  used_at: string;
+}
+
+export interface UsageHistoryResponse {
+  items: UsageHistoryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+export async function listUsageHistory(
+  limit = 50,
+  offset = 0,
+): Promise<UsageHistoryResponse> {
+  // Backend pagination через page/page_size — конвертируем из limit/offset.
+  const page = Math.floor(offset / limit) + 1;
+  const params = new URLSearchParams({ page: String(page), page_size: String(limit) });
+  return request<UsageHistoryResponse>(`/api/prompts/history?${params}`);
+}
+
+// --- Analytics ---
+
+export type AnalyticsRange = '7d' | '30d' | '90d' | '365d';
+
+export interface UsageByDayPoint {
+  date: string;
+  count: number;
+}
+
+export interface TopPromptItem {
+  id: number;
+  title: string;
+  usage_count: number;
+}
+
+export interface PersonalAnalyticsResponse {
+  range: AnalyticsRange;
+  totals: {
+    uses: number;
+    created: number;
+    share_views: number;
+  };
+  usage_by_day: UsageByDayPoint[];
+  top_prompts: TopPromptItem[];
+  model_segmentation?: { model: string; count: number }[];
+}
+
+export async function getPersonalAnalytics(
+  range: AnalyticsRange = '30d',
+): Promise<PersonalAnalyticsResponse> {
+  return request<PersonalAnalyticsResponse>(`/api/analytics/personal?range=${range}`);
+}
+
+export interface Insight {
+  type: string;
+  title: string;
+  description: string;
+  data?: Record<string, unknown>;
+}
+
+export interface InsightsResponse {
+  items: Insight[];
+  generated_at: string;
+}
+
+export async function getInsights(): Promise<InsightsResponse> {
+  return request<InsightsResponse>('/api/analytics/insights');
+}
+
+export async function refreshInsights(): Promise<InsightsResponse> {
+  return request<InsightsResponse>('/api/analytics/insights/refresh', { method: 'POST' });
+}
+
+// --- Versions ---
+
+export async function listVersions(
+  promptId: number,
+  limit = 20,
+  offset = 0,
+): Promise<{ items: PromptVersion[]; total: number; has_more: boolean }> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  return request<{ items: PromptVersion[]; total: number; has_more: boolean }>(
+    `/api/prompts/${promptId}/versions?${params}`,
+  );
+}
+
+export async function revertVersion(promptId: number, versionId: number): Promise<Prompt> {
+  return request<Prompt>(`/api/prompts/${promptId}/revert/${versionId}`, {
+    method: 'POST',
+  });
+}
+
+// --- Trash ---
+
+export async function listTrash(): Promise<TrashListResponse> {
+  return request<TrashListResponse>('/api/trash');
+}
+
+export async function restoreTrashPrompt(id: number): Promise<Prompt> {
+  return request<Prompt>(`/api/trash/prompts/${id}/restore`, { method: 'POST' });
+}
+
+export async function restoreTrashCollection(id: number): Promise<Collection> {
+  return request<Collection>(`/api/trash/collections/${id}/restore`, { method: 'POST' });
+}
+
+export async function permanentDeleteTrashPrompt(id: number): Promise<void> {
+  await request<void>(`/api/trash/prompts/${id}`, { method: 'DELETE' });
+}
+
+export async function permanentDeleteTrashCollection(id: number): Promise<void> {
+  await request<void>(`/api/trash/collections/${id}`, { method: 'DELETE' });
+}
+
+export async function emptyTrash(): Promise<void> {
+  await request<void>('/api/trash', { method: 'DELETE' });
+}
+
+// --- Share Links ---
+
+export async function getShareLink(promptId: number): Promise<ShareLink | null> {
+  try {
+    return await request<ShareLink>(`/api/prompts/${promptId}/share`);
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'not_found') return null;
+    throw err;
+  }
+}
+
+export async function createShareLink(promptId: number): Promise<ShareLink> {
+  return request<ShareLink>(`/api/prompts/${promptId}/share`, { method: 'POST' });
+}
+
+export async function deactivateShareLink(promptId: number): Promise<void> {
+  await request<void>(`/api/prompts/${promptId}/share`, { method: 'DELETE' });
+}
+
+// --- Collections CRUD (Phase 2) ---
 
 export async function listCollections(teamId?: number | null): Promise<CollectionDTO[]> {
   const params = new URLSearchParams();
@@ -150,6 +434,37 @@ export async function listCollections(teamId?: number | null): Promise<Collectio
   return Array.isArray(data) ? data : (data.items ?? []);
 }
 
+export interface CreateCollectionBody {
+  name: string;
+  description?: string;
+  color: string;
+  icon: string;
+  team_id?: number | null;
+}
+
+export async function createCollection(body: CreateCollectionBody): Promise<Collection> {
+  return request<Collection>('/api/collections', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateCollection(
+  id: number,
+  body: Partial<CreateCollectionBody>,
+): Promise<Collection> {
+  return request<Collection>(`/api/collections/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteCollection(id: number): Promise<void> {
+  await request<void>(`/api/collections/${id}`, { method: 'DELETE' });
+}
+
+// --- Tags CRUD ---
+
 export async function listTags(teamId?: number | null): Promise<TagDTO[]> {
   const params = new URLSearchParams();
   if (teamId) params.set('team_id', String(teamId));
@@ -158,15 +473,139 @@ export async function listTags(teamId?: number | null): Promise<TagDTO[]> {
   return Array.isArray(data) ? data : (data.items ?? []);
 }
 
+export interface CreateTagBody {
+  name: string;
+  color: string;
+  team_id?: number | null;
+}
+
+export async function createTag(body: CreateTagBody): Promise<Tag> {
+  return request<Tag>('/api/tags', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function deleteTag(id: number): Promise<void> {
+  await request<void>(`/api/tags/${id}`, { method: 'DELETE' });
+}
+
+// --- Teams ---
+
+export async function listTeams(): Promise<TeamDTO[]> {
+  const data = await request<TeamDTO[] | { items: TeamDTO[] }>('/api/teams');
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
+export async function getTeam(slug: string): Promise<TeamDetail> {
+  return request<TeamDetail>(`/api/teams/${slug}`);
+}
+
+export interface CreateTeamBody {
+  name: string;
+  description?: string;
+}
+
+export async function createTeam(body: CreateTeamBody): Promise<Team> {
+  return request<Team>('/api/teams', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function updateTeam(slug: string, body: Partial<CreateTeamBody>): Promise<Team> {
+  return request<Team>(`/api/teams/${slug}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteTeam(slug: string): Promise<void> {
+  await request<void>(`/api/teams/${slug}`, { method: 'DELETE' });
+}
+
+export async function inviteTeamMember(
+  slug: string,
+  body: { email: string; role: 'editor' | 'viewer' },
+): Promise<void> {
+  await request<void>(`/api/teams/${slug}/invitations`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function removeTeamMember(slug: string, memberId: number): Promise<void> {
+  await request<void>(`/api/teams/${slug}/members/${memberId}`, { method: 'DELETE' });
+}
+
+export async function updateTeamMemberRole(
+  slug: string,
+  memberId: number,
+  role: 'owner' | 'editor' | 'viewer',
+): Promise<void> {
+  await request<void>(`/api/teams/${slug}/members/${memberId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ role }),
+  });
+}
+
+// --- Streak / Stats ---
+
 export async function getStreak(): Promise<StreakDTO> {
   return request<StreakDTO>('/api/streaks');
 }
 
-export async function createShareLink(promptId: number): Promise<{ token: string; url: string }> {
-  return request<{ token: string; url: string }>(`/api/prompts/${promptId}/share`, {
+export async function getStreakDetail(): Promise<StreakResponse> {
+  return request<StreakResponse>('/api/streaks');
+}
+
+// --- Badges ---
+
+export async function listBadges(): Promise<BadgeListResponse> {
+  return request<BadgeListResponse>('/api/badges');
+}
+
+// --- Changelog ---
+
+export async function getChangelog(): Promise<ChangelogResponse> {
+  return request<ChangelogResponse>('/api/changelog');
+}
+
+export async function markChangelogRead(): Promise<void> {
+  await request<void>('/api/changelog/seen', { method: 'POST' });
+}
+
+// --- Subscription ---
+
+export async function listPlans(): Promise<Plan[]> {
+  const data = await request<Plan[] | { items: Plan[] }>('/api/plans');
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
+export async function getCurrentSubscription(): Promise<Subscription | null> {
+  try {
+    return await request<Subscription>('/api/subscription');
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'not_found') return null;
+    throw err;
+  }
+}
+
+export async function getUsageSummary(): Promise<UsageSummary> {
+  return request<UsageSummary>('/api/subscription/usage');
+}
+
+export async function cancelSubscription(): Promise<void> {
+  await request<void>('/api/subscription/cancel', { method: 'POST' });
+}
+
+// Backend требует body { months: 1|2|3 } — default 1.
+export async function pauseSubscription(months = 1): Promise<void> {
+  await request<void>('/api/subscription/pause', {
     method: 'POST',
+    body: JSON.stringify({ months }),
   });
 }
+
+export async function resumeSubscription(): Promise<void> {
+  await request<void>('/api/subscription/resume', { method: 'POST' });
+}
+
+// --- Use / favorite / pin ---
 
 export async function incrementUsage(promptId: number): Promise<void> {
   await request<{ message?: string }>(`/api/prompts/${promptId}/use`, {
@@ -187,24 +626,100 @@ export async function togglePin(promptId: number): Promise<PinResult> {
   return request<PinResult>(`/api/prompts/${promptId}/pin`, { method: 'POST' });
 }
 
-export async function validateKey(
-  apiKey: string,
-  apiBase?: string,
-): Promise<MeResponse> {
-  const { apiBase: storedBase } = await getSettings();
-  const base = apiBase ?? storedBase;
-  const headers = new Headers();
-  headers.set('Authorization', `Bearer ${apiKey}`);
-  headers.set('X-Client', `chrome-extension/${EXTENSION_VERSION}`);
-  headers.set('Accept', 'application/json');
+// --- API Keys ---
 
-  let res: Response;
-  try {
-    res = await fetch(`${base}/api/auth/me`, { headers });
-  } catch {
-    throw new ApiError('network error', 0, 'network');
-  }
-  if (res.status === 401) throw new ApiError('unauthorized', 401, 'unauthorized');
-  if (!res.ok) throw new ApiError(`http ${res.status}`, res.status, 'network');
-  return (await res.json()) as MeResponse;
+export async function listApiKeys(): Promise<APIKeyListResponse> {
+  return request<APIKeyListResponse>('/api/api-keys');
 }
+
+export async function createApiKey(body: CreateAPIKeyRequest): Promise<CreatedAPIKey> {
+  return request<CreatedAPIKey>('/api/api-keys', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteApiKey(id: number): Promise<void> {
+  await request<void>(`/api/api-keys/${id}`, { method: 'DELETE' });
+}
+
+// --- Chains (Phase 3) ---
+
+export async function listChains(teamId?: number | null): Promise<ChainListResponse> {
+  const params = new URLSearchParams();
+  if (teamId) params.set('team_id', String(teamId));
+  const suffix = params.toString() ? `?${params}` : '';
+  return request<ChainListResponse>(`/api/chains${suffix}`);
+}
+
+export async function getChain(id: number): Promise<ChainDetail> {
+  return request<ChainDetail>(`/api/chains/${id}`);
+}
+
+export async function startChainExecution(
+  chainId: number,
+  initialVars: Record<string, string> = {},
+): Promise<ChainExecution> {
+  return request<ChainExecution>(`/api/chains/${chainId}/executions`, {
+    method: 'POST',
+    body: JSON.stringify({ initial_vars: initialVars }),
+  });
+}
+
+export async function getExecution(execId: number): Promise<ChainExecution> {
+  return request<ChainExecution>(`/api/executions/${execId}`);
+}
+
+export async function advanceChainStep(
+  execId: number,
+  stepOutput: string,
+  chosenBranchIndex?: number,
+): Promise<ChainExecution> {
+  const body: Record<string, unknown> = { step_output: stepOutput };
+  if (chosenBranchIndex !== undefined) body.chosen_branch_index = chosenBranchIndex;
+  return request<ChainExecution>(`/api/executions/${execId}/advance`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function listExecutions(chainId: number): Promise<ChainExecutionListResponse> {
+  return request<ChainExecutionListResponse>(`/api/chains/${chainId}/executions`);
+}
+
+// --- Team Invitations ---
+
+export async function listMyInvitations(): Promise<TeamInvitation[]> {
+  const data = await request<TeamInvitation[] | { items: TeamInvitation[] }>(
+    '/api/invitations',
+  );
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
+export async function acceptInvitation(invitationId: number): Promise<void> {
+  await request<void>(`/api/invitations/${invitationId}/accept`, { method: 'POST' });
+}
+
+export async function declineInvitation(invitationId: number): Promise<void> {
+  await request<void>(`/api/invitations/${invitationId}/decline`, { method: 'POST' });
+}
+
+// --- Feedback ---
+
+export async function submitFeedback(body: FeedbackRequest): Promise<FeedbackResponse> {
+  return request<FeedbackResponse>('/api/feedback', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// --- API Keys are dual-purpose — Type-only re-exports kept above ---
+// (chains module section ends here)
+
+// Re-export для backward-compat existing callers.
+export {
+  type APIKey,
+  type APIKeyListResponse,
+  type CreatedAPIKey,
+  type CreateAPIKeyRequest,
+} from './types';

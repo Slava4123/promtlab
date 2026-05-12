@@ -6,7 +6,9 @@
     "types": ["chrome"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@pv/shared": ["../shared/src/index.ts"],
+      "@pv/shared/*": ["../shared/src/*"]
     },
     "strict": true,
     "noUnusedLocals": true,
@@ -18,7 +20,8 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".wxt/types"
+    ".wxt/types",
+    "../shared/src/**/*.ts"
   ],
   "exclude": [
     "node_modules",
