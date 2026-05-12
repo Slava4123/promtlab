@@ -7,6 +7,7 @@ import { useCommandPalette } from "../../hooks/use-command-palette"
 import { QuotaExceededDialog } from "../subscription/quota-exceeded-dialog"
 import { OverLimitBanner } from "../subscription/over-limit-banner"
 import { QuickSaveDialog } from "../prompts/quick-save-dialog"
+import { ChangelogPopup } from "../changelog-popup"
 
 // Layout оболочка для всех authenticated-страниц. Sticky bottom-tabs снизу,
 // drawer slide-in для остального меню, глобальная Cmd+K command palette.
@@ -33,6 +34,7 @@ export function AppShell() {
       <CommandPalette open={palette.open} onClose={palette.closePalette} />
       <QuotaExceededDialog />
       <QuickSaveDialog />
+      <ChangelogPopup />
     </div>
   )
 }

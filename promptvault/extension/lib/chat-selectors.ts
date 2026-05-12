@@ -4,6 +4,7 @@
 // даёт fallback на manual paste.
 
 import type { SupportedHost } from './selectors'
+import { addBreadcrumb } from './sentry'
 
 const RESPONSE_SELECTORS: Record<SupportedHost, string[]> = {
   'chatgpt.com': [
@@ -78,5 +79,10 @@ export function extractLastAIResponse(host: string): string | null {
       // Невалидный селектор — продолжаем
     }
   }
+  // B-17: capture failed — breadcrumb для мониторинга DOM-changes.
+  addBreadcrumb('selector.miss', `AI response not captured on ${host}`, {
+    host,
+    tried: list.length,
+  }, 'warning')
   return null
 }

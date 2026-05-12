@@ -115,9 +115,13 @@ export default defineBackground(() => {
     dsn: import.meta.env.WXT_SENTRY_DSN,
   });
 
-  chrome.sidePanel
-    ?.setPanelBehavior?.({ openPanelOnActionClick: true })
-    .catch((err) => console.warn('sidePanel.setPanelBehavior failed', err));
+  // chrome.sidePanel доступен только в Chrome MV3. Firefox использует
+  // sidebar_action — открывается через клик на action автоматически.
+  if (typeof chrome !== 'undefined' && 'sidePanel' in chrome) {
+    chrome.sidePanel
+      ?.setPanelBehavior?.({ openPanelOnActionClick: true })
+      .catch((err) => console.warn('sidePanel.setPanelBehavior failed', err));
+  }
 
   chrome.runtime.onInstalled.addListener((details) => {
     console.info('PromptVault extension installed', details.reason);
@@ -144,7 +148,9 @@ export default defineBackground(() => {
       },
     });
     try {
-      if (tab?.windowId !== undefined) {
+      // Chrome: открываем side panel программно. Firefox: sidebar_action
+      // открывается через клик на action — программное открытие не работает.
+      if (typeof chrome !== 'undefined' && 'sidePanel' in chrome && tab?.windowId !== undefined) {
         await (chrome.sidePanel as unknown as { open: (o: { windowId: number }) => Promise<void> })?.open?.({
           windowId: tab.windowId,
         });

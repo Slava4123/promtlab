@@ -1,6 +1,8 @@
 // Per-site селекторы input-полей. Атрибутные, re-query каждый раз
 // (никогда не кэшировать references — SPA churn).
 
+import { addBreadcrumb } from './sentry'
+
 export type SupportedHost =
   | 'chatgpt.com'
   | 'claude.ai'
@@ -117,14 +119,28 @@ export const INPUT_SELECTORS: Record<SupportedHost, string[]> = {
 /**
  * Находит input-элемент на странице по per-host селекторам, с fallback на
  * heuristic "largest contenteditable" (Agora 2026).
+ *
+ * B-17: при каждом fallback на heuristic пишем breadcrumb selector.miss
+ * — мониторинг качества селекторов в проде. Если на каком-то хосте
+ * фолбэк срабатывает часто — значит DOM сайта обновился и пора live recon.
  */
 export function findTargetInput(host: string): HTMLElement | null {
   const list = INPUT_SELECTORS[host as SupportedHost] ?? []
+  const tried: string[] = []
   for (const sel of list) {
     const el = document.querySelector<HTMLElement>(sel)
-    if (el && isVisible(el)) return el
+    if (el && isVisible(el)) {
+      return el
+    }
+    tried.push(sel)
   }
-  return findLargestContentEditable()
+  const fallback = findLargestContentEditable()
+  addBreadcrumb('selector.miss', `input not found on ${host}`, {
+    host,
+    tried: tried.length,
+    fallback_found: Boolean(fallback),
+  }, fallback ? 'warning' : 'error')
+  return fallback
 }
 
 function isVisible(el: HTMLElement): boolean {

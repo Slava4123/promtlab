@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, Search, Keyboard, Star, X } from 'lucide-react';
+import { Sparkles, Search, Keyboard, Star, X, GitBranch, ArrowLeft } from 'lucide-react';
 import { Button } from './ui/button';
 import { isOnboardingSeen, markOnboardingSeen } from '../lib/storage';
 
@@ -24,22 +24,29 @@ export function OnboardingOverlay() {
       icon: <Sparkles className="h-8 w-8 text-(--color-primary)" />,
       title: 'Добро пожаловать в ПромтЛаб',
       description:
-        'Расширение хранит вашу библиотеку промптов и вставляет их прямо в ChatGPT, Claude, Gemini, Perplexity одним кликом.',
+        'Расширение хранит вашу библиотеку промптов и вставляет их прямо в ChatGPT, Claude, Gemini, Perplexity, Yandex GPT, GigaChat, DeepSeek, Mistral и Qwen — одним кликом.',
     },
     {
       icon: <Search className="h-8 w-8 text-(--color-primary)" />,
-      title: 'Быстрый поиск',
-      description: 'Нажмите Ctrl+K (⌘K) чтобы перейти к поиску. Стрелками ↑↓ навигация, Enter открывает.',
+      title: 'Поиск и Cmd+K',
+      description:
+        'Введите запрос в шапке или нажмите Cmd+K — глобальная команд-палитра ищет по промптам, коллекциям и тегам.',
     },
     {
       icon: <Keyboard className="h-8 w-8 text-(--color-primary)" />,
       title: 'Горячие клавиши',
       description:
-        'Ctrl+Shift+K — открыть панель. Esc — назад. Ctrl+Enter — вставить. Ctrl+R — обновить список.',
+        'Ctrl+Shift+K — открыть панель. Esc — назад. ↑↓Enter — навигация по списку. Ctrl+R — обновить.',
+    },
+    {
+      icon: <GitBranch className="h-8 w-8 text-purple-500" />,
+      title: 'Цепочки промптов',
+      description:
+        'Объединяйте несколько промптов в workflow. Запускайте — копируйте отрендеренный промпт, выполняйте в LLM, нажимайте «Далее» для следующего шага.',
     },
     {
       icon: <Star className="h-8 w-8 text-amber-500" />,
-      title: 'Избранное и закреплённое',
+      title: 'Закреплённые и избранное',
       description:
         'Наведите на карточку и кликните ⭐ или 📌 — промпт попадёт в соответствующий таб для быстрого доступа.',
     },
@@ -81,9 +88,21 @@ export function OnboardingOverlay() {
           ))}
         </div>
         <div className="flex gap-2">
-          <Button type="button" variant="ghost" onClick={close} className="flex-1">
-            Пропустить
-          </Button>
+          {step > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setStep(step - 1)}
+              aria-label="Назад"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button type="button" variant="ghost" onClick={close} className="flex-1">
+              Пропустить
+            </Button>
+          )}
           <Button
             type="button"
             onClick={() => {
