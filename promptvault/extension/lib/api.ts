@@ -713,6 +713,210 @@ export async function submitFeedback(body: FeedbackRequest): Promise<FeedbackRes
   });
 }
 
+// --- Notifications settings ---
+
+export async function setInsightEmails(enabled: boolean): Promise<{ insight_emails_enabled: boolean }> {
+  return request<{ insight_emails_enabled: boolean }>(
+    '/api/auth/notifications/insights',
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
+    },
+  );
+}
+
+// --- Linked accounts ---
+
+export interface LinkedAccountDTO {
+  id: number;
+  provider: string;
+}
+
+export async function listLinkedAccounts(): Promise<LinkedAccountDTO[]> {
+  const data = await request<LinkedAccountDTO[] | { items: LinkedAccountDTO[] }>(
+    '/api/auth/linked-accounts',
+  );
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
+export async function unlinkProvider(provider: string): Promise<void> {
+  await request<void>(`/api/auth/unlink/${provider}`, { method: 'DELETE' });
+}
+
+// --- Referral ---
+
+export interface ReferralInfo {
+  code: string;
+  invited_count: number;
+  referred_by?: string;
+  reward_granted: boolean;
+}
+
+export async function getReferral(): Promise<ReferralInfo> {
+  return request<ReferralInfo>('/api/auth/referral');
+}
+
+// --- Team Branding ---
+
+export interface TeamBranding {
+  logo_url?: string;
+  logo_source?: string;
+  effective_logo_url?: string;
+  tagline?: string;
+  website?: string;
+  primary_color?: string;
+}
+
+export interface UpdateBrandingBody {
+  tagline?: string;
+  website?: string;
+  primary_color?: string;
+  logo_url?: string;
+}
+
+export async function getTeamBranding(slug: string): Promise<TeamBranding> {
+  return request<TeamBranding>(`/api/teams/${slug}/branding`);
+}
+
+export async function updateTeamBranding(
+  slug: string,
+  body: UpdateBrandingBody,
+): Promise<TeamBranding> {
+  return request<TeamBranding>(`/api/teams/${slug}/branding`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteTeamLogo(slug: string): Promise<void> {
+  await request<void>(`/api/teams/${slug}/branding/logo`, { method: 'DELETE' });
+}
+
+// uploadTeamLogo — multipart upload. Делается напрямую из side-panel (не через
+// background switch), потому что FormData не сериализуется через chrome.runtime.sendMessage.
+export async function uploadTeamLogoDirect(
+  slug: string,
+  file: File,
+): Promise<TeamBranding> {
+  const { apiKey, apiBase } = await getSettings();
+  if (!apiKey) throw new ApiError('missing api key', 401, 'unauthorized');
+
+  const formData = new FormData();
+  formData.append('logo', file);
+
+  const headers = new Headers();
+  headers.set('Authorization', `Bearer ${apiKey}`);
+  headers.set('X-Client', `chrome-extension/${EXTENSION_VERSION}`);
+
+  const res = await fetch(`${apiBase}/api/teams/${slug}/branding/logo`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) throw new ApiError('unauthorized', 401, 'unauthorized');
+    if (res.status === 402) {
+      const body = await safeJson(res);
+      throw new ApiError(body?.message ?? 'upgrade required', 402, 'quota_exceeded');
+    }
+    if (res.status === 413) throw new ApiError('file too large', 413, 'validation');
+    if (res.status === 415) throw new ApiError('unsupported format', 415, 'validation');
+    throw new ApiError(`upload failed: ${res.status}`, res.status, 'network');
+  }
+
+  return (await res.json()) as TeamBranding;
+}
+
+// --- Team Analytics ---
+
+export interface AnalyticsUsagePoint {
+  day: string;
+  count: number;
+}
+
+export interface AnalyticsTopPrompt {
+  prompt_id: number;
+  title: string;
+  uses: number;
+}
+
+export interface AnalyticsContributor {
+  user_id: number;
+  email: string;
+  name?: string;
+  prompts_created: number;
+  prompts_edited: number;
+  uses: number;
+}
+
+export interface AnalyticsModelUsage {
+  model: string;
+  uses: number;
+}
+
+export interface AnalyticsTotals {
+  uses: number;
+  created: number;
+  updated: number;
+  share_views: number;
+}
+
+export interface TeamDashboardResponse {
+  range: AnalyticsRange;
+  usage_per_day: AnalyticsUsagePoint[];
+  top_prompts: AnalyticsTopPrompt[];
+  prompts_created_per_day: AnalyticsUsagePoint[];
+  prompts_updated_per_day: AnalyticsUsagePoint[];
+  contributors: AnalyticsContributor[];
+  totals_current: AnalyticsTotals;
+  totals_previous: AnalyticsTotals;
+  usage_by_model: AnalyticsModelUsage[];
+}
+
+export async function getTeamAnalytics(
+  teamId: number,
+  range: AnalyticsRange = '30d',
+): Promise<TeamDashboardResponse> {
+  return request<TeamDashboardResponse>(
+    `/api/analytics/teams/${teamId}?range=${range}`,
+  );
+}
+
+// --- Team Activity ---
+
+export interface ActivityItem {
+  id: number;
+  actor_id?: number;
+  actor_email?: string;
+  actor_name?: string;
+  event_type: string;
+  target_type: string;
+  target_id?: number;
+  target_label?: string;
+  metadata?: unknown;
+  created_at: string;
+}
+
+export interface ActivityResponse {
+  items: ActivityItem[];
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+export async function getTeamActivity(
+  slug: string,
+  page = 1,
+  pageSize = 50,
+): Promise<ActivityResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  return request<ActivityResponse>(`/api/teams/${slug}/activity?${params}`);
+}
+
 // --- API Keys are dual-purpose — Type-only re-exports kept above ---
 // (chains module section ends here)
 

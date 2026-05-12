@@ -69,6 +69,15 @@ const TeamsIndexPage = lazy(() =>
 const TeamDetailPage = lazy(() =>
   import("./pages/teams/detail-page").then((m) => ({ default: m.TeamDetailPage })),
 )
+const TeamBrandingPage = lazy(() =>
+  import("./pages/teams/branding-page").then((m) => ({ default: m.TeamBrandingPage })),
+)
+const TeamAnalyticsPage = lazy(() =>
+  import("./pages/teams/analytics-page").then((m) => ({ default: m.TeamAnalyticsPage })),
+)
+const TeamActivityPage = lazy(() =>
+  import("./pages/teams/activity-page").then((m) => ({ default: m.TeamActivityPage })),
+)
 const ProfilePage = lazy(() =>
   import("./pages/settings/profile-page").then((m) => ({ default: m.ProfilePage })),
 )
@@ -80,6 +89,15 @@ const SubscriptionSettingsPage = lazy(() =>
 )
 const AppearancePage = lazy(() =>
   import("./pages/settings/appearance-page").then((m) => ({ default: m.AppearancePage })),
+)
+const NotificationsPage = lazy(() =>
+  import("./pages/settings/notifications-page").then((m) => ({ default: m.NotificationsPage })),
+)
+const AccountsPage = lazy(() =>
+  import("./pages/settings/accounts-page").then((m) => ({ default: m.AccountsPage })),
+)
+const ReferralPage = lazy(() =>
+  import("./pages/settings/referral-page").then((m) => ({ default: m.ReferralPage })),
 )
 const PricingPage = lazy(() =>
   import("./pages/pricing-page").then((m) => ({ default: m.PricingPage })),
@@ -162,36 +180,9 @@ export function AppRoutes() {
             {/* Phase 4: Teams */}
             <Route path="/teams" element={<TeamsIndexPage />} />
             <Route path="/teams/:slug" element={<TeamDetailPage />} />
-            <Route
-              path="/teams/:slug/branding"
-              element={
-                <PlaceholderPage
-                  title="Брендинг"
-                  description="Логотип и цвета команды — редактирование в веб-приложении."
-                  phase="Phase 4 polish"
-                />
-              }
-            />
-            <Route
-              path="/teams/:slug/analytics"
-              element={
-                <PlaceholderPage
-                  title="Аналитика команды"
-                  description="Метрики команды — в веб-приложении."
-                  phase="Phase 2 polish"
-                />
-              }
-            />
-            <Route
-              path="/teams/:slug/activity"
-              element={
-                <PlaceholderPage
-                  title="Активность команды"
-                  description="События в команде — в веб-приложении."
-                  phase="Phase 2 polish"
-                />
-              }
-            />
+            <Route path="/teams/:slug/branding" element={<TeamBrandingPage />} />
+            <Route path="/teams/:slug/analytics" element={<TeamAnalyticsPage />} />
+            <Route path="/teams/:slug/activity" element={<TeamActivityPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/badges" element={<BadgesPage />} />
@@ -220,37 +211,10 @@ export function AppRoutes() {
                 />
               }
             />
-            <Route
-              path="/settings/accounts"
-              element={
-                <PlaceholderPage
-                  title="Подключённые аккаунты"
-                  description="OAuth-привязка — в веб-приложении."
-                  phase="Phase 5 polish"
-                />
-              }
-            />
-            <Route
-              path="/settings/notifications"
-              element={
-                <PlaceholderPage
-                  title="Уведомления"
-                  description="Настройки email-уведомлений — в веб-приложении."
-                  phase="Phase 5 polish"
-                />
-              }
-            />
+            <Route path="/settings/accounts" element={<AccountsPage />} />
+            <Route path="/settings/notifications" element={<NotificationsPage />} />
             <Route path="/settings/subscription" element={<SubscriptionSettingsPage />} />
-            <Route
-              path="/settings/referral"
-              element={
-                <PlaceholderPage
-                  title="Реферальная программа"
-                  description="Реферальный код и приглашения — в веб-приложении."
-                  phase="Phase 5 polish"
-                />
-              }
-            />
+            <Route path="/settings/referral" element={<ReferralPage />} />
             <Route path="/settings/integrations" element={<IntegrationsPage />} />
             <Route path="/settings/appearance" element={<AppearancePage />} />
             <Route path="*" element={<NotFoundPage />} />

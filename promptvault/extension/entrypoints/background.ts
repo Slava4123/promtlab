@@ -8,6 +8,15 @@ import {
   changePassword,
   createApiKey,
   declineInvitation,
+  deleteTeamLogo,
+  getReferral,
+  getTeamActivity,
+  getTeamAnalytics,
+  getTeamBranding,
+  listLinkedAccounts,
+  setInsightEmails,
+  unlinkProvider,
+  updateTeamBranding,
   createCollection,
   createPrompt,
   createShareLink,
@@ -296,6 +305,30 @@ async function handleRequest(msg: BgRequest): Promise<unknown> {
     // --- Feedback ---
     case 'api.submitFeedback':
       return submitFeedback(msg.body);
+
+    // --- Notifications / Linked accounts / Referral ---
+    case 'api.setInsightEmails':
+      return setInsightEmails(msg.enabled);
+    case 'api.listLinkedAccounts':
+      return listLinkedAccounts();
+    case 'api.unlinkProvider':
+      await unlinkProvider(msg.provider);
+      return { ok: true };
+    case 'api.getReferral':
+      return getReferral();
+
+    // --- Team Branding/Analytics/Activity ---
+    case 'api.getTeamBranding':
+      return getTeamBranding(msg.slug);
+    case 'api.updateTeamBranding':
+      return updateTeamBranding(msg.slug, msg.body);
+    case 'api.deleteTeamLogo':
+      await deleteTeamLogo(msg.slug);
+      return { ok: true };
+    case 'api.getTeamAnalytics':
+      return getTeamAnalytics(msg.teamId, msg.range);
+    case 'api.getTeamActivity':
+      return getTeamActivity(msg.slug, msg.page, msg.pageSize);
 
     // --- Streak / Badges / Changelog ---
     case 'api.getStreak':

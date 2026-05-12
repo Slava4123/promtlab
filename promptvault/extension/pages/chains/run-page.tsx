@@ -501,17 +501,20 @@ function resolveStepContent(
   manualVars: Record<string, string>,
   promptContent: string,
 ): string {
+  // chain_var → только exec.variables (initial-level переменные цепочки).
+  // step_outputs как источник убран: backend пишет ключи step_<step.id> (uint),
+  // а variable_mapping хранит var_name (string) — несовпадение схем ломало
+  // подстановку. См. frontend pages/chains/run.tsx::resolveStepVariables.
+  // Output модели не возвращается в PromptVault — юзер работает с ответом
+  // прямо в чате LLM.
   const values: Record<string, string> = {}
   for (const [name, src] of Object.entries(step.variable_mapping)) {
     if (src.type === "chain_var" && src.var_name) {
-      // chain_var может быть из exec.variables (initial) или из step_outputs
-      values[name] =
-        exec.variables[src.var_name] ?? exec.step_outputs[`step_${src.var_name}`] ?? ""
+      values[name] = exec.variables[src.var_name] ?? ""
     } else if (src.type === "manual" && src.var_name) {
       values[name] = exec.variables[src.var_name] ?? manualVars[name] ?? ""
     }
   }
-  // Также добавим manual переменные из step не упомянутые в mapping
   for (const [k, v] of Object.entries(manualVars)) {
     if (!(k in values)) values[k] = v
   }

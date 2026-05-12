@@ -135,6 +135,21 @@ export type BgRequest =
   | { type: 'api.declineInvitation'; invitationId: number }
   // --- Feedback ---
   | { type: 'api.submitFeedback'; body: FeedbackRequest }
+  // --- Notifications/Linked/Referral ---
+  | { type: 'api.setInsightEmails'; enabled: boolean }
+  | { type: 'api.listLinkedAccounts' }
+  | { type: 'api.unlinkProvider'; provider: string }
+  | { type: 'api.getReferral' }
+  // --- Team Branding/Analytics/Activity ---
+  | { type: 'api.getTeamBranding'; slug: string }
+  | {
+      type: 'api.updateTeamBranding'
+      slug: string
+      body: { tagline?: string; website?: string; primary_color?: string; logo_url?: string }
+    }
+  | { type: 'api.deleteTeamLogo'; slug: string }
+  | { type: 'api.getTeamAnalytics'; teamId: number; range?: '7d' | '30d' | '90d' | '365d' }
+  | { type: 'api.getTeamActivity'; slug: string; page?: number; pageSize?: number }
   // --- Streak / Badges / Changelog ---
   | { type: 'api.getStreak' }
   | { type: 'api.getStreakDetail' }
@@ -256,6 +271,36 @@ export interface BgResultMap {
   'api.declineInvitation': { ok: true };
   // --- Feedback ---
   'api.submitFeedback': FeedbackResponse;
+  // --- Notifications/Linked/Referral ---
+  'api.setInsightEmails': { insight_emails_enabled: boolean };
+  'api.listLinkedAccounts': Array<{ id: number; provider: string }>;
+  'api.unlinkProvider': { ok: true };
+  'api.getReferral': {
+    code: string;
+    invited_count: number;
+    referred_by?: string;
+    reward_granted: boolean;
+  };
+  // --- Team Branding/Analytics/Activity ---
+  'api.getTeamBranding': {
+    logo_url?: string;
+    logo_source?: string;
+    effective_logo_url?: string;
+    tagline?: string;
+    website?: string;
+    primary_color?: string;
+  };
+  'api.updateTeamBranding': {
+    logo_url?: string;
+    logo_source?: string;
+    effective_logo_url?: string;
+    tagline?: string;
+    website?: string;
+    primary_color?: string;
+  };
+  'api.deleteTeamLogo': { ok: true };
+  'api.getTeamAnalytics': import('./api').TeamDashboardResponse;
+  'api.getTeamActivity': import('./api').ActivityResponse;
   // --- Streak / Badges / Changelog ---
   'api.getStreak': StreakDTO;
   'api.getStreakDetail': StreakResponse;
