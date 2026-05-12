@@ -15,6 +15,12 @@ const UsePromptPage = lazy(() =>
 const SignInPage = lazy(() =>
   import("./pages/sign-in").then((m) => ({ default: m.SignInPage })),
 )
+const SignUpPage = lazy(() =>
+  import("./pages/sign-up").then((m) => ({ default: m.SignUpPage })),
+)
+const ForgotPasswordPage = lazy(() =>
+  import("./pages/forgot-password").then((m) => ({ default: m.ForgotPasswordPage })),
+)
 const SettingsPage = lazy(() =>
   import("./pages/settings").then((m) => ({ default: m.SettingsPage })),
 )
@@ -128,6 +134,8 @@ export function AppRoutes() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/sign-in" element={<SignInPage />} />
+        <Route path="/sign-up" element={<SignUpPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route element={<AuthGate />}>
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />

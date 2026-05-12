@@ -774,6 +774,133 @@ export async function moveStepDown(chainId: number, stepId: number): Promise<Cha
   });
 }
 
+// --- Phase 6: Email/password auth ---
+
+// Phase 6 — после успешного login/register сразу создаём API-key
+// "Chrome Extension" через access_token и работаем дальше как с pvlt_* ключом.
+// Refresh_token через HttpOnly cookie в extension не работает, а access живёт
+// только 15 минут — это решает проблему долгоживущей сессии.
+
+export interface AuthLoginResponse {
+  apiKey: string;
+  user: MeResponse;
+}
+
+async function unauthFetch(
+  apiBase: string,
+  path: string,
+  body: unknown,
+): Promise<Response> {
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+    'X-Client': `chrome-extension/${EXTENSION_VERSION}`,
+  });
+  return fetch(`${apiBase}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+async function createKeyWithAccessToken(
+  apiBase: string,
+  accessToken: string,
+  name: string,
+): Promise<string> {
+  const res = await fetch(`${apiBase}/api/api-keys`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Client': `chrome-extension/${EXTENSION_VERSION}`,
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ name, read_only: false }),
+  });
+  if (!res.ok) {
+    throw new ApiError(`не удалось создать API-key: ${res.status}`, res.status, 'unknown');
+  }
+  const data = (await res.json()) as { key: string };
+  return data.key;
+}
+
+export async function loginEmailPassword(
+  email: string,
+  password: string,
+): Promise<AuthLoginResponse> {
+  const { apiBase } = await getSettings();
+  const res = await unauthFetch(apiBase, '/api/auth/login', { email, password });
+  if (!res.ok) {
+    if (res.status === 401) throw new ApiError('Неверный email или пароль', 401, 'unauthorized');
+    if (res.status === 403) {
+      const body = await safeJson(res);
+      throw new ApiError(body?.message ?? 'Доступ заблокирован', 403, 'forbidden');
+    }
+    if (res.status === 429) throw new ApiError('Слишком много попыток', 429, 'rate_limited');
+    throw new ApiError(`Ошибка входа: ${res.status}`, res.status, 'network');
+  }
+  const data = (await res.json()) as { user: MeResponse; tokens: { access_token: string } };
+  const apiKey = await createKeyWithAccessToken(apiBase, data.tokens.access_token, 'Chrome Extension');
+  return { apiKey, user: data.user };
+}
+
+export async function registerEmailPassword(body: {
+  email: string;
+  password: string;
+  name: string;
+  referredBy?: string;
+}): Promise<AuthLoginResponse> {
+  const { apiBase } = await getSettings();
+  const res = await unauthFetch(apiBase, '/api/auth/register', {
+    email: body.email,
+    password: body.password,
+    name: body.name,
+    referred_by: body.referredBy,
+  });
+  if (!res.ok) {
+    if (res.status === 409) throw new ApiError('Email уже зарегистрирован', 409, 'conflict');
+    if (res.status === 422) {
+      const data = await safeJson(res);
+      throw new ApiError(data?.message ?? 'Ошибка валидации', 422, 'validation');
+    }
+    throw new ApiError(`Ошибка регистрации: ${res.status}`, res.status, 'network');
+  }
+  const data = (await res.json()) as { user: MeResponse; tokens: { access_token: string } };
+  const apiKey = await createKeyWithAccessToken(apiBase, data.tokens.access_token, 'Chrome Extension');
+  return { apiKey, user: data.user };
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  const { apiBase } = await getSettings();
+  const res = await unauthFetch(apiBase, '/api/auth/forgot-password', { email });
+  if (!res.ok) {
+    if (res.status === 429) throw new ApiError('Слишком много попыток', 429, 'rate_limited');
+    // Backend для безопасности всегда возвращает 200, чтобы не раскрывать
+    // существование аккаунта. Если получили не-200 — fail-safe ошибка.
+    throw new ApiError(`Ошибка: ${res.status}`, res.status, 'network');
+  }
+}
+
+export async function resetPassword(body: {
+  email: string;
+  code: string;
+  newPassword: string;
+}): Promise<void> {
+  const { apiBase } = await getSettings();
+  const res = await unauthFetch(apiBase, '/api/auth/reset-password', {
+    email: body.email,
+    code: body.code,
+    new_password: body.newPassword,
+  });
+  if (!res.ok) {
+    if (res.status === 400 || res.status === 422) {
+      const data = await safeJson(res);
+      throw new ApiError(data?.message ?? 'Неверный код или email', res.status, 'validation');
+    }
+    if (res.status === 410) throw new ApiError('Код истёк', 410, 'validation');
+    throw new ApiError(`Ошибка: ${res.status}`, res.status, 'network');
+  }
+}
+
 // --- Team Invitations ---
 
 export async function listMyInvitations(): Promise<TeamInvitation[]> {

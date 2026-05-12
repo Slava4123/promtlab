@@ -12,14 +12,18 @@ import {
   declineInvitation,
   deleteChain,
   deleteTeamLogo,
+  forgotPassword,
   getReferral,
   getTeamActivity,
   getTeamAnalytics,
   getTeamBranding,
   listLinkedAccounts,
+  loginEmailPassword,
   moveStepDown,
   moveStepUp,
+  registerEmailPassword,
   removeChainStep,
+  resetPassword,
   setInsightEmails,
   unlinkProvider,
   updateChain,
@@ -407,6 +411,27 @@ async function handleRequest(msg: BgRequest): Promise<unknown> {
       return moveStepUp(msg.chainId, msg.stepId);
     case 'api.moveStepDown':
       return moveStepDown(msg.chainId, msg.stepId);
+
+    // --- Phase 6 Auth (email/password) ---
+    case 'api.loginEmailPassword':
+      return loginEmailPassword(msg.email, msg.password);
+    case 'api.registerEmailPassword':
+      return registerEmailPassword({
+        email: msg.email,
+        password: msg.password,
+        name: msg.name,
+        referredBy: msg.referredBy,
+      });
+    case 'api.forgotPassword':
+      await forgotPassword(msg.email);
+      return { ok: true };
+    case 'api.resetPassword':
+      await resetPassword({
+        email: msg.email,
+        code: msg.code,
+        newPassword: msg.newPassword,
+      });
+      return { ok: true };
 
     // --- Content commands ---
     case 'cmd.insertPrompt':

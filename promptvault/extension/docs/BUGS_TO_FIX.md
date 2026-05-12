@@ -24,7 +24,7 @@
 
 ## 🟠 High — фичи отсутствуют
 
-### B-3. Collection drill-down (`/collections/:id`)
+### B-3. Collection drill-down (`/collections/:id`) ✅ ИСПРАВЛЕНО
 - **Симптом**: при клике на коллекцию открывается placeholder «PHASE 2»
 - **Что нужно**:
   - Page header с иконкой/цветом + имя коллекции + count
@@ -35,12 +35,13 @@
 - **Reference**: `frontend/src/pages/collections.tsx` — drill-down logic inline
 - **API**: `GET /api/prompts?collection_id=:id` + `GET /api/collections/:id`
 
-### B-4. Tag drill-down (`/tags/:id`)
+### B-4. Tag drill-down (`/tags/:id`) ✅ ИСПРАВЛЕНО
 - **Симптом**: placeholder при клике на тег
 - **Что нужно**: аналогично коллекциям, фильтр `tag_ids=:id`
 - **API**: `GET /api/prompts?tag_ids=:id`
 
-### B-5. Notifications settings (`/notifications` и `/settings/notifications`)
+### B-5. Notifications settings (`/notifications` и `/settings/notifications`) ✅ ИСПРАВЛЕНО (частично)
+- Реализован Smart Insights toggle. Streak/weekly — backend endpoints отсутствуют, помечены как «Скоро».
 - **Симптом**: placeholder «PHASE 5»
 - **Что нужно**:
   - Toggle `insight_emails_enabled` (Smart Insights digest)
@@ -50,7 +51,8 @@
   - `PATCH /api/auth/notifications/insights` — есть
   - Остальные нужно уточнить в backend (могут не существовать)
 
-### B-6. Security settings (`/settings/security`)
+### B-6. Security settings (`/settings/security`) ⏸ ОТЛОЖЕНО
+- Backend endpoints для обычных юзеров (`/api/auth/2fa/*`, `/api/auth/sessions`) не существуют. Остаётся placeholder с deep-link.
 - **Симптом**: placeholder
 - **Что нужно**:
   - 2FA enroll (QR code через `qrcode.react`)
@@ -60,7 +62,8 @@
   - `POST /api/auth/2fa/{enroll,verify,disable}` — статус неизвестен
   - `GET /api/auth/sessions`, `DELETE /api/auth/sessions/:id` — статус неизвестен
 
-### B-7. Connected accounts (`/settings/accounts`)
+### B-7. Connected accounts (`/settings/accounts`) ✅ ИСПРАВЛЕНО
+- Список linked accounts + unlink. Link через OAuth flow — deep-link на web.
 - **Симптом**: placeholder
 - **Что нужно**:
   - Список linked accounts (Google/GitHub/Yandex) + статус
@@ -71,7 +74,8 @@
   - `POST /api/auth/link/:provider`
   - `DELETE /api/auth/unlink/:provider`
 
-### B-8. Referral (`/settings/referral`)
+### B-8. Referral (`/settings/referral`) ✅ ИСПРАВЛЕНО
+- Код, copy-link, stats invited_count + reward_granted.
 - **Симптом**: placeholder
 - **Что нужно**: код, copy-link, список приглашённых
 - **API**: `GET /api/auth/referral`
@@ -80,7 +84,9 @@
 
 ## 🟡 Medium — chains UX
 
-### B-9. Chains: editor, detail, canvas (`/chains/new`, `/chains/:id`, `/chains/:id/edit`, `/chains/:id/canvas`)
+### B-9. Chains: editor, detail, canvas (`/chains/new`, `/chains/:id`, `/chains/:id/edit`, `/chains/:id/canvas`) ✅ ИСПРАВЛЕНО
+- Все 4 страницы реализованы. Canvas — vertical timeline вместо @xyflow (для узкого sidepanel).
+  Тонкое редактирование variable_mapping и conditions — deep-link на веб.
 - **Симптом**: 4 placeholders «Phase 3 polish»
 - **Сложность**: высокая
 - **Что нужно**:
@@ -89,7 +95,10 @@
   - Edit: inline-tree editor (35KB в frontend), prompt picker, fork conditions
   - Canvas: DAG через `@xyflow/react` + `elkjs` (нужно установить, или vertical timeline для узкого sidepanel)
 
-### B-10. Chain run: chain_var resolution (известный edge-case)
+### B-10. Chain run: chain_var resolution (известный edge-case) ✅ ИСПРАВЛЕНО
+- Убрал fallback `exec.step_outputs[step_<var_name>]` — backend ключ `step_<id>` (uint),
+  не совпадает с `var_name` (string). chain_var теперь только из `exec.variables`
+  (initial-level), как frontend run.tsx после Phase 16-C.
 - **Симптом**: при использовании `type: "chain_var"` переменных значение из step_output может не подставиться
 - **Где**: `pages/chains/run-page.tsx::resolveStepContent`
 - **Причина**: backend пишет `step_outputs[step_<step.id>]`, я ищу по `step_${src.var_name}`. Несовпадение ключа
@@ -99,17 +108,20 @@
 
 ## 🟢 Low — polish
 
-### B-11. Team branding edit (`/teams/:slug/branding`)
+### B-11. Team branding edit (`/teams/:slug/branding`) ✅ ИСПРАВЛЕНО
+- Logo upload (multipart direct fetch), 12 brand-чипов + color picker, tagline/website.
 - **Симптом**: placeholder, только read-only display
 - **Что нужно**: upload logo (multipart bytea), color palette picker
 - **API**: `POST /api/teams/:slug/branding/logo`, `PUT /api/teams/:slug/branding`
 
-### B-12. Team analytics (`/teams/:slug/analytics`)
+### B-12. Team analytics (`/teams/:slug/analytics`) ✅ ИСПРАВЛЕНО
+- Range selector, metric cards с delta, top prompts, contributors leaderboard, model segmentation.
 - **Симптом**: placeholder
 - **Что нужно**: аналогично personal analytics но team-scoped
 - **API**: `GET /api/analytics/teams/:id`
 
-### B-13. Team activity (`/teams/:slug/activity`)
+### B-13. Team activity (`/teams/:slug/activity`) ✅ ИСПРАВЛЕНО
+- Infinite-scroll лента событий с event_type → label/icon маппингом.
 - **Симптом**: placeholder
 - **Что нужно**: virtualized timeline событий
 - **API**: `GET /api/teams/:slug/activity` (cursor-paginated)

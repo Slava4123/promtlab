@@ -203,6 +203,22 @@ export type BgRequest =
   | { type: 'api.removeChainStep'; chainId: number; stepId: number }
   | { type: 'api.moveStepUp'; chainId: number; stepId: number }
   | { type: 'api.moveStepDown'; chainId: number; stepId: number }
+  // --- Phase 6 Auth ---
+  | { type: 'api.loginEmailPassword'; email: string; password: string }
+  | {
+      type: 'api.registerEmailPassword'
+      email: string
+      password: string
+      name: string
+      referredBy?: string
+    }
+  | { type: 'api.forgotPassword'; email: string }
+  | {
+      type: 'api.resetPassword'
+      email: string
+      code: string
+      newPassword: string
+    }
   // --- Content commands ---
   | { type: 'cmd.insertPrompt'; text: string }
   | { type: 'cmd.insertPromptAll'; text: string }
@@ -357,6 +373,11 @@ export interface BgResultMap {
   'api.removeChainStep': ChainDetail;
   'api.moveStepUp': ChainDetail;
   'api.moveStepDown': ChainDetail;
+  // --- Phase 6 Auth ---
+  'api.loginEmailPassword': { apiKey: string; user: MeResponse };
+  'api.registerEmailPassword': { apiKey: string; user: MeResponse };
+  'api.forgotPassword': { ok: true };
+  'api.resetPassword': { ok: true };
   // --- Content ---
   'cmd.insertPrompt': { strategy: InsertStrategy };
   'cmd.insertPromptAll': { count: number; successes: number };
