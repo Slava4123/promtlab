@@ -179,6 +179,30 @@ export type BgRequest =
       chosenBranchIndex?: number
     }
   | { type: 'api.listExecutions'; chainId: number }
+  | {
+      type: 'api.createChain'
+      body: { name: string; description?: string; team_id?: number | null }
+    }
+  | {
+      type: 'api.updateChain'
+      id: number
+      body: { name?: string; description?: string }
+    }
+  | { type: 'api.deleteChain'; id: number }
+  | {
+      type: 'api.addChainStep'
+      chainId: number
+      body: import('./api').AddStepBody
+    }
+  | {
+      type: 'api.updateChainStep'
+      chainId: number
+      stepId: number
+      body: import('./api').UpdateStepBody
+    }
+  | { type: 'api.removeChainStep'; chainId: number; stepId: number }
+  | { type: 'api.moveStepUp'; chainId: number; stepId: number }
+  | { type: 'api.moveStepDown'; chainId: number; stepId: number }
   // --- Content commands ---
   | { type: 'cmd.insertPrompt'; text: string }
   | { type: 'cmd.insertPromptAll'; text: string }
@@ -325,6 +349,14 @@ export interface BgResultMap {
   'api.getExecution': ChainExecution;
   'api.advanceChainStep': ChainExecution;
   'api.listExecutions': ChainExecutionListResponse;
+  'api.createChain': ChainDetail;
+  'api.updateChain': ChainDetail;
+  'api.deleteChain': { ok: true };
+  'api.addChainStep': ChainDetail;
+  'api.updateChainStep': ChainDetail;
+  'api.removeChainStep': ChainDetail;
+  'api.moveStepUp': ChainDetail;
+  'api.moveStepDown': ChainDetail;
   // --- Content ---
   'cmd.insertPrompt': { strategy: InsertStrategy };
   'cmd.insertPromptAll': { count: number; successes: number };

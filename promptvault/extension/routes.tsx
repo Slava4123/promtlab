@@ -57,6 +57,18 @@ const AnalyticsPage = lazy(() =>
 const ChainsIndexPage = lazy(() =>
   import("./pages/chains/index-page").then((m) => ({ default: m.ChainsIndexPage })),
 )
+const ChainNewPage = lazy(() =>
+  import("./pages/chains/new-page").then((m) => ({ default: m.ChainNewPage })),
+)
+const ChainDetailPage = lazy(() =>
+  import("./pages/chains/detail-page").then((m) => ({ default: m.ChainDetailPage })),
+)
+const ChainEditorPage = lazy(() =>
+  import("./pages/chains/editor-page").then((m) => ({ default: m.ChainEditorPage })),
+)
+const ChainCanvasPage = lazy(() =>
+  import("./pages/chains/canvas-page").then((m) => ({ default: m.ChainCanvasPage })),
+)
 const ChainRunPage = lazy(() =>
   import("./pages/chains/run-page").then((m) => ({ default: m.ChainRunPage })),
 )
@@ -134,49 +146,12 @@ export function AppRoutes() {
             <Route path="/tags/:id" element={<TagDetailPage />} />
             {/* Phase 3: Chains */}
             <Route path="/chains" element={<ChainsIndexPage />} />
-            <Route
-              path="/chains/new"
-              element={
-                <PlaceholderPage
-                  title="Редактор цепочки"
-                  description="Создавайте цепочки в веб-приложении. Запускайте здесь."
-                  phase="Phase 3 polish"
-                />
-              }
-            />
-            <Route
-              path="/chains/:id"
-              element={
-                <PlaceholderPage
-                  title="Детали цепочки"
-                  description="Используйте 'Запустить' для запуска цепочки."
-                  phase="Phase 3 polish"
-                  webPath="/chains"
-                />
-              }
-            />
-            <Route
-              path="/chains/:id/edit"
-              element={
-                <PlaceholderPage
-                  title="Редактор цепочки"
-                  description="Редактирование в веб-приложении."
-                  phase="Phase 3 polish"
-                />
-              }
-            />
+            <Route path="/chains/new" element={<ChainNewPage />} />
+            <Route path="/chains/:id" element={<ChainDetailPage />} />
+            <Route path="/chains/:id/edit" element={<ChainEditorPage />} />
             <Route path="/chains/:id/run" element={<ChainRunPage />} />
             <Route path="/chains/:id/runs" element={<ChainRunsPage />} />
-            <Route
-              path="/chains/:id/canvas"
-              element={
-                <PlaceholderPage
-                  title="Canvas цепочки"
-                  description="DAG-визуализация в веб-приложении."
-                  phase="Phase 3 polish"
-                />
-              }
-            />
+            <Route path="/chains/:id/canvas" element={<ChainCanvasPage />} />
             {/* Phase 4: Teams */}
             <Route path="/teams" element={<TeamsIndexPage />} />
             <Route path="/teams/:slug" element={<TeamDetailPage />} />

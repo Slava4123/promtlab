@@ -3,19 +3,27 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import {
   acceptInvitation,
+  addChainStep,
   advanceChainStep,
   cancelSubscription,
   changePassword,
   createApiKey,
+  createChain,
   declineInvitation,
+  deleteChain,
   deleteTeamLogo,
   getReferral,
   getTeamActivity,
   getTeamAnalytics,
   getTeamBranding,
   listLinkedAccounts,
+  moveStepDown,
+  moveStepUp,
+  removeChainStep,
   setInsightEmails,
   unlinkProvider,
+  updateChain,
+  updateChainStep,
   updateTeamBranding,
   createCollection,
   createPrompt,
@@ -382,6 +390,23 @@ async function handleRequest(msg: BgRequest): Promise<unknown> {
       return advanceChainStep(msg.execId, msg.stepOutput, msg.chosenBranchIndex);
     case 'api.listExecutions':
       return listExecutions(msg.chainId);
+    case 'api.createChain':
+      return createChain(msg.body);
+    case 'api.updateChain':
+      return updateChain(msg.id, msg.body);
+    case 'api.deleteChain':
+      await deleteChain(msg.id);
+      return { ok: true };
+    case 'api.addChainStep':
+      return addChainStep(msg.chainId, msg.body);
+    case 'api.updateChainStep':
+      return updateChainStep(msg.chainId, msg.stepId, msg.body);
+    case 'api.removeChainStep':
+      return removeChainStep(msg.chainId, msg.stepId);
+    case 'api.moveStepUp':
+      return moveStepUp(msg.chainId, msg.stepId);
+    case 'api.moveStepDown':
+      return moveStepDown(msg.chainId, msg.stepId);
 
     // --- Content commands ---
     case 'cmd.insertPrompt':

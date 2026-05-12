@@ -687,6 +687,93 @@ export async function listExecutions(chainId: number): Promise<ChainExecutionLis
   return request<ChainExecutionListResponse>(`/api/chains/${chainId}/executions`);
 }
 
+// --- Chain CRUD ---
+
+export interface CreateChainBody {
+  name: string;
+  description?: string;
+  team_id?: number | null;
+}
+
+export async function createChain(body: CreateChainBody): Promise<ChainDetail> {
+  return request<ChainDetail>('/api/chains', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateChain(
+  id: number,
+  body: { name?: string; description?: string },
+): Promise<ChainDetail> {
+  return request<ChainDetail>(`/api/chains/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteChain(id: number): Promise<void> {
+  await request<void>(`/api/chains/${id}`, { method: 'DELETE' });
+}
+
+// --- Chain Steps ---
+
+export interface AddStepBody {
+  prompt_id?: number | null;
+  name?: string;
+  variable_mapping?: Record<string, { type: string; var_name?: string }>;
+  manual_checkpoint?: boolean;
+  step_type?: 'prompt' | 'fork';
+  conditions?: unknown;
+  after_step_id?: number;
+  parent_fork_id?: number;
+  branch_index?: number;
+}
+
+export async function addChainStep(chainId: number, body: AddStepBody): Promise<ChainDetail> {
+  return request<ChainDetail>(`/api/chains/${chainId}/steps`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export interface UpdateStepBody {
+  name?: string;
+  variable_mapping?: Record<string, { type: string; var_name?: string }>;
+  manual_checkpoint?: boolean;
+  step_type?: 'prompt' | 'fork';
+  conditions?: unknown;
+}
+
+export async function updateChainStep(
+  chainId: number,
+  stepId: number,
+  body: UpdateStepBody,
+): Promise<ChainDetail> {
+  return request<ChainDetail>(`/api/chains/${chainId}/steps/${stepId}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function removeChainStep(chainId: number, stepId: number): Promise<ChainDetail> {
+  return request<ChainDetail>(`/api/chains/${chainId}/steps/${stepId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function moveStepUp(chainId: number, stepId: number): Promise<ChainDetail> {
+  return request<ChainDetail>(`/api/chains/${chainId}/steps/${stepId}/move-up`, {
+    method: 'POST',
+  });
+}
+
+export async function moveStepDown(chainId: number, stepId: number): Promise<ChainDetail> {
+  return request<ChainDetail>(`/api/chains/${chainId}/steps/${stepId}/move-down`, {
+    method: 'POST',
+  });
+}
+
 // --- Team Invitations ---
 
 export async function listMyInvitations(): Promise<TeamInvitation[]> {
