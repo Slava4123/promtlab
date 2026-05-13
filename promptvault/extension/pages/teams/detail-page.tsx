@@ -15,6 +15,13 @@ import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { ConfirmDialog } from "../../components/ui/confirm-dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select"
 import { useToast } from "../../components/ui/toaster"
 import {
   useTeam,
@@ -296,22 +303,39 @@ export function TeamDetailPage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="invite-role">Роль</Label>
-                <select
-                  id="invite-role"
+                <Select
                   value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as "editor" | "viewer")}
-                  className="h-9 w-full rounded-md border border-(--color-border) bg-(--color-card) px-2 text-sm"
+                  onValueChange={(v) => setInviteRole(v as "editor" | "viewer")}
                 >
-                  <option value="editor">Редактор — может создавать и редактировать</option>
-                  <option value="viewer">Просмотр — только чтение</option>
-                </select>
+                  <SelectTrigger id="invite-role">
+                    <SelectValue placeholder="Выберите роль" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="editor">
+                      <div className="flex flex-col">
+                        <span className="font-medium">Редактор</span>
+                        <span className="text-[10px] text-(--color-muted-foreground)">
+                          Может создавать и редактировать
+                        </span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="viewer">
+                      <div className="flex flex-col">
+                        <span className="font-medium">Просмотр</span>
+                        <span className="text-[10px] text-(--color-muted-foreground)">
+                          Только чтение
+                        </span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setInviteOpen(false)}>
                 Отмена
               </Button>
-              <Button type="button" size="sm" onClick={handleInvite} disabled={inviteMut.isPending}>
+              <Button type="button" variant="brand" size="sm" onClick={handleInvite} disabled={inviteMut.isPending}>
                 Пригласить
               </Button>
             </div>
