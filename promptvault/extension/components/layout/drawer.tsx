@@ -58,15 +58,18 @@ export function Drawer({ open, onClose }: DrawerProps) {
     if (open) closeButtonRef.current?.focus()
   }, [open])
 
-  if (!open) return null
-
   function openFeedback() {
     setFeedbackOpen(true)
     onClose()
   }
 
+  // Drawer overlay рендерится conditionally, НО FeedbackDialog держим
+  // mounted вне условия — иначе onClose() при openFeedback() unmount'ил
+  // весь компонент (включая <FeedbackDialog />), и dialog не успевал
+  // показаться. FeedbackDialog сам рендерит null когда open=false.
   return (
     <>
+      {open && (
       <div className="fixed inset-0 z-50">
         <div
           className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -136,6 +139,7 @@ export function Drawer({ open, onClose }: DrawerProps) {
           </footer>
         </aside>
       </div>
+      )}
       <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>
   )
