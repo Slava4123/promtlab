@@ -84,7 +84,11 @@ export function PromptCard({ prompt, onClick, highlighted, focused }: Props) {
           className={cn(
             'shrink-0 rounded p-0.5 transition-colors',
             isPinned
-              ? 'text-(--color-brand)'
+              ? // Когда оба маркера активны — pin приглушаем (звезда яркая amber
+                // достаточно акцентируется, два rich-цвета рядом перегружают).
+                prompt.favorite
+                ? 'text-(--color-brand)/65 hover:text-(--color-brand)'
+                : 'text-(--color-brand)'
               : 'text-(--color-muted-foreground) opacity-0 group-hover:opacity-100 hover:text-(--color-foreground)',
           )}
         >

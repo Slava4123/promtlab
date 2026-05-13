@@ -5,7 +5,6 @@ import {
   Loader2,
   RotateCcw,
   Trash2,
-  Tag as TagIcon,
   FolderOpen,
   FileText,
 } from "lucide-react"
@@ -209,7 +208,7 @@ export function TrashPage() {
 
         {totalItems === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-            <TagIcon className="h-10 w-10 text-(--color-muted-foreground)/40" />
+            <Trash2 className="h-10 w-10 text-(--color-muted-foreground)/40" />
             <p className="text-sm font-medium">Корзина пуста</p>
             <p className="text-[10px] text-(--color-muted-foreground)">
               Удалённые промпты и коллекции попадают сюда на 30 дней.

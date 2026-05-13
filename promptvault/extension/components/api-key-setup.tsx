@@ -28,7 +28,7 @@ export function ApiKeySetup({ initialBase }: Props) {
       return;
     }
     if (!/^https?:\/\//.test(trimmedBase)) {
-      setError('Адрес сервера должен начинаться с http:// или https://');
+      setError('Адрес API должен начинаться с http:// или https://');
       return;
     }
     setLoading(true);
@@ -97,7 +97,7 @@ export function ApiKeySetup({ initialBase }: Props) {
 
       <form onSubmit={onSubmit} className="flex flex-1 flex-col gap-4">
         <div className="space-y-2">
-          <Label htmlFor="api-base">Адрес сервера</Label>
+          <Label htmlFor="api-base">Адрес API</Label>
           <Input
             id="api-base"
             type="url"

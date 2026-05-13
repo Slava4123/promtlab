@@ -189,7 +189,7 @@ export function SettingsView({ apiKey, apiBase, theme, onBack }: Props) {
 
         {/* API base */}
         <section className="space-y-2">
-          <Label htmlFor="api-base-setting">Адрес сервера</Label>
+          <Label htmlFor="api-base-setting">Адрес API</Label>
           <div className="flex gap-2">
             <Input
               id="api-base-setting"

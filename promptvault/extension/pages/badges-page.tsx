@@ -121,7 +121,10 @@ function BadgeCard({ badge }: { badge: Badge }) {
         <span className={cn("text-2xl", !badge.unlocked && "grayscale")}>{badge.icon || "🏆"}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 text-xs font-medium">
-            <span className="truncate">{badge.title}</span>
+            {/* title= даёт tooltip с полным именем при hover —
+                карточка в 2-колоночном grid обрезает «Коллекционер», «Командный»
+                и подобные длинные названия. */}
+            <span className="truncate" title={badge.title}>{badge.title}</span>
             {!badge.unlocked && <Lock className="h-2.5 w-2.5 text-(--color-muted-foreground)" />}
           </div>
           <p className="mt-0.5 line-clamp-2 text-[10px] text-(--color-muted-foreground)">
@@ -133,7 +136,7 @@ function BadgeCard({ badge }: { badge: Badge }) {
         <div className="mt-2">
           <div className="h-1 overflow-hidden rounded-full bg-(--color-muted)">
             <div
-              className="h-full bg-(--color-primary) transition-all"
+              className="h-full bg-(--color-brand) transition-all duration-(--duration-normal) ease-(--ease-out)"
               style={{ width: `${progress}%` }}
             />
           </div>
