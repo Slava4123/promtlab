@@ -4,12 +4,17 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring) disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-ring) focus-visible:ring-offset-2 focus-visible:ring-offset-(--color-background) disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
         default:
           'bg-(--color-primary) text-(--color-primary-foreground) hover:opacity-90',
+        // Brand CTA — фиолетовый из identity. Используется для primary-actions
+        // (FAB «Создать промпт», Save в формах, Submit, Upgrade plan).
+        // Default variant остаётся neutral для secondary-actions.
+        brand:
+          'bg-(--color-brand) text-(--color-brand-foreground) shadow-[var(--brand-shadow)] hover:bg-[color-mix(in_oklch,var(--color-brand)_92%,black)]',
         outline:
           'border border-(--color-border) bg-transparent hover:bg-(--color-accent) hover:text-(--color-accent-foreground)',
         ghost:

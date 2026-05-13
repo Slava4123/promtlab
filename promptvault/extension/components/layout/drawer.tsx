@@ -104,7 +104,7 @@ export function Drawer({ open, onClose }: DrawerProps) {
                       cn(
                         "flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors",
                         isActive
-                          ? "bg-(--color-muted) text-(--color-primary)"
+                          ? "bg-(--color-brand-muted) text-(--color-brand)"
                           : "text-(--color-foreground) hover:bg-(--color-muted)",
                       )
                     }
@@ -113,7 +113,7 @@ export function Drawer({ open, onClose }: DrawerProps) {
                     <span className="flex-1">{link.label}</span>
                     {showBadge && (
                       <span
-                        className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-(--color-primary) px-1 text-[10px] font-bold text-(--color-primary-foreground)"
+                        className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-(--color-brand) px-1 text-[10px] font-bold text-(--color-brand-foreground)"
                         aria-label={`${unreadCount} непрочитанных`}
                       >
                         {unreadCount > 99 ? "99+" : unreadCount}

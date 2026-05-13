@@ -16,11 +16,13 @@ export function DashboardPage() {
         onOpenSettings={() => navigate("/settings")}
         highlightedId={null}
       />
-      {/* Floating "+" button — создать новый промпт */}
+      {/* Floating "+" button — создать новый промпт. Brand-CTA: фиолетовый
+          из identity, тень с brand-shadow. 44×44 (WCAG touch-target). */}
       <Button
         type="button"
+        variant="brand"
         onClick={() => navigate("/prompts/new")}
-        className="absolute bottom-3 right-3 h-10 w-10 rounded-full shadow-lg p-0"
+        className="absolute bottom-4 right-4 h-11 w-11 rounded-full p-0"
         aria-label="Создать промпт"
         title="Создать промпт"
       >

@@ -1,17 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Settings as SettingsIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button } from './ui/button';
 import { SearchBar } from './search-bar';
 import { PromptList } from './prompt-list';
 import { PromptListSkeleton } from './prompt-list-skeleton';
 import { EmptyState } from './empty-state';
-import { ActiveTabBadge } from './active-tab-badge';
 import { WorkspaceSelector } from './workspace-selector';
 import { CollectionSelector } from './collection-selector';
-import { StreakBadge } from './streak-badge';
 import { QuotaIndicator } from './quota-indicator';
-import { NotificationCenter } from './notification-center';
 import {
   useInfinitePromptList,
   usePinned,
@@ -19,7 +14,6 @@ import {
   useSearch,
 } from '../hooks/use-prompts';
 import { useDebounced } from '../hooks/use-debounced';
-import { useActiveTab } from '../hooks/use-active-tab';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { useWorkspace } from '../hooks/use-workspace';
 import type { PromptFilterMessage } from '../lib/messages';
@@ -29,11 +23,13 @@ type Tab = 'all' | 'pinned' | 'recent' | 'favorites';
 
 interface Props {
   onSelect: (p: Prompt) => void;
-  onOpenSettings: () => void;
+  // onOpenSettings оставлен в props для backward-compat с dashboard.tsx,
+  // но кнопка настроек убрана из header — settings доступны через drawer.
+  onOpenSettings?: () => void;
   highlightedId?: number | null;
 }
 
-export function Home({ onSelect, onOpenSettings, highlightedId }: Props) {
+export function Home({ onSelect, highlightedId }: Props) {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('all');
   const [focusIdx, setFocusIdx] = useState(0);
@@ -43,7 +39,6 @@ export function Home({ onSelect, onOpenSettings, highlightedId }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
-  const activeTab = useActiveTab();
   const workspace = useWorkspace();
 
   const filter: PromptFilterMessage = useMemo(
@@ -170,40 +165,17 @@ export function Home({ onSelect, onOpenSettings, highlightedId }: Props) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
+      {/* Header — минимум: workspace selector + quota indicator. Остальное
+          (notifications, refresh, settings) доступно через drawer / bottom-tabs. */}
       <div className="flex items-center gap-2 border-b border-(--color-border) p-3">
-        <WorkspaceSelector
-          workspaceId={workspace.workspaceId}
-          teams={workspace.teams}
-          onChange={workspace.setWorkspaceId}
-        />
-        <ActiveTabBadge state={activeTab} />
-        <StreakBadge />
-        <div className="flex-1" />
-        <NotificationCenter />
+        <div className="min-w-0 flex-1">
+          <WorkspaceSelector
+            workspaceId={workspace.workspaceId}
+            teams={workspace.teams}
+            onChange={workspace.setWorkspaceId}
+          />
+        </div>
         <QuotaIndicator />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => {
-            void queryClient.invalidateQueries({ queryKey: ['prompts'] });
-          }}
-          aria-label="Обновить"
-          title="Обновить (⌘R)"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onOpenSettings}
-          aria-label="Настройки"
-          title="Настройки"
-        >
-          <SettingsIcon className="h-4 w-4" />
-        </Button>
       </div>
 
       {/* Search + Collection selector */}
@@ -282,15 +254,15 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={
-        'relative px-2.5 pb-2 text-xs font-medium transition-colors ' +
+        'relative px-2.5 pb-2 text-xs font-medium transition-colors duration-150 ' +
         (active
-          ? 'text-(--color-foreground)'
+          ? 'text-(--color-brand)'
           : 'text-(--color-muted-foreground) hover:text-(--color-foreground)')
       }
     >
       {children}
       {active ? (
-        <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t bg-(--color-primary)" />
+        <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-t bg-(--color-brand)" />
       ) : null}
     </button>
   );

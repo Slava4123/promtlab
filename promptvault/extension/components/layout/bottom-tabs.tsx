@@ -3,7 +3,7 @@ import {
   FileText,
   GitBranch,
   Users,
-  BarChart3,
+  History,
   Menu,
 } from "lucide-react"
 import { cn } from "../../lib/utils"
@@ -16,11 +16,14 @@ interface TabItem {
 }
 
 // 4 главные tab'а на дне sidepanel + 5й slot — drawer trigger ("ещё").
+// Аналитика убрана — это manage-time информация, в side-panel не вписывается
+// (узкий экран, дублирует веб). История — use-time контекст «где недавно
+// вставлял этот промпт», полезна прямо во время работы с AI.
 const TABS: TabItem[] = [
   { to: "/", label: "Промпты", icon: FileText, end: true },
   { to: "/chains", label: "Цепочки", icon: GitBranch },
   { to: "/teams", label: "Команды", icon: Users },
-  { to: "/analytics", label: "Аналитика", icon: BarChart3 },
+  { to: "/history", label: "История", icon: History },
 ]
 
 interface BottomTabsProps {
@@ -42,7 +45,7 @@ export function BottomTabs({ onOpenDrawer }: BottomTabsProps) {
             cn(
               "flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
               isActive
-                ? "text-(--color-primary)"
+                ? "text-(--color-brand)"
                 : "text-(--color-muted-foreground) hover:text-(--color-foreground)",
             )
           }
@@ -52,7 +55,7 @@ export function BottomTabs({ onOpenDrawer }: BottomTabsProps) {
               <tab.icon
                 className={cn(
                   "h-4 w-4",
-                  isActive ? "text-(--color-primary)" : "text-current",
+                  isActive ? "text-(--color-brand)" : "text-current",
                 )}
               />
               <span>{tab.label}</span>
