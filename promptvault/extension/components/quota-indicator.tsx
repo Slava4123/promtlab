@@ -25,13 +25,19 @@ const PLAN_LABELS: Record<PlanID, string> = {
 }
 
 function ratio({ used, limit }: QuotaInfo): number {
-  if (limit < 0) return 0
-  if (limit === 0) return 1
+  // limit < 0 → ∞ (no limit), не считаем горячим.
+  // limit === 0 → feature недоступна на тарифе — это НЕ 100% used,
+  // это «не применимо». Раньше возвращали 1, и квота-индикатор показывал
+  // 100% оранжевым у каждого нового free-юзера, кто никогда не использовал
+  // ext_uses_today или mcp_uses_today. Семантический баг.
+  if (limit <= 0) return 0
   return Math.min(used / limit, 1)
 }
 
 function format({ used, limit }: QuotaInfo): string {
-  return `${used} / ${limit < 0 ? "∞" : limit}`
+  if (limit < 0) return `${used} / ∞`
+  if (limit === 0) return "недоступно"
+  return `${used} / ${limit}`
 }
 
 function severity(r: number): "ok" | "warn" | "danger" {
@@ -56,8 +62,10 @@ export function QuotaIndicator() {
     sev === "danger"
       ? "text-(--color-destructive)"
       : sev === "warn"
-        ? "text-amber-500"
+        ? "text-(--color-warning)"
         : "text-(--color-muted-foreground)"
+  // Контекст для screen-reader и tooltip: «N% использовано» вместо просто «N%».
+  const usedLabel = `${Math.round(hottest.r * 100)}% использовано`
 
   function openPricing() {
     if (!settings) return
@@ -74,8 +82,8 @@ export function QuotaIndicator() {
           "flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium transition-colors hover:bg-(--color-muted)",
           ringColor,
         )}
-        aria-label="Использование квот"
-        title={`${RESOURCE_LABELS[hottest.key]}: ${format(hottest.info)}`}
+        aria-label={`${RESOURCE_LABELS[hottest.key]}: ${usedLabel}`}
+        title={`${RESOURCE_LABELS[hottest.key]}: ${format(hottest.info)} (${usedLabel})`}
       >
         <Gauge className="h-3.5 w-3.5" />
         <span className="tabular-nums">{Math.round(hottest.r * 100)}%</span>
@@ -111,12 +119,12 @@ export function QuotaIndicator() {
                     <div className="h-1 overflow-hidden rounded-full bg-(--color-muted)">
                       <div
                         className={cn(
-                          "h-full transition-all",
+                          "h-full transition-all duration-(--duration-normal) ease-(--ease-out)",
                           s === "danger"
                             ? "bg-(--color-destructive)"
                             : s === "warn"
-                              ? "bg-amber-500"
-                              : "bg-(--color-primary)",
+                              ? "bg-(--color-warning)"
+                              : "bg-(--color-brand)",
                         )}
                         style={{ width: `${Math.round(r * 100)}%` }}
                       />
@@ -130,7 +138,7 @@ export function QuotaIndicator() {
               <button
                 type="button"
                 onClick={openPricing}
-                className="mt-2.5 flex w-full items-center justify-center gap-1 rounded-md bg-(--color-primary) px-2 py-1.5 text-[10px] font-medium text-(--color-primary-foreground) hover:opacity-90"
+                className="mt-2.5 flex w-full items-center justify-center gap-1 rounded-md bg-(--color-brand) px-2 py-1.5 text-[10px] font-medium text-(--color-brand-foreground) shadow-[var(--brand-shadow)] hover:bg-[color-mix(in_oklch,var(--color-brand)_92%,black)]"
               >
                 <ExternalLink className="h-3 w-3" />
                 Повысить тариф
@@ -151,7 +159,10 @@ function findHottest(
   for (const key of Object.keys(RESOURCE_LABELS) as ResourceKey[]) {
     const info = data[key]
     if (!info) continue
-    if (info.limit < 0) continue
+    // Skip ресурсы с limit <= 0: limit < 0 = ∞ (Max-тариф), limit === 0 =
+    // feature недоступна. Ни один из них не «горячий» — показывать их
+    // 100% оранжевым было багом.
+    if (info.limit <= 0) continue
     const r = ratio(info)
     if (!best || r > best.r) best = { key, info, r }
   }

@@ -1,8 +1,33 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pin, Star } from 'lucide-react';
 import type { Prompt } from '../lib/types';
 import { cn } from '../lib/utils';
 import { useToggleFavorite, useTogglePin } from '../hooks/use-mutations';
+
+// Подсветка {{var}} в preview карточки. Тот же regex что в shared/template/parse
+// (Unicode-aware, identifier = letter+digits+underscore). Возвращает React-узлы,
+// чтобы избежать dangerouslySetInnerHTML.
+const VAR_REGEX = /\{\{([\p{L}_][\p{L}\p{N}_]*)\}\}/gu;
+
+function highlightVariables(text: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  for (const match of text.matchAll(VAR_REGEX)) {
+    const idx = match.index!;
+    if (idx > lastIndex) parts.push(text.slice(lastIndex, idx));
+    parts.push(
+      <span
+        key={`${idx}-${match[1]}`}
+        className="rounded-sm bg-(--color-brand-muted) px-1 font-mono text-[10px] text-(--color-brand-muted-foreground)"
+      >
+        {match[0]}
+      </span>,
+    );
+    lastIndex = idx + match[0].length;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
 
 interface Props {
   prompt: Prompt;
@@ -59,11 +84,14 @@ export function PromptCard({ prompt, onClick, highlighted, focused }: Props) {
           className={cn(
             'shrink-0 rounded p-0.5 transition-colors',
             isPinned
-              ? 'text-(--color-primary)'
+              ? 'text-(--color-brand)'
               : 'text-(--color-muted-foreground) opacity-0 group-hover:opacity-100 hover:text-(--color-foreground)',
           )}
         >
-          <Pin className={cn('h-3.5 w-3.5', isPinned && 'fill-current')} />
+          <Pin
+            className={cn('h-3.5 w-3.5', isPinned && 'fill-current')}
+            aria-hidden
+          />
         </button>
         <button
           type="button"
@@ -82,7 +110,9 @@ export function PromptCard({ prompt, onClick, highlighted, focused }: Props) {
           <Star className={cn('h-3.5 w-3.5', prompt.favorite && 'fill-current')} />
         </button>
       </div>
-      <p className="line-clamp-2 text-xs text-(--color-muted-foreground)">{preview}</p>
+      <p className="line-clamp-2 text-xs text-(--color-muted-foreground)">
+        {highlightVariables(preview)}
+      </p>
       {prompt.tags.length > 0 ? (
         <div className="mt-1 flex flex-wrap gap-1">
           {prompt.tags.slice(0, 4).map((t) => (

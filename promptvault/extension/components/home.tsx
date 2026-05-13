@@ -208,8 +208,9 @@ export function Home({ onSelect, highlightedId }: Props) {
         </div>
       ) : null}
 
-      {/* Content */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3">
+      {/* Content. pb-20 — место под FAB «+» (h-11 = 44px + bottom-4 = 16px
+          + gap) чтобы последняя карточка не перекрывалась. */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 pb-20">
         {showInitialSkeleton ? (
           <PromptListSkeleton />
         ) : visiblePrompts.length === 0 ? (
