@@ -62,14 +62,14 @@ export function ChangelogPopup() {
   if (!show || !latest) return null
 
   return (
-    <div className="fixed bottom-16 right-3 z-50 w-72 rounded-lg border border-(--color-primary)/40 bg-(--color-background) shadow-xl animate-in slide-in-from-bottom-2">
+    <div className="fixed bottom-16 right-3 z-50 w-72 rounded-lg border border-(--color-brand)/40 bg-(--color-background) shadow-xl animate-in slide-in-from-bottom-2">
       <div className="flex items-start gap-2 p-3">
-        <div className="rounded-md bg-(--color-primary)/15 p-1.5">
-          <BookOpen className="h-3.5 w-3.5 text-(--color-primary)" />
+        <div className="rounded-md bg-(--color-brand-muted) p-1.5">
+          <BookOpen className="h-3.5 w-3.5 text-(--color-brand)" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-(--color-primary)">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-(--color-brand)">
               Что нового
             </span>
             <span className="rounded bg-(--color-muted) px-1 py-px text-[9px] font-mono">

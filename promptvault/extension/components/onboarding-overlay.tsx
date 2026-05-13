@@ -21,19 +21,19 @@ export function OnboardingOverlay() {
 
   const steps = [
     {
-      icon: <Sparkles className="h-8 w-8 text-(--color-primary)" />,
+      icon: <Sparkles className="h-8 w-8 text-(--color-brand)" />,
       title: 'Добро пожаловать в ПромтЛаб',
       description:
         'Расширение хранит вашу библиотеку промптов и вставляет их прямо в ChatGPT, Claude, Gemini, Perplexity, Yandex GPT, GigaChat, DeepSeek, Mistral и Qwen — одним кликом.',
     },
     {
-      icon: <Search className="h-8 w-8 text-(--color-primary)" />,
+      icon: <Search className="h-8 w-8 text-(--color-brand)" />,
       title: 'Поиск и Cmd+K',
       description:
         'Введите запрос в шапке или нажмите Cmd+K — глобальная команд-палитра ищет по промптам, коллекциям и тегам.',
     },
     {
-      icon: <Keyboard className="h-8 w-8 text-(--color-primary)" />,
+      icon: <Keyboard className="h-8 w-8 text-(--color-brand)" />,
       title: 'Горячие клавиши',
       description:
         'Ctrl+Shift+K — открыть панель. Esc — назад. ↑↓Enter — навигация по списку. Ctrl+R — обновить.',
@@ -64,7 +64,7 @@ export function OnboardingOverlay() {
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm">
       <div className="m-3 w-full max-w-sm rounded-xl border border-(--color-border) bg-(--color-card) p-5 shadow-xl">
         <div className="mb-3 flex items-start justify-between">
-          <div className="rounded-lg bg-(--color-primary)/10 p-2">{current.icon}</div>
+          <div className="rounded-lg bg-(--color-brand-muted) p-2">{current.icon}</div>
           <button
             type="button"
             onClick={close}

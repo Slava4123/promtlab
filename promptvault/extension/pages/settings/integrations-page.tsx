@@ -102,9 +102,9 @@ export function IntegrationsPage() {
         </p>
 
         {/* MCP setup hint */}
-        <section className="rounded-md border border-(--color-primary)/30 bg-(--color-primary)/5 p-3">
+        <section className="rounded-md border border-(--color-brand)/30 bg-(--color-brand-muted) p-3">
           <div className="flex items-center gap-1.5">
-            <Key className="h-3.5 w-3.5 text-(--color-primary)" />
+            <Key className="h-3.5 w-3.5 text-(--color-brand)" />
             <h3 className="text-xs font-semibold">Подключить к Claude / Cursor</h3>
           </div>
           <p className="mt-1 text-[10px] text-(--color-muted-foreground)">
@@ -144,7 +144,7 @@ export function IntegrationsPage() {
                     </div>
                     {isCurrent && (
                       <span
-                        className="rounded bg-(--color-primary)/15 px-1.5 py-0.5 text-[9px] font-medium text-(--color-primary)"
+                        className="rounded bg-(--color-brand-muted) px-1.5 py-0.5 text-[9px] font-medium text-(--color-brand)"
                         title="Этим ключом подключено это расширение"
                       >
                         текущий

@@ -71,7 +71,7 @@ export function ShareDialog({ promptId, open, onClose }: ShareDialogProps) {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-lg border border-(--color-border) bg-(--color-background) p-4 shadow-xl">
         <div className="flex items-center gap-2 mb-3">
-          <LinkIcon className="h-4 w-4 text-(--color-primary)" />
+          <LinkIcon className="h-4 w-4 text-(--color-brand)" />
           <h3 id="share-title" className="flex-1 text-sm font-semibold">Публичная ссылка</h3>
           <button
             type="button"
@@ -124,6 +124,7 @@ export function ShareDialog({ promptId, open, onClose }: ShareDialogProps) {
             </p>
             <Button
               type="button"
+              variant="brand"
               size="sm"
               onClick={create}
               disabled={createMut.isPending}

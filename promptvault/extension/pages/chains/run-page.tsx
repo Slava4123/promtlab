@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
@@ -7,7 +7,6 @@ import {
   Loader2,
   Send,
   Copy,
-  Play,
   GitBranch,
 } from "lucide-react"
 import { Button } from "../../components/ui/button"
@@ -16,6 +15,8 @@ import { Textarea } from "../../components/ui/textarea"
 import { useToast } from "../../components/ui/toaster"
 import { useChain, useStartExecution, useExecution, useAdvanceStep } from "../../hooks/use-chains"
 import { useInsertPrompt } from "../../hooks/use-insert-prompt"
+import { useActiveTab } from "../../hooks/use-active-tab"
+import { hostLabel } from "../../lib/messages"
 import { renderTemplate, extractVariables } from "../../lib/template"
 import type {
   ChainStep,
@@ -49,7 +50,13 @@ export function ChainRunPage() {
   const chainQuery = useChain(chainId)
   const startMut = useStartExecution()
   const [execId, setExecId] = useState<number | null>(null)
-  const [initialVars, setInitialVars] = useState<Record<string, string>>({})
+  // Capture mutateAsync через ref, чтобы auto-start useEffect не пересоздавался
+  // при ре-рендере хука useStartExecution (MN-63 паттерн из frontend).
+  const startMutateRef = useRef(startMut.mutateAsync)
+  useEffect(() => {
+    startMutateRef.current = startMut.mutateAsync
+  }, [startMut.mutateAsync])
+  const startedRef = useRef(false)
 
   const execQuery = useExecution(execId)
   const advanceMut = useAdvanceStep(execId ?? 0)
@@ -62,9 +69,36 @@ export function ChainRunPage() {
       const p = data?.[STORAGE_KEY] as PersistedExec | undefined
       if (p && p.chainId === chainId) {
         setExecId(p.execId)
+        startedRef.current = true
       }
     })
   }, [chainId])
+
+  const chain = chainQuery.data
+
+  // Auto-start execution с пустыми initial_vars (как frontend run.tsx).
+  // Manual-переменные шага запрашиваются на каждом шаге, где они нужны,
+  // не на отдельном pre-run экране — это просто и не путает юзера.
+  useEffect(() => {
+    if (execId || startedRef.current) return
+    if (!chainId || !chain) return
+    if (chain.steps.length === 0) return // empty chain handled below
+    startedRef.current = true
+    startMutateRef
+      .current({ chainId, initialVars: {} })
+      .then((exec) => {
+        saveActiveExec({ execId: exec.id, chainId, startedAt: Date.now() })
+        setExecId(exec.id)
+      })
+      .catch((err: unknown) => {
+        startedRef.current = false
+        toast({
+          title: "Не удалось запустить",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "error",
+        })
+      })
+  }, [chainId, chain, execId, toast])
 
   if (chainQuery.isPending) {
     return (
@@ -74,7 +108,6 @@ export function ChainRunPage() {
     )
   }
 
-  const chain = chainQuery.data
   if (!chain) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-(--color-muted-foreground)">
@@ -83,26 +116,8 @@ export function ChainRunPage() {
     )
   }
 
-  // Pre-flight: вытащим chain-level переменные из всех шагов с type=manual.
-  const initialVarNames = collectChainVars(chain.steps)
-
-  async function handleStart() {
-    if (!chainId) return
-    try {
-      const exec = await startMut.mutateAsync({ chainId, initialVars })
-      saveActiveExec({ execId: exec.id, chainId, startedAt: Date.now() })
-      setExecId(exec.id)
-    } catch (err) {
-      toast({
-        title: "Не удалось запустить",
-        description: err instanceof Error ? err.message : undefined,
-        variant: "error",
-      })
-    }
-  }
-
-  // ----- Pre-run: ввод initial vars -----
-  if (execId === null) {
+  // Empty chain — show empty state without trying to start.
+  if (chain.steps.length === 0) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex items-center gap-2 border-b border-(--color-border) p-2">
@@ -111,58 +126,29 @@ export function ChainRunPage() {
           </Button>
           <h2 className="flex-1 truncate text-sm font-semibold">{chain.name}</h2>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          <p className="text-xs text-(--color-muted-foreground)">
-            Цепочка из {chain.steps.length} шагов. Заполните начальные переменные и запустите.
-          </p>
-          {initialVarNames.length > 0 ? (
-            <div className="space-y-2.5">
-              <div className="text-[10px] font-medium uppercase tracking-wide text-(--color-muted-foreground)">
-                Начальные переменные
-              </div>
-              {initialVarNames.map((name) => (
-                <div key={name} className="space-y-1">
-                  <Label
-                    htmlFor={`var-${name}`}
-                    className="font-mono text-xs text-(--color-primary)"
-                  >
-                    {`{{${name}}}`}
-                  </Label>
-                  <Textarea
-                    id={`var-${name}`}
-                    value={initialVars[name] ?? ""}
-                    onChange={(e) =>
-                      setInitialVars((prev) => ({ ...prev, [name]: e.target.value }))
-                    }
-                    rows={2}
-                    placeholder={`Значение для ${name}`}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[10px] text-(--color-muted-foreground)">
-              В цепочке нет начальных переменных — можно запустить сразу.
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+          <GitBranch className="h-10 w-10 text-(--color-muted-foreground)/40" />
+          <div>
+            <p className="text-sm font-medium">В цепочке нет шагов</p>
+            <p className="mt-1 text-[10px] text-(--color-muted-foreground)">
+              Добавьте хотя бы один шаг чтобы запустить.
             </p>
-          )}
-        </div>
-        <div className="border-t border-(--color-border) p-2">
+          </div>
           <Button
             type="button"
-            onClick={handleStart}
-            disabled={startMut.isPending}
-            className="w-full gap-1.5"
+            size="sm"
+            onClick={() => navigate(`/chains/${chain.id}/edit`)}
+            className="gap-1.5"
           >
-            <Play className="h-3.5 w-3.5" />
-            {startMut.isPending ? "Запускаю…" : "Запустить цепочку"}
+            Открыть редактор
           </Button>
         </div>
       </div>
     )
   }
 
-  // ----- In-run state -----
-  if (execQuery.isPending || !execQuery.data) {
+  // Старт цепочки или загрузка существующего execution.
+  if (execId === null || execQuery.isPending || !execQuery.data) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin text-(--color-muted-foreground)" />
@@ -193,9 +179,13 @@ export function ChainRunPage() {
     )
   }
 
-  const handleAdvance = async (output: string, branchIndex?: number) => {
+  // Output модели в PromptVault не возвращается — юзер работает с ответом
+  // прямо в чате LLM (как frontend run.tsx после Phase 16-C). step_output
+  // всегда "" — backend по-прежнему пишет в JSONB пустые строки для
+  // backward-compat с прошлыми executions.
+  const handleAdvance = async (_unused: string, branchIndex?: number) => {
     try {
-      const next = await advanceMut.mutateAsync({ stepOutput: output, chosenBranchIndex: branchIndex })
+      const next = await advanceMut.mutateAsync({ stepOutput: "", chosenBranchIndex: branchIndex })
       if (next.status === "completed") {
         clearActiveExec()
       }
@@ -230,22 +220,6 @@ export function ChainRunPage() {
   )
 }
 
-// Собирает имена переменных, не предоставляемых output'ами шагов
-// (т.е. type=manual). Для шага type=fork — пропускаем.
-function collectChainVars(steps: ChainStep[]): string[] {
-  const seen = new Set<string>()
-  for (const step of steps) {
-    if (step.step_type !== "prompt") continue
-    const mapping = step.variable_mapping
-    for (const [, src] of Object.entries(mapping)) {
-      if (src.type === "manual" && src.var_name) {
-        seen.add(src.var_name)
-      }
-    }
-  }
-  return Array.from(seen)
-}
-
 interface ChainStepViewProps {
   exec: ChainExecution
   step: ChainStep
@@ -258,8 +232,10 @@ interface ChainStepViewProps {
 
 function ChainStepView({ exec, step, chainName, onAdvance, onCancel, insertFn, advancing }: ChainStepViewProps) {
   const { toast } = useToast()
-  const [output, setOutput] = useState("")
   const [manualVars, setManualVars] = useState<Record<string, string>>({})
+  const activeTab = useActiveTab()
+  const canInsert = activeTab.supported
+  const targetLabel = hostLabel(activeTab.host)
 
   const prompt = step.prompt
   const promptContent = prompt?.content ?? exec.chain_snapshot.prompt_contents[step.prompt_id ?? 0] ?? ""
@@ -277,26 +253,6 @@ function ChainStepView({ exec, step, chainName, onAdvance, onCancel, insertFn, a
     }
   }
 
-  async function captureAndCopy() {
-    // Try to capture AI response from current tab. Placeholder for Phase 3 polish.
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-      if (!tab?.id) return
-      const resp = await chrome.tabs
-        .sendMessage(tab.id, { type: "content.captureLastAIResponse" })
-        .catch(() => null)
-      if (resp && resp.type === "content.captured" && resp.text) {
-        setOutput(resp.text)
-        toast({ title: "AI-ответ захвачен", variant: "success", durationMs: 1500 })
-      } else {
-        toast({ title: "Не удалось захватить ответ", variant: "info" })
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  // Подсветка переменных
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-(--color-border) p-2">
@@ -335,7 +291,7 @@ function ChainStepView({ exec, step, chainName, onAdvance, onCancel, insertFn, a
                   if (isFromChain) return null
                   return (
                     <div key={v} className="space-y-1">
-                      <Label className="font-mono text-xs text-(--color-primary)">
+                      <Label className="font-mono text-xs text-(--color-brand)">
                         {`{{${v}}}`}
                       </Label>
                       <Textarea
@@ -353,7 +309,7 @@ function ChainStepView({ exec, step, chainName, onAdvance, onCancel, insertFn, a
             {/* Resolved prompt preview */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label>Промпт</Label>
+                <Label>Промпт для этого шага</Label>
                 <span className="text-[10px] text-(--color-muted-foreground)">
                   {resolvedContent.length.toLocaleString("ru-RU")} симв
                 </span>
@@ -361,67 +317,67 @@ function ChainStepView({ exec, step, chainName, onAdvance, onCancel, insertFn, a
               <div className="whitespace-pre-wrap rounded-md border border-(--color-border) bg-(--color-muted)/30 p-3 text-xs max-h-48 overflow-y-auto">
                 {resolvedContent}
               </div>
-            </div>
-
-            {/* Output field */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="step-output">Ответ AI (для следующего шага)</Label>
-                <button
-                  type="button"
-                  onClick={captureAndCopy}
-                  className="text-[10px] text-(--color-primary) hover:underline"
-                >
-                  Захватить из вкладки
-                </button>
-              </div>
-              <Textarea
-                id="step-output"
-                value={output}
-                onChange={(e) => setOutput(e.target.value)}
-                rows={4}
-                placeholder="Вставьте ответ AI сюда (или оставьте пустым)"
-              />
+              <p className="text-[10px] text-(--color-muted-foreground)">
+                Скопируйте промпт, выполните его в Claude/ChatGPT и вернитесь сюда.
+              </p>
             </div>
           </>
         )}
       </div>
 
       {step.step_type !== "fork" && (
-        <div className="flex items-center gap-2 border-t border-(--color-border) p-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => insertFn(resolvedContent)}
-            className="gap-1.5"
-            disabled={advancing}
-          >
-            <Send className="h-3.5 w-3.5" />
-            Вставить
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={copyContent}
-            className="gap-1.5"
-            disabled={advancing}
-          >
-            <Copy className="h-3.5 w-3.5" />
-            Копировать
-          </Button>
-          <div className="flex-1" />
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => onAdvance(output)}
-            disabled={advancing}
-            className="gap-1.5"
-          >
-            {advancing ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
-            Далее
-          </Button>
+        <div className="flex flex-col gap-1.5 border-t border-(--color-border) p-2">
+          {!canInsert && (
+            <p className="text-center text-[10px] text-(--color-muted-foreground)">
+              Откройте ChatGPT / Claude / Gemini и т.д. чтобы вставить
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => insertFn(resolvedContent)}
+              className="gap-1.5"
+              disabled={advancing || !canInsert}
+              title={
+                canInsert
+                  ? targetLabel
+                    ? `Вставить в ${targetLabel}`
+                    : "Вставить"
+                  : "Откройте поддерживаемый AI-сайт"
+              }
+            >
+              <Send className="h-3.5 w-3.5" />
+              Вставить
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={copyContent}
+              className="gap-1.5"
+              disabled={advancing}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Копировать
+            </Button>
+            <div className="flex-1" />
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onAdvance("")}
+              disabled={advancing}
+              className="gap-1.5"
+            >
+              {advancing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <ArrowRight className="h-3.5 w-3.5" />
+              )}
+              Далее
+            </Button>
+          </div>
         </div>
       )}
     </div>

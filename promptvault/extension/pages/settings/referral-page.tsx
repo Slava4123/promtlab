@@ -66,7 +66,7 @@ export function ReferralPage() {
             {/* Stats */}
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-md border border-(--color-border) bg-(--color-card) p-3 text-center">
-                <Users className="mx-auto h-4 w-4 text-(--color-primary)" />
+                <Users className="mx-auto h-4 w-4 text-(--color-brand)" />
                 <div className="mt-1 text-lg font-semibold">{info.data.invited_count}</div>
                 <div className="text-[10px] text-(--color-muted-foreground)">приглашено</div>
               </div>

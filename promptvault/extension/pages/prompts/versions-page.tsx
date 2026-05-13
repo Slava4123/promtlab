@@ -83,7 +83,7 @@ export function VersionsPage() {
                     className={cn(
                       "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors",
                       active?.id === v.id
-                        ? "bg-(--color-primary)/10"
+                        ? "bg-(--color-brand-muted)"
                         : "hover:bg-(--color-muted)/40",
                     )}
                   >

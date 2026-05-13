@@ -38,6 +38,7 @@ export function ChainsIndexPage() {
         <h2 className="flex-1 text-sm font-semibold">Цепочки промптов</h2>
         <Button
           type="button"
+          variant="brand"
           size="sm"
           onClick={() => navigate("/chains/new")}
           className="gap-1"
@@ -57,6 +58,7 @@ export function ChainsIndexPage() {
             </p>
             <Button
               type="button"
+              variant="brand"
               size="sm"
               onClick={() => navigate("/chains/new")}
               className="mt-2 gap-1.5"
@@ -89,7 +91,7 @@ function ChainListCard({ chain }: { chain: Chain }) {
         onClick={() => navigate(`/chains/${chain.id}`)}
         className="flex w-full items-start gap-2 text-left"
       >
-        <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-(--color-primary)" />
+        <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-(--color-brand)" />
         <div className="flex-1 min-w-0">
           <h3 className="truncate text-sm font-medium hover:underline">{chain.name}</h3>
           {chain.description && (
@@ -114,7 +116,7 @@ function ChainListCard({ chain }: { chain: Chain }) {
                   "flex h-5 w-5 items-center justify-center rounded text-[9px]",
                   step.step_type === "fork"
                     ? "rotate-45 bg-purple-500/20 text-purple-500"
-                    : "bg-(--color-primary)/20 text-(--color-primary)",
+                    : "bg-(--color-brand)/20 text-(--color-brand)",
                 )}
               >
                 <span className={step.step_type === "fork" ? "-rotate-45" : ""}>
@@ -137,6 +139,7 @@ function ChainListCard({ chain }: { chain: Chain }) {
       <div className="mt-2 flex gap-1.5">
         <Button
           type="button"
+          variant="brand"
           size="sm"
           onClick={() => navigate(`/chains/${chain.id}/run`)}
           className="flex-1 gap-1.5 h-7 text-xs"

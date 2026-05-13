@@ -18,7 +18,7 @@ interface FeedbackDialogProps {
 const TYPE_META: Record<FeedbackType, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
   bug: { label: "Баг", icon: Bug, color: "text-(--color-destructive)" },
   feature: { label: "Идея", icon: Lightbulb, color: "text-amber-500" },
-  other: { label: "Другое", icon: MessageSquare, color: "text-(--color-primary)" },
+  other: { label: "Другое", icon: MessageSquare, color: "text-(--color-brand)" },
 }
 
 const MAX_MESSAGE_LEN = 2000
@@ -102,7 +102,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
                 className={cn(
                   "flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[10px] transition-colors",
                   active
-                    ? "border-(--color-primary) bg-(--color-primary)/10"
+                    ? "border-(--color-brand) bg-(--color-brand-muted)"
                     : "border-(--color-border) bg-(--color-card) hover:bg-(--color-muted)/40",
                 )}
               >

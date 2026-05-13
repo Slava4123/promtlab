@@ -132,7 +132,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
             item.action!.onClick();
             onDismiss();
           }}
-          className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-(--color-primary) hover:bg-(--color-accent)"
+          className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-(--color-brand) hover:bg-(--color-accent)"
         >
           {item.action.icon === 'undo' ? <Undo2 className="h-3 w-3" /> : null}
           {item.action.label}

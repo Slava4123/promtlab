@@ -30,7 +30,7 @@ import { cn } from "../../lib/utils"
 
 const ROLE_META: Record<TeamRole, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
   owner: { label: "Владелец", icon: ShieldCheck, color: "text-amber-500" },
-  editor: { label: "Редактор", icon: Shield, color: "text-(--color-primary)" },
+  editor: { label: "Редактор", icon: Shield, color: "text-(--color-brand)" },
   viewer: { label: "Просмотр", icon: Eye, color: "text-(--color-muted-foreground)" },
 }
 
@@ -147,7 +147,7 @@ export function TeamDetailPage() {
               className="h-7 text-sm"
               autoFocus
             />
-            <Button type="button" size="sm" onClick={handleSaveName}>
+            <Button type="button" variant="brand" size="sm" onClick={handleSaveName}>
               Сохранить
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setEditingName(false)}>
@@ -207,7 +207,7 @@ export function TeamDetailPage() {
                   key={m.user_id}
                   className="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-card) p-2 text-xs"
                 >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-(--color-primary)/15 text-[10px] font-semibold text-(--color-primary)">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-(--color-brand-muted) text-[10px] font-semibold text-(--color-brand)">
                     {(m.name ?? m.email).charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -249,22 +249,6 @@ export function TeamDetailPage() {
           <div className="text-[10px] font-medium uppercase tracking-wide text-(--color-muted-foreground)">
             Разделы команды
           </div>
-          <button
-            type="button"
-            onClick={() => navigate(`/teams/${slug}/branding`)}
-            className="flex w-full items-center justify-between rounded-md border border-(--color-border) bg-(--color-card) px-3 py-2 text-xs hover:bg-(--color-muted)/40"
-          >
-            <span>Брендинг</span>
-            <span className="text-(--color-muted-foreground)">→</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate(`/teams/${slug}/analytics`)}
-            className="flex w-full items-center justify-between rounded-md border border-(--color-border) bg-(--color-card) px-3 py-2 text-xs hover:bg-(--color-muted)/40"
-          >
-            <span>Аналитика</span>
-            <span className="text-(--color-muted-foreground)">→</span>
-          </button>
           <button
             type="button"
             onClick={() => navigate(`/teams/${slug}/activity`)}

@@ -85,7 +85,7 @@ export function ForgotPasswordPage() {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-1.5">
-          <KeyRound className="h-4 w-4 text-(--color-primary)" />
+          <KeyRound className="h-4 w-4 text-(--color-brand)" />
           <h1 className="text-base font-semibold">Сброс пароля</h1>
         </div>
       </div>
@@ -117,6 +117,7 @@ export function ForgotPasswordPage() {
 
           <Button
             type="submit"
+            variant="brand"
             disabled={forgotMut.isPending || !email.trim()}
             className="w-full gap-1.5"
           >
@@ -177,6 +178,7 @@ export function ForgotPasswordPage() {
 
           <Button
             type="submit"
+            variant="brand"
             disabled={
               resetMut.isPending ||
               !code.trim() ||

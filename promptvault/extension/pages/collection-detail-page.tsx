@@ -7,7 +7,7 @@ import { PromptListSkeleton } from "../components/prompt-list-skeleton"
 import { EmptyState } from "../components/empty-state"
 import { useCollections } from "../hooks/use-collections-crud"
 import { useInfinitePromptList } from "../hooks/use-prompts"
-import { useWorkspaceStore } from "../stores/workspace-store"
+import { useWorkspace } from "../hooks/use-workspace"
 
 // Список промптов в коллекции. Использует тот же useInfinitePromptList,
 // что и dashboard, но с filter.collectionId.
@@ -15,7 +15,7 @@ export function CollectionDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const collectionId = id ? Number(id) : null
-  const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
+  const teamId = useWorkspace().workspaceId
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const collectionsQuery = useCollections()
@@ -52,8 +52,8 @@ export function CollectionDetailPage() {
           type="button"
           variant="ghost"
           size="icon"
-          onClick={() => navigate("/collections")}
-          aria-label="Назад к коллекциям"
+          onClick={() => navigate(-1)}
+          aria-label="Назад"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>

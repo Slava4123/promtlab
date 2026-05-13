@@ -8,13 +8,13 @@ import { Label } from "../../components/ui/label"
 import { Textarea } from "../../components/ui/textarea"
 import { useToast } from "../../components/ui/toaster"
 import { sendBg } from "../../lib/bg-client"
-import { useWorkspaceStore } from "../../stores/workspace-store"
+import { useWorkspace } from "../../hooks/use-workspace"
 
 export function ChainNewPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const qc = useQueryClient()
-  const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
+  const teamId = useWorkspace().workspaceId
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
 
@@ -49,7 +49,7 @@ export function ChainNewPage() {
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         <div className="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-card) p-3">
-          <GitBranch className="h-4 w-4 text-(--color-primary)" />
+          <GitBranch className="h-4 w-4 text-(--color-brand)" />
           <p className="text-[10px] text-(--color-muted-foreground)">
             Создайте многошаговый workflow, чтобы вызывать несколько промптов по очереди.
           </p>

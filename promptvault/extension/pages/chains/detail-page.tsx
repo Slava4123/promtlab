@@ -9,7 +9,6 @@ import {
   Loader2,
   GitBranch,
   FileText,
-  LayoutGrid,
 } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "../../components/ui/button"
@@ -151,16 +150,6 @@ export function ChainDetailPage() {
         >
           <History className="h-3.5 w-3.5" />
           История
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => navigate(`/chains/${chain.id}/canvas`)}
-          className="gap-1.5"
-          aria-label="Граф"
-        >
-          <LayoutGrid className="h-3.5 w-3.5" />
         </Button>
         <Button
           type="button"

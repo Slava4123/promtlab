@@ -163,7 +163,7 @@ export function VariableForm({
             </div>
             {variables.map((v) => (
               <div key={v} className="space-y-1.5">
-                <Label htmlFor={`var-${v}`} className="font-mono text-xs text-(--color-primary)">
+                <Label htmlFor={`var-${v}`} className="font-mono text-xs text-(--color-brand)">
                   {'{{'}
                   {v}
                   {'}}'}
@@ -208,6 +208,7 @@ export function VariableForm({
         <div className="flex gap-2">
           <Button
             type="submit"
+            variant="brand"
             disabled={submitting || !canInsert}
             className="flex-1"
             title="Вставить в активную вкладку (⌘↵)"
@@ -285,7 +286,7 @@ function HighlightedPreview({
       nodes.push(
         <span
           key={`v${i}`}
-          className="rounded bg-(--color-primary)/15 px-0.5 text-(--color-foreground)"
+          className="rounded bg-(--color-brand-muted) px-0.5 text-(--color-foreground)"
           title={`{{${name}}}`}
         >
           {val}
@@ -295,7 +296,7 @@ function HighlightedPreview({
       nodes.push(
         <span
           key={`p${i}`}
-          className="font-mono text-(--color-primary)/70"
+          className="font-mono text-(--color-brand)/70"
         >
           {'{{'}
           {name}

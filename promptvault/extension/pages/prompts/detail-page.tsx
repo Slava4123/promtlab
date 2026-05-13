@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query"
 import {
   ArrowLeft,
   Edit3,
-  History,
   Trash2,
   Share2,
   Copy,
@@ -20,7 +19,6 @@ import { useDeletePrompt } from "../../hooks/use-prompts-crud"
 import { useToggleFavorite, useTogglePin } from "../../hooks/use-mutations"
 import { useInsertPrompt } from "../../hooks/use-insert-prompt"
 import { ShareDialog } from "../../components/prompts/share-dialog"
-import { PromptStats } from "../../components/prompts/prompt-stats"
 import { extractVariables, renderTemplate } from "../../lib/template"
 import { useState } from "react"
 import { cn } from "../../lib/utils"
@@ -52,8 +50,28 @@ export function PromptDetailPage() {
   const prompt = promptQuery.data
   if (!prompt) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-(--color-muted-foreground)">
-        Промпт не найден
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-1 border-b border-(--color-border) p-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/")}
+            aria-label="Назад"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h2 className="flex-1 text-sm font-semibold">Не найдено</h2>
+        </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+          <p className="text-sm font-medium">Промпт не найден</p>
+          <p className="text-[10px] text-(--color-muted-foreground)">
+            Возможно, промпт удалён или вы вошли под другим аккаунтом.
+          </p>
+          <Button type="button" size="sm" onClick={() => navigate("/")}>
+            К списку промптов
+          </Button>
+        </div>
       </div>
     )
   }
@@ -99,7 +117,7 @@ export function PromptDetailPage() {
           size="icon"
           onClick={() => togglePin.mutate(prompt.id)}
           aria-label="Закрепить"
-          className={cn(isPinned && "text-(--color-primary)")}
+          className={cn(isPinned && "text-(--color-brand)")}
         >
           <Pin className={cn("h-4 w-4", isPinned && "fill-current")} />
         </Button>
@@ -114,15 +132,6 @@ export function PromptDetailPage() {
           <Star className={cn("h-4 w-4", prompt.favorite && "fill-current")} />
         </Button>
         <div className="flex-1" />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(`/prompts/${prompt.id}/versions`)}
-          aria-label="История"
-        >
-          <History className="h-3.5 w-3.5" />
-        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -191,7 +200,6 @@ export function PromptDetailPage() {
             Модель: {prompt.model}
           </div>
         )}
-        <PromptStats prompt={prompt} />
       </div>
 
       {/* Footer actions */}

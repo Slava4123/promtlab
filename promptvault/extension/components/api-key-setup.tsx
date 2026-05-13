@@ -65,7 +65,7 @@ export function ApiKeySetup({ initialBase }: Props) {
     <div className="flex h-full flex-col gap-4 p-5 overflow-y-auto">
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-(--color-primary)" />
+          <Sparkles className="h-5 w-5 text-(--color-brand)" />
           <h1 className="text-lg font-semibold">ПромтЛаб</h1>
         </div>
         <p className="text-sm text-(--color-muted-foreground)">
@@ -80,7 +80,7 @@ export function ApiKeySetup({ initialBase }: Props) {
           onClick={() => openExternal('/sign-up?from=extension')}
           className="flex flex-col items-start gap-1 rounded-md border border-(--color-border) bg-(--color-card) p-2.5 text-left hover:bg-(--color-muted)/40"
         >
-          <ExternalLink className="h-3.5 w-3.5 text-(--color-primary)" />
+          <ExternalLink className="h-3.5 w-3.5 text-(--color-brand)" />
           <div className="text-xs font-medium">Создать аккаунт</div>
           <div className="text-[10px] text-(--color-muted-foreground)">На {baseHost}</div>
         </button>
@@ -89,7 +89,7 @@ export function ApiKeySetup({ initialBase }: Props) {
           onClick={() => openExternal('/settings/integrations?from=extension')}
           className="flex flex-col items-start gap-1 rounded-md border border-(--color-border) bg-(--color-card) p-2.5 text-left hover:bg-(--color-muted)/40"
         >
-          <KeyRound className="h-3.5 w-3.5 text-(--color-primary)" />
+          <KeyRound className="h-3.5 w-3.5 text-(--color-brand)" />
           <div className="text-xs font-medium">Получить ключ</div>
           <div className="text-[10px] text-(--color-muted-foreground)">Настройки → API-ключи</div>
         </button>
@@ -134,7 +134,7 @@ export function ApiKeySetup({ initialBase }: Props) {
         ) : null}
 
         <div className="mt-auto space-y-2">
-          <Button type="submit" disabled={loading || !key} className="w-full">
+          <Button type="submit" variant="brand" disabled={loading || !key} className="w-full">
             {loading ? 'Проверяю…' : 'Подключить'}
           </Button>
           <button

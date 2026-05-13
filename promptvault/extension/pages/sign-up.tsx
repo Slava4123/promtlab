@@ -73,7 +73,7 @@ export function SignUpPage() {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-1.5">
-          <Sparkles className="h-4 w-4 text-(--color-primary)" />
+          <Sparkles className="h-4 w-4 text-(--color-brand)" />
           <h1 className="text-base font-semibold">Создать аккаунт</h1>
         </div>
       </div>
@@ -146,6 +146,7 @@ export function SignUpPage() {
 
         <Button
           type="submit"
+          variant="brand"
           disabled={
             registerMut.isPending ||
             !email.trim() ||
@@ -165,7 +166,7 @@ export function SignUpPage() {
 
         <p className="text-center text-[10px] text-(--color-muted-foreground)">
           Уже есть аккаунт?{" "}
-          <a href="#/sign-in" className="text-(--color-primary) hover:underline">
+          <a href="#/sign-in" className="text-(--color-brand) hover:underline">
             Войти
           </a>
         </p>

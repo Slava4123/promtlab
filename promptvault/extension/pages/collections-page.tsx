@@ -124,7 +124,7 @@ export function CollectionsPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h2 className="flex-1 text-sm font-semibold">Коллекции</h2>
-        <Button type="button" size="sm" onClick={() => setForm(emptyForm)} className="gap-1.5">
+        <Button type="button" variant="brand" size="sm" onClick={() => setForm(emptyForm)} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />
           Создать
         </Button>

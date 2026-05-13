@@ -43,7 +43,7 @@ export function AppearancePage() {
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 rounded-md border p-2 text-xs transition-colors",
                   theme === id
-                    ? "border-(--color-primary) bg-(--color-primary)/10 text-(--color-primary)"
+                    ? "border-(--color-brand) bg-(--color-brand-muted) text-(--color-brand)"
                     : "border-(--color-border) bg-(--color-card) hover:bg-(--color-muted)/40",
                 )}
               >

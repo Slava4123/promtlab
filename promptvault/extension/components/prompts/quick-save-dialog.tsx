@@ -142,6 +142,7 @@ export function QuickSaveDialog() {
           </Button>
           <Button
             type="button"
+            variant="brand"
             size="sm"
             onClick={handleSave}
             disabled={createMut.isPending || !title.trim() || !content.trim()}

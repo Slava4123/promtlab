@@ -117,7 +117,7 @@ export function PricingPage() {
               className={cn(
                 "rounded-md border p-3",
                 isCurrent
-                  ? "border-(--color-primary) bg-(--color-primary)/5"
+                  ? "border-(--color-brand) bg-(--color-brand-muted)"
                   : "border-(--color-border) bg-(--color-card)",
               )}
             >
@@ -126,10 +126,10 @@ export function PricingPage() {
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-semibold">{plan.name}</h3>
                     {basePlan.id === "pro" && (
-                      <Sparkles className="h-3.5 w-3.5 text-(--color-primary)" />
+                      <Sparkles className="h-3.5 w-3.5 text-(--color-brand)" />
                     )}
                     {isCurrent && (
-                      <span className="rounded bg-(--color-primary)/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-(--color-primary)">
+                      <span className="rounded bg-(--color-brand-muted) px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-(--color-brand)">
                         Текущий
                       </span>
                     )}

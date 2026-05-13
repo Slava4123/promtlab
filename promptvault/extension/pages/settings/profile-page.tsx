@@ -123,6 +123,7 @@ export function ProfilePage() {
           </div>
           <Button
             type="button"
+            variant="brand"
             onClick={handleProfileSave}
             disabled={updateMut.isPending}
             className="w-full gap-1.5"

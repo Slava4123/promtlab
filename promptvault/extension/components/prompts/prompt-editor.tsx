@@ -9,6 +9,7 @@ import { Label } from "../ui/label"
 import { Textarea } from "../ui/textarea"
 import { useToast } from "../ui/toaster"
 import { CodeEditor } from "../ui/code-editor"
+import { TagInput } from "../tags/tag-input"
 import {
   promptSchema,
   MAX_PROMPT_CONTENT_LENGTH,
@@ -30,31 +31,6 @@ interface PromptEditorProps {
   onSubmit: (values: PromptFormValues) => Promise<Prompt>
   submitting?: boolean
 }
-
-// Список «известных» моделей с подсказками. Юзер может ввести любую свою
-// модель (combobox: datalist suggestions + free-text input).
-const MODEL_SUGGESTIONS = [
-  "gpt-4o",
-  "gpt-4o-mini",
-  "gpt-4-turbo",
-  "o1-preview",
-  "o1-mini",
-  "claude-opus-4",
-  "claude-sonnet-4",
-  "claude-haiku-4",
-  "gemini-2.5-pro",
-  "gemini-2.5-flash",
-  "deepseek-v3",
-  "deepseek-r1",
-  "yandex-gpt-5",
-  "yandex-gpt-5-pro",
-  "gigachat-pro",
-  "gigachat-max",
-  "mistral-large",
-  "mistral-medium",
-  "qwen-max",
-  "qwen-plus",
-]
 
 export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptEditorProps) {
   const team = useWorkspaceStore((s) => s.team)
@@ -86,15 +62,11 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
   const charCount = content.length
   const isWarning = charCount >= CONTENT_LENGTH_WARNING
 
-  // Загружаем collections + tags для multi-select.
+  // Загружаем collections для multi-select. Tags обрабатываются в TagInput,
+  // который сам делает useTags().
   const collectionsQuery = useQuery({
     queryKey: qk.collections,
     queryFn: () => sendBg({ type: "api.listCollections", teamId: team?.teamId ?? null }),
-    staleTime: 60_000,
-  })
-  const tagsQuery = useQuery({
-    queryKey: qk.tags,
-    queryFn: () => sendBg({ type: "api.listTags", teamId: team?.teamId ?? null }),
     staleTime: 60_000,
   })
 
@@ -147,6 +119,7 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
         </h2>
         <Button
           type="submit"
+          variant="brand"
           size="sm"
           disabled={submitting}
           className="gap-1.5"
@@ -156,7 +129,7 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-4">
         {/* Title */}
         <div className="space-y-1">
           <Label htmlFor="prompt-title">Название</Label>
@@ -181,27 +154,38 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <Label>Содержимое</Label>
-            <div className="flex gap-1">
-              <Button
+            {/* Segmented Edit/Preview — active state брендирован.
+                Кастомные кнопки вместо Button, чтобы не наследовать
+                primary-цвет (default variant); paint только active. */}
+            <div className="inline-flex rounded-md border border-(--color-border) p-0.5">
+              <button
                 type="button"
-                variant={mode === "edit" ? "default" : "ghost"}
-                size="sm"
                 onClick={() => setMode("edit")}
-                className="h-7 px-2 gap-1"
+                aria-pressed={mode === "edit"}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors",
+                  mode === "edit"
+                    ? "bg-(--color-brand-muted) text-(--color-brand)"
+                    : "text-(--color-muted-foreground) hover:text-(--color-foreground)",
+                )}
               >
-                <Edit3 className="h-3 w-3" />
+                <Edit3 className="h-3 w-3" aria-hidden />
                 Edit
-              </Button>
-              <Button
+              </button>
+              <button
                 type="button"
-                variant={mode === "preview" ? "default" : "ghost"}
-                size="sm"
                 onClick={() => setMode("preview")}
-                className="h-7 px-2 gap-1"
+                aria-pressed={mode === "preview"}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors",
+                  mode === "preview"
+                    ? "bg-(--color-brand-muted) text-(--color-brand)"
+                    : "text-(--color-muted-foreground) hover:text-(--color-foreground)",
+                )}
               >
-                <Eye className="h-3 w-3" />
+                <Eye className="h-3 w-3" aria-hidden />
                 Preview
-              </Button>
+              </button>
             </div>
           </div>
           {mode === "edit" ? (
@@ -241,25 +225,15 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
           </div>
         </div>
 
-        {/* Model — combobox: свободный ввод + suggestions */}
+        {/* Model — свободный ввод (как frontend), без datalist */}
         <div className="space-y-1">
-          <Label htmlFor="prompt-model">Модель</Label>
-          <input
+          <Label htmlFor="prompt-model">Модель (опционально)</Label>
+          <Input
             id="prompt-model"
-            list="prompt-model-list"
             {...register("model")}
-            className="h-9 w-full rounded-md border border-(--color-border) bg-(--color-card) px-2 text-sm"
-            placeholder="Любая или выберите из списка"
+            placeholder="Например: gpt-4o, claude-opus-4"
             autoComplete="off"
           />
-          <datalist id="prompt-model-list">
-            {MODEL_SUGGESTIONS.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-          <p className="text-[10px] text-(--color-muted-foreground)">
-            Можно ввести любую модель или выбрать подсказку
-          </p>
         </div>
 
         {/* Collections multi-select (chip-based) */}
@@ -283,22 +257,16 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
           />
         </div>
 
-        {/* Tags multi-select */}
+        {/* Tags — combobox с inline-созданием */}
         <div className="space-y-1">
           <Label>Теги</Label>
           <Controller
             control={control}
             name="tag_ids"
             render={({ field }) => (
-              <ChipMultiSelect
-                options={(tagsQuery.data ?? []).map((t) => ({
-                  id: t.id,
-                  label: t.name,
-                  color: t.color,
-                }))}
-                value={field.value ?? []}
+              <TagInput
+                selectedTagIds={field.value ?? []}
                 onChange={field.onChange}
-                emptyLabel="Без тегов"
               />
             )}
           />
@@ -310,27 +278,16 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
             type="checkbox"
             id="prompt-public"
             {...register("is_public")}
-            className="h-4 w-4 accent-(--color-primary)"
+            className="h-4 w-4 accent-(--color-brand)"
           />
           <Label htmlFor="prompt-public" className="cursor-pointer text-xs">
             Публичный (доступен по share-ссылке)
           </Label>
         </div>
 
-        {/* Change note (только при редактировании) */}
-        {prompt && (
-          <div className="space-y-1">
-            <Label htmlFor="prompt-changenote">Что изменилось (опционально)</Label>
-            <Input
-              id="prompt-changenote"
-              {...register("change_note")}
-              placeholder="Добавил пример…"
-            />
-            <p className="text-[10px] text-(--color-muted-foreground)">
-              Появится в истории версий.
-            </p>
-          </div>
-        )}
+        {/* Spacer перед bottom-tabs — даёт визуальный «воздух» при scroll'е
+            до конца. Explicit div вместо pb-N, чтобы CSS override'ы не съели. */}
+        <div className="h-12" aria-hidden />
       </div>
     </form>
   )
@@ -399,7 +356,7 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
                 className={cn(
                   "flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-left",
                   value.includes(o.id)
-                    ? "bg-(--color-primary)/10 text-(--color-primary)"
+                    ? "bg-(--color-brand-muted) text-(--color-brand)"
                     : "hover:bg-(--color-muted)",
                 )}
               >

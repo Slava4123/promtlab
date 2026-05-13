@@ -78,12 +78,12 @@ export function SubscriptionPage() {
         ) : (
           <>
             {/* Current plan */}
-            <section className="rounded-md border border-(--color-primary)/30 bg-gradient-to-br from-(--color-primary)/10 to-transparent p-3">
+            <section className="rounded-md border border-(--color-brand)/30 bg-gradient-to-br from-(--color-primary)/10 to-transparent p-3">
               <div className="text-[10px] font-medium uppercase tracking-wide text-(--color-muted-foreground)">
                 Текущий тариф
               </div>
               <div className="mt-1 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-(--color-primary)" />
+                <CreditCard className="h-5 w-5 text-(--color-brand)" />
                 <span className="text-lg font-bold">
                   {subQuery.data
                     ? PLAN_LABELS[subQuery.data.plan_id] ?? subQuery.data.plan_id

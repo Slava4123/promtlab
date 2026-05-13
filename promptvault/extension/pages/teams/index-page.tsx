@@ -88,7 +88,7 @@ export function TeamsIndexPage() {
           className={
             "flex w-full items-center gap-2 rounded-md border p-2.5 text-left transition-colors " +
             (currentTeam === null
-              ? "border-(--color-primary) bg-(--color-primary)/10"
+              ? "border-(--color-brand) bg-(--color-brand-muted)"
               : "border-(--color-border) bg-(--color-card) hover:bg-(--color-muted)/40")
           }
         >
@@ -99,7 +99,7 @@ export function TeamsIndexPage() {
             <div className="text-xs font-medium">Личное</div>
             <div className="text-[10px] text-(--color-muted-foreground)">Ваши промпты</div>
           </div>
-          {currentTeam === null && <span className="text-[10px] text-(--color-primary)">текущее</span>}
+          {currentTeam === null && <span className="text-[10px] text-(--color-brand)">текущее</span>}
         </button>
 
         {teams.length === 0 ? (
@@ -122,11 +122,11 @@ export function TeamsIndexPage() {
               className={
                 "flex w-full items-center gap-2 rounded-md border p-2.5 text-left transition-colors " +
                 (currentTeam?.teamId === team.id
-                  ? "border-(--color-primary) bg-(--color-primary)/10"
+                  ? "border-(--color-brand) bg-(--color-brand-muted)"
                   : "border-(--color-border) bg-(--color-card) hover:bg-(--color-muted)/40")
               }
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-(--color-primary)/15 text-sm font-semibold text-(--color-primary)">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-(--color-brand-muted) text-sm font-semibold text-(--color-brand)">
                 {team.name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -182,7 +182,7 @@ export function TeamsIndexPage() {
               <Button type="button" variant="outline" size="sm" onClick={() => setCreateOpen(false)}>
                 Отмена
               </Button>
-              <Button type="button" size="sm" onClick={handleCreate} disabled={createMut.isPending}>
+              <Button type="button" variant="brand" size="sm" onClick={handleCreate} disabled={createMut.isPending}>
                 Создать
               </Button>
             </div>

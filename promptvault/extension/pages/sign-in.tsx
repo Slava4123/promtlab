@@ -44,7 +44,7 @@ export function SignInPage() {
     <div className="flex h-full flex-col overflow-y-auto p-5 gap-4">
       <div className="space-y-1.5">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-(--color-primary)" />
+          <Sparkles className="h-5 w-5 text-(--color-brand)" />
           <h1 className="text-lg font-semibold">ПромтЛаб</h1>
         </div>
         <p className="text-xs text-(--color-muted-foreground)">
@@ -209,6 +209,7 @@ function EmailPasswordForm({ apiBase }: { apiBase: string }) {
 
       <Button
         type="submit"
+        variant="brand"
         disabled={loginMut.isPending || !email.trim() || !password}
         className="w-full gap-1.5"
       >
@@ -223,7 +224,7 @@ function EmailPasswordForm({ apiBase }: { apiBase: string }) {
       <div className="flex items-center justify-between text-[10px]">
         <a
           href="#/sign-up"
-          className="flex items-center gap-1 text-(--color-primary) hover:underline"
+          className="flex items-center gap-1 text-(--color-brand) hover:underline"
         >
           <UserPlus className="h-3 w-3" />
           Создать аккаунт
@@ -242,7 +243,7 @@ function EmailPasswordForm({ apiBase }: { apiBase: string }) {
         <button
           type="button"
           onClick={() => openWebPage(apiBase, "/sign-up?from=extension")}
-          className="text-(--color-primary) hover:underline"
+          className="text-(--color-brand) hover:underline"
         >
           Зарегистрироваться на {deriveFrontendUrl(apiBase).replace(/^https?:\/\//, "")}
         </button>

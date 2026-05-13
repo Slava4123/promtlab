@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   ChevronUp,
   GitBranch,
@@ -9,6 +10,7 @@ import {
   Loader2,
   Plus,
   Save,
+  Search,
   Trash2,
 } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -19,8 +21,9 @@ import { Textarea } from "../../components/ui/textarea"
 import { ConfirmDialog } from "../../components/ui/confirm-dialog"
 import { useToast } from "../../components/ui/toaster"
 import { useChain } from "../../hooks/use-chains"
+import { useDebounced } from "../../hooks/use-debounced"
+import { useWorkspace } from "../../hooks/use-workspace"
 import { sendBg } from "../../lib/bg-client"
-import { useWorkspaceStore } from "../../stores/workspace-store"
 import { cn } from "../../lib/utils"
 import type { Prompt } from "../../lib/types"
 
@@ -292,8 +295,9 @@ export function ChainEditorPage() {
   )
 }
 
-// Простой prompt-picker: показывает список промптов в текущем workspace,
-// выбираешь → добавляем как новый шаг в конец цепочки.
+// Prompt-picker — диалог выбора промпта по аналогии с frontend
+// components/chains/prompt-picker.tsx. Карточки с title + preview контента
+// + теги chips. Поиск через backend (filter.search) с 250ms дебаунсом.
 function AddPromptDialog({
   open,
   chainId,
@@ -306,22 +310,32 @@ function AddPromptDialog({
   onAdded: () => void
 }) {
   const { toast } = useToast()
-  const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
+  // Используем workspace из chrome.storage (тот же источник что Home),
+  // не Zustand store — иначе picker фильтрует по stale-teamId при «Личное».
+  const workspace = useWorkspace()
+  const teamId = workspace.workspaceId
   const [query, setQuery] = useState("")
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [stepName, setStepName] = useState("")
+  const debouncedQuery = useDebounced(query, 250)
 
+  // Backend FTS по title+content через filter.search (Phase 15 Search FTS).
+  // page_size=20 как у frontend prompt-picker'а — типично достаточно.
   const promptsQuery = useQuery({
-    queryKey: ["prompts", "picker", teamId],
+    queryKey: ["prompts", "picker", teamId, debouncedQuery],
     queryFn: () =>
       sendBg({
         type: "api.fetchPrompts",
         page: 1,
-        pageSize: 100,
-        filter: { teamId },
+        pageSize: 20,
+        filter: {
+          teamId,
+          search: debouncedQuery.trim() || undefined,
+        },
       }),
     enabled: open,
-    staleTime: 60_000,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   })
 
   const addMut = useMutation({
@@ -349,9 +363,7 @@ function AddPromptDialog({
   if (!open) return null
 
   const prompts: Prompt[] = promptsQuery.data?.items ?? []
-  const filtered = query.trim()
-    ? prompts.filter((p) => p.title.toLowerCase().includes(query.toLowerCase()))
-    : prompts
+  const isSearching = debouncedQuery.trim().length > 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -359,13 +371,16 @@ function AddPromptDialog({
       <div className="relative flex h-[80vh] w-full max-w-sm flex-col rounded-lg border border-(--color-border) bg-(--color-background) shadow-xl">
         <header className="border-b border-(--color-border) p-3">
           <h3 className="text-sm font-semibold">Выбрать промпт</h3>
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск…"
-            autoFocus
-            className="mt-2"
-          />
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-card) px-2">
+            <Search className="h-3.5 w-3.5 shrink-0 text-(--color-muted-foreground)" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Поиск по названию и содержимому…"
+              autoFocus
+              className="h-9 flex-1 bg-transparent text-xs outline-none placeholder:text-(--color-muted-foreground)"
+            />
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-2">
@@ -373,29 +388,68 @@ function AddPromptDialog({
             <div className="flex justify-center py-6">
               <Loader2 className="h-4 w-4 animate-spin text-(--color-muted-foreground)" />
             </div>
-          ) : filtered.length === 0 ? (
-            <p className="py-6 text-center text-[10px] text-(--color-muted-foreground)">
-              Нет промптов
+          ) : prompts.length === 0 ? (
+            <p className="py-8 text-center text-xs text-(--color-muted-foreground)">
+              {isSearching
+                ? `Нет промптов по «${debouncedQuery}»`
+                : "У вас пока нет промптов"}
             </p>
           ) : (
-            <ul className="space-y-1">
-              {filtered.map((p) => (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(p.id)}
-                    className={cn(
-                      "w-full rounded-md border px-2 py-1.5 text-left text-xs transition-colors",
-                      selectedId === p.id
-                        ? "border-(--color-primary) bg-(--color-primary)/10"
-                        : "border-(--color-border) hover:bg-(--color-muted)/40",
-                    )}
-                  >
-                    <div className="truncate font-medium">{p.title}</div>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <div className="mb-1.5 px-1 text-[9px] font-medium uppercase tracking-wide text-(--color-muted-foreground)">
+                {isSearching ? "Результаты" : "Недавние"}
+              </div>
+              <ul className="space-y-1">
+                {prompts.map((p) => {
+                  const isSelected = selectedId === p.id
+                  const preview = p.content?.slice(0, 80).trim() || "—"
+                  return (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(p.id)}
+                        className={cn(
+                          "flex w-full items-start gap-2 rounded-md border px-2 py-2 text-left transition-colors",
+                          isSelected
+                            ? "border-(--color-brand) bg-(--color-brand-muted)"
+                            : "border-(--color-border) hover:bg-(--color-muted)/40",
+                        )}
+                      >
+                        <div className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                          {isSelected ? (
+                            <Check className="h-3.5 w-3.5 text-(--color-brand)" />
+                          ) : (
+                            <FileText className="h-3.5 w-3.5 text-(--color-muted-foreground)" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-0.5">
+                          <div className="truncate text-xs font-medium">{p.title}</div>
+                          <div className="line-clamp-1 text-[10px] text-(--color-muted-foreground)">
+                            {preview}
+                          </div>
+                          {p.tags && p.tags.length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {p.tags.slice(0, 3).map((t) => (
+                                <span
+                                  key={t.id}
+                                  className="rounded px-1 py-px text-[9px]"
+                                  style={{
+                                    backgroundColor: `${t.color}22`,
+                                    color: t.color,
+                                  }}
+                                >
+                                  {t.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
           )}
         </div>
 

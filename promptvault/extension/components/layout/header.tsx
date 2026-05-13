@@ -27,7 +27,7 @@ export function AppHeader() {
         to="/"
         className="flex items-center gap-1.5 text-sm font-semibold text-(--color-foreground)"
       >
-        <Sparkles className="h-4 w-4 text-(--color-primary)" />
+        <Sparkles className="h-4 w-4 text-(--color-brand)" />
         <span>ПромтЛаб</span>
       </Link>
       <div className="flex items-center gap-2">
@@ -50,7 +50,7 @@ export function AppHeader() {
         {user && (
           <Link
             to="/settings/profile"
-            className="flex h-6 w-6 items-center justify-center rounded-full bg-(--color-primary)/15 text-[10px] font-semibold text-(--color-primary)"
+            className="flex h-6 w-6 items-center justify-center rounded-full bg-(--color-brand-muted) text-[10px] font-semibold text-(--color-brand)"
             title={user.email}
           >
             {(user.name ?? user.email).charAt(0).toUpperCase()}

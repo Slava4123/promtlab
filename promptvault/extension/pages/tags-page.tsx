@@ -95,6 +95,7 @@ export function TagsPage() {
             />
             <Button
               type="button"
+              variant="brand"
               size="sm"
               onClick={handleCreate}
               disabled={createMut.isPending || !name.trim()}
