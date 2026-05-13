@@ -312,7 +312,7 @@ export function TeamDetailPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="editor">
-                      <div className="flex flex-col">
+                      <div className="flex flex-col items-start text-left">
                         <span className="font-medium">Редактор</span>
                         <span className="text-[10px] text-(--color-muted-foreground)">
                           Может создавать и редактировать
@@ -320,7 +320,7 @@ export function TeamDetailPage() {
                       </div>
                     </SelectItem>
                     <SelectItem value="viewer">
-                      <div className="flex flex-col">
+                      <div className="flex flex-col items-start text-left">
                         <span className="font-medium">Просмотр</span>
                         <span className="text-[10px] text-(--color-muted-foreground)">
                           Только чтение
