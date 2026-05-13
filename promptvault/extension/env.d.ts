@@ -2,8 +2,8 @@
 
 interface ImportMetaEnv {
   readonly WXT_API_BASE?: string;
-  readonly VITE_SENTRY_ENABLED?: string;
-  readonly VITE_SENTRY_DSN?: string;
+  readonly WXT_SENTRY_DSN?: string;
+  readonly WXT_SENTRY_ENABLED?: string;
 }
 
 interface ImportMeta {

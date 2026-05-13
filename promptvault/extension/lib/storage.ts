@@ -28,13 +28,33 @@ export interface LastInsert {
   ts: number;
 }
 
+// Module-level cache: chrome.storage.local I/O ~50–500 раз за сессию через
+// background API-клиент. Кэш живёт пока worker не убит; инвалидируется
+// автоматически через storage.onChanged ниже.
+let cachedSettings: StoredSettings | null = null;
+let cacheInvalidationInstalled = false;
+
+function installCacheInvalidation(): void {
+  if (cacheInvalidationInstalled) return;
+  cacheInvalidationInstalled = true;
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (KEY_API_KEY in changes || KEY_API_BASE in changes || KEY_THEME in changes) {
+      cachedSettings = null;
+    }
+  });
+}
+
 export async function getSettings(): Promise<StoredSettings> {
+  if (cachedSettings) return cachedSettings;
+  installCacheInvalidation();
   const data = await chrome.storage.local.get([KEY_API_KEY, KEY_API_BASE, KEY_THEME]);
-  return {
+  cachedSettings = {
     apiKey: data[KEY_API_KEY] ?? null,
     apiBase: data[KEY_API_BASE] ?? DEFAULT_API_BASE,
     theme: (data[KEY_THEME] as Theme) ?? 'system',
   };
+  return cachedSettings;
 }
 
 export async function setApiKey(key: string): Promise<void> {

@@ -120,11 +120,13 @@ export default defineBackground(() => {
   if (typeof chrome !== 'undefined' && 'sidePanel' in chrome) {
     chrome.sidePanel
       ?.setPanelBehavior?.({ openPanelOnActionClick: true })
-      .catch((err) => console.warn('sidePanel.setPanelBehavior failed', err));
+      .catch((err) =>
+        addBreadcrumb('bg.lifecycle', 'sidePanel.setPanelBehavior failed', { err: String(err) }, 'warning'),
+      );
   }
 
   chrome.runtime.onInstalled.addListener((details) => {
-    console.info('PromptVault extension installed', details.reason);
+    addBreadcrumb('bg.lifecycle', 'extension installed', { reason: details.reason });
     setupContextMenus();
     // Re-inject content scripts во все открытые AI-вкладки. Без этого
     // MV3 не обновляет существующие scripts при extension reload — юзер
@@ -598,14 +600,28 @@ async function reinjectContentScripts(): Promise<void> {
             target: { tabId: tab.id },
             files: [file],
           });
-          console.info(`reinjected ${file} into tab ${tab.id} (${tab.url})`);
+          addBreadcrumb('bg.reinject', 'reinjected content script', {
+            file,
+            tabId: tab.id,
+            url: tab.url,
+          });
         } catch (err) {
           // Игнорируем ошибки (например chrome-extension://, chrome://, etc.)
-          console.warn(`reinject ${file} failed for tab ${tab.id}:`, err);
+          addBreadcrumb(
+            'bg.reinject',
+            'reinject failed',
+            { file, tabId: tab.id, err: String(err) },
+            'warning',
+          );
         }
       }
     } catch (err) {
-      console.warn(`tabs.query failed for ${pattern}:`, err);
+      addBreadcrumb(
+        'bg.reinject',
+        'tabs.query failed',
+        { pattern, err: String(err) },
+        'warning',
+      );
     }
   }
 }
