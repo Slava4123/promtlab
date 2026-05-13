@@ -1,8 +1,7 @@
-import { useState, useMemo, useEffect } from "react"
+import { useMemo, useEffect } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useQuery } from "@tanstack/react-query"
-import { ArrowLeft, Save, Eye, Edit3, X } from "lucide-react"
+import { ArrowLeft, Save, Eye, Edit3 } from "lucide-react"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
@@ -10,15 +9,14 @@ import { Textarea } from "../ui/textarea"
 import { useToast } from "../ui/toaster"
 import { CodeEditor } from "../ui/code-editor"
 import { TagInput } from "../tags/tag-input"
+import { CollectionInput } from "../collections/collection-input"
 import {
   promptSchema,
   MAX_PROMPT_CONTENT_LENGTH,
   CONTENT_LENGTH_WARNING,
   type PromptFormValues,
 } from "../../lib/validation/prompt-schema"
-import { sendBg } from "../../lib/bg-client"
 import { renderTemplate, extractVariables } from "../../lib/template"
-import { qk } from "../../lib/query-keys"
 import { useWorkspaceStore } from "../../stores/workspace-store"
 import { ApiError, type Prompt } from "../../lib/types"
 import { cn } from "../../lib/utils"
@@ -62,13 +60,9 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
   const charCount = content.length
   const isWarning = charCount >= CONTENT_LENGTH_WARNING
 
-  // Загружаем collections для multi-select. Tags обрабатываются в TagInput,
-  // который сам делает useTags().
-  const collectionsQuery = useQuery({
-    queryKey: qk.collections,
-    queryFn: () => sendBg({ type: "api.listCollections", teamId: team?.teamId ?? null }),
-    staleTime: 60_000,
-  })
+  // Collections / Tags теперь fetch'ятся внутри CollectionInput / TagInput
+  // через свои хуки. Раньше parent держал collectionsQuery и передавал options
+  // в ChipMultiSelect — теперь не нужно.
 
   // Unsaved-changes guard через beforeunload.
   useEffect(() => {
@@ -236,22 +230,19 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
           />
         </div>
 
-        {/* Collections multi-select (chip-based) */}
+        {/* Collections — combobox с inline-созданием (mirror TagInput).
+            Раньше был ChipMultiSelect — простой dropdown без поиска и без
+            создания. Теперь юзер вводит название и либо выбирает из списка,
+            либо создаёт новую (с дефолтной иконкой/цветом, дораб. потом). */}
         <div className="space-y-1">
           <Label>Коллекции</Label>
           <Controller
             control={control}
             name="collection_ids"
             render={({ field }) => (
-              <ChipMultiSelect
-                options={(collectionsQuery.data ?? []).map((c) => ({
-                  id: c.id,
-                  label: c.name,
-                  color: c.color,
-                }))}
-                value={field.value ?? []}
+              <CollectionInput
+                selectedCollectionIds={field.value ?? []}
                 onChange={field.onChange}
-                emptyLabel="Без коллекции"
               />
             )}
           />
@@ -291,91 +282,4 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
       </div>
     </form>
   )
-
-  // Local helper subcomponent — inline для простоты.
-  function ChipMultiSelect({
-    options,
-    value,
-    onChange,
-    emptyLabel,
-  }: {
-    options: Array<{ id: number; label: string; color?: string }>
-    value: number[]
-    onChange: (v: number[]) => void
-    emptyLabel: string
-  }) {
-    const [open, setOpen] = useState(false)
-    const selected = options.filter((o) => value.includes(o.id))
-    function toggle(id: number) {
-      onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id])
-    }
-    return (
-      <div className="space-y-1">
-        <div className="flex flex-wrap gap-1">
-          {selected.length === 0 ? (
-            <span className="text-[10px] text-(--color-muted-foreground)">{emptyLabel}</span>
-          ) : (
-            selected.map((s) => (
-              <span
-                key={s.id}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px]"
-                style={{
-                  backgroundColor: s.color ? `${s.color}22` : "var(--color-muted)",
-                  color: s.color ?? "var(--color-foreground)",
-                }}
-              >
-                {s.label}
-                <button
-                  type="button"
-                  onClick={() => toggle(s.id)}
-                  className="hover:text-(--color-destructive)"
-                  aria-label="Убрать"
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </span>
-            ))
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-6 text-[10px] px-2"
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? "Скрыть" : "Выбрать"}
-          </Button>
-        </div>
-        {open && options.length > 0 && (
-          <div className="max-h-32 overflow-y-auto rounded-md border border-(--color-border) p-1">
-            {options.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => toggle(o.id)}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-left",
-                  value.includes(o.id)
-                    ? "bg-(--color-brand-muted) text-(--color-brand)"
-                    : "hover:bg-(--color-muted)",
-                )}
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: o.color ?? "currentColor" }}
-                />
-                {o.label}
-                {value.includes(o.id) && <span className="ml-auto">✓</span>}
-              </button>
-            ))}
-          </div>
-        )}
-        {open && options.length === 0 && (
-          <p className="text-[10px] text-(--color-muted-foreground)">
-            Создайте {emptyLabel.includes("коллекци") ? "коллекцию" : "тег"} в веб-интерфейсе.
-          </p>
-        )}
-      </div>
-    )
-  }
 }
