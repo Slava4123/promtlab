@@ -54,7 +54,7 @@ export function ChainsIndexPage() {
             <GitBranch className="h-10 w-10 text-(--color-muted-foreground)/40" />
             <p className="text-sm font-medium">Цепочек пока нет</p>
             <p className="max-w-xs text-[10px] text-(--color-muted-foreground)">
-              Многошаговые workflow для последовательных вызовов промптов.
+              Последовательные сценарии из нескольких шагов с подстановкой результатов.
             </p>
             <Button
               type="button"

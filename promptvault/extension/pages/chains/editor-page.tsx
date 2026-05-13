@@ -461,7 +461,7 @@ function AddPromptDialog({
                 id="step-name"
                 value={stepName}
                 onChange={(e) => setStepName(e.target.value)}
-                placeholder="Brief"
+                placeholder="Например: черновик"
                 maxLength={100}
               />
             </div>

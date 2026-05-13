@@ -150,7 +150,7 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
           />
         </div>
 
-        {/* Content tabs: Edit / Preview */}
+        {/* Content tabs: Редактор / Просмотр */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <Label>Содержимое</Label>
@@ -170,7 +170,7 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
                 )}
               >
                 <Edit3 className="h-3 w-3" aria-hidden />
-                Edit
+                Редактор
               </button>
               <button
                 type="button"
@@ -184,7 +184,7 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
                 )}
               >
                 <Eye className="h-3 w-3" aria-hidden />
-                Preview
+                Просмотр
               </button>
             </div>
           </div>
@@ -281,7 +281,7 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
             className="h-4 w-4 accent-(--color-brand)"
           />
           <Label htmlFor="prompt-public" className="cursor-pointer text-xs">
-            Публичный (доступен по share-ссылке)
+            Публичный (доступен по ссылке)
           </Label>
         </div>
 

@@ -51,9 +51,9 @@ export function ChainNewPage() {
         <div className="flex items-start gap-2 rounded-md border border-(--color-brand)/15 bg-(--color-brand-muted) p-3">
           <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-(--color-brand)" />
           <p className="text-[11px] leading-relaxed text-(--color-foreground)">
-            <span className="font-medium">Многошаговый workflow.</span>{" "}
+            <span className="font-medium">Последовательность из нескольких шагов.</span>{" "}
             <span className="text-(--color-muted-foreground)">
-              Цепочка вызывает несколько промптов по очереди — output одного шага становится input следующего.
+              Цепочка вызывает несколько промптов по очереди — результат одного шага подставляется в следующий.
             </span>
           </p>
         </div>

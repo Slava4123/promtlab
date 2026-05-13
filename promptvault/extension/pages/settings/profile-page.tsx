@@ -109,13 +109,13 @@ export function ProfilePage() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="prof-username">Username</Label>
+            <Label htmlFor="prof-username">Имя пользователя</Label>
             <Input
               id="prof-username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               maxLength={30}
-              placeholder="username"
+              placeholder="ivan_petrov"
             />
             <p className="text-[10px] text-(--color-muted-foreground)">
               Только латиница, цифры, _. До 30 символов.

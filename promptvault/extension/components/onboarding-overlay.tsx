@@ -39,10 +39,10 @@ export function OnboardingOverlay() {
         'Ctrl+Shift+K — открыть панель. Esc — назад. ↑↓Enter — навигация по списку. Ctrl+R — обновить.',
     },
     {
-      icon: <GitBranch className="h-8 w-8 text-purple-500" />,
+      icon: <GitBranch className="h-8 w-8 text-(--color-brand)" />,
       title: 'Цепочки промптов',
       description:
-        'Объединяйте несколько промптов в workflow. Запускайте — копируйте отрендеренный промпт, выполняйте в LLM, нажимайте «Далее» для следующего шага.',
+        'Объединяйте несколько промптов в последовательность. Запускайте — копируйте готовый текст, отправляйте в AI-чат, нажимайте «Далее» для следующего шага.',
     },
     {
       icon: <Star className="h-8 w-8 text-amber-500" />,
