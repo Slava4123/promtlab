@@ -2,7 +2,7 @@
 // Использование: useToast().toast({ title, description, variant, action })
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CheckCircle2, XCircle, Info, Undo2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Info, Undo2, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export type ToastVariant = 'success' | 'error' | 'info';
@@ -73,11 +73,24 @@ export function useToast(): ToastContextValue {
 }
 
 function ToastViewport({ items, onDismiss }: { items: ToastItem[]; onDismiss: (id: number) => void }) {
+  // C4: A11y baseline. role="region" + aria-live даёт screen-reader'у
+  // объявление новых toast'ов. polite — для info/success (не прерывает),
+  // assertive — для error (важная ошибка, прерывает). Разделение через
+  // два смежных region'а: SR прочитает оба, но приоритеты разные.
+  const polite = items.filter((t) => t.variant !== 'error');
+  const errors = items.filter((t) => t.variant === 'error');
   return (
     <div className="pointer-events-none fixed bottom-3 left-3 right-3 z-50 flex flex-col gap-2">
-      {items.map((t) => (
-        <ToastCard key={t.id} item={t} onDismiss={() => onDismiss(t.id)} />
-      ))}
+      <div role="region" aria-live="polite" aria-atomic="false" aria-label="Уведомления">
+        {polite.map((t) => (
+          <ToastCard key={t.id} item={t} onDismiss={() => onDismiss(t.id)} />
+        ))}
+      </div>
+      <div role="region" aria-live="assertive" aria-atomic="false" aria-label="Ошибки">
+        {errors.map((t) => (
+          <ToastCard key={t.id} item={t} onDismiss={() => onDismiss(t.id)} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -99,6 +112,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
 
   return (
     <div
+      role={item.variant === 'error' ? 'alert' : 'status'}
       className={cn(
         'pointer-events-auto flex items-start gap-2 rounded-md border border-(--color-border) bg-(--color-card) p-3 shadow-lg transition-all',
         visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
@@ -124,6 +138,14 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
           {item.action.label}
         </button>
       ) : null}
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="shrink-0 rounded p-0.5 text-(--color-muted-foreground) hover:bg-(--color-muted) hover:text-(--color-foreground)"
+        aria-label="Закрыть"
+      >
+        <X className="h-3 w-3" />
+      </button>
     </div>
   );
 }

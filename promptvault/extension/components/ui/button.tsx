@@ -21,7 +21,13 @@ const buttonVariants = cva(
         default: 'h-9 px-4 py-2',
         sm: 'h-8 rounded-md px-3 text-xs',
         lg: 'h-10 rounded-md px-6',
-        icon: 'h-9 w-9',
+        // WCAG 2.2 AA target size: 44×44px минимум. Это default для icon-кнопок
+        // (BottomTabs, NavBar, dialog actions). Иконка внутри визуально остаётся
+        // 16-20px — увеличивается только hit-area через padding.
+        icon: 'h-11 w-11',
+        // Для density-критичных мест (header-rows, list-item inline actions),
+        // где 44×44 ломает компоновку — допустим 36×36, но только осознанно.
+        'icon-sm': 'h-9 w-9',
       },
     },
     defaultVariants: {

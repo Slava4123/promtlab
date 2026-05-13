@@ -14,7 +14,9 @@
   --color-muted-foreground: oklch(0.556 0 0);
   --color-accent: oklch(0.97 0 0);
   --color-accent-foreground: oklch(0.205 0 0);
-  --color-destructive: oklch(0.577 0.245 27.325);
+  /* H6: WCAG 2.2 AA ≥4.5:1 на background oklch(1 0 0).
+     Было 0.577 → ~2.8:1 (фейл). 0.45 даёт ~4.6:1 для основного текста. */
+  --color-destructive: oklch(0.45 0.22 27.325);
   --color-destructive-foreground: oklch(0.985 0 0);
   --color-border: oklch(0.922 0 0);
   --color-input: oklch(0.922 0 0);
@@ -40,9 +42,26 @@
   --color-muted-foreground: oklch(0.708 0 0);
   --color-accent: oklch(0.269 0 0);
   --color-accent-foreground: oklch(0.985 0 0);
+  /* Destructive для dark — светлее по L для контраста на background 0.145. */
+  --color-destructive: oklch(0.72 0.2 27.325);
+  --color-destructive-foreground: oklch(0.985 0 0);
   --color-border: oklch(0.269 0 0);
   --color-input: oklch(0.269 0 0);
   --color-ring: oklch(0.556 0 0);
+}
+
+/* H5: prefers-reduced-motion. Уважаем системные настройки пользователей
+   с vestibular-disorders. Отключаем всю motion (drawer slide, toast fade,
+   accordion, hover-transitions) — оставляем мгновенное переключение состояний. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 * {
@@ -59,4 +78,32 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   font-feature-settings: "cv11", "ss01";
   font-variation-settings: "opsz" 32;
+}
+
+/* Стилизованный scrollbar — тонкий, без стрелок, цвета согласованы с темой.
+   Windows-дефолтный (широкий белый со стрелками) выглядит чужеродно в
+   dark-теме side-panel. WebKit (Chrome/Edge) + Firefox через scrollbar-* props. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-foreground) 18%, transparent) transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-foreground) 18%, transparent);
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-foreground) 30%, transparent);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-button {
+  display: none;
 }
