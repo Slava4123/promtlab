@@ -36,7 +36,7 @@ export function PromptCard({ prompt, onClick, highlighted, focused }: Props) {
       onMouseLeave={() => setHoverPreview(false)}
       data-prompt-id={prompt.id}
       className={cn(
-        'group relative flex w-full cursor-pointer flex-col items-start gap-1 rounded-md border bg-(--color-card) p-3 text-left transition-all duration-200',
+        'group cv-auto relative flex w-full cursor-pointer flex-col items-start gap-1 rounded-md border bg-(--color-card) p-3 text-left transition-all duration-200',
         focused
           ? 'border-(--color-ring) ring-2 ring-(--color-ring)/40'
           : 'border-(--color-border)',

@@ -68,7 +68,7 @@ export function HistoryPage() {
                 </h3>
                 <ul className="space-y-0.5">
                   {items.map((item) => (
-                    <li key={item.id}>
+                    <li key={item.id} className="cv-auto-row">
                       <button
                         type="button"
                         onClick={() => navigate(`/prompts/${item.prompt_id}`)}
@@ -80,11 +80,6 @@ export function HistoryPage() {
                         <span className="flex-1 truncate">
                           {item.prompt?.title ?? `Промпт #${item.prompt_id}`}
                         </span>
-                        {item.prompt?.model && (
-                          <span className="rounded bg-(--color-muted) px-1.5 py-0.5 text-[9px] text-(--color-muted-foreground)">
-                            {item.prompt.model}
-                          </span>
-                        )}
                       </button>
                     </li>
                   ))}

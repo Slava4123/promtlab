@@ -64,6 +64,20 @@
   }
 }
 
+/* H7: дешёвая виртуализация. Браузер skip'нет layout/paint для off-screen
+   элементов в длинных списках. contain-intrinsic-size задаёт fallback-высоту
+   чтобы scroll-bar не дрожал, когда контент ещё не нарисован. Применяется
+   к card'ам в Home и к li-rows в HistoryPage. Без новых JS-deps. */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 88px;
+}
+
+.cv-auto-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 32px;
+}
+
 * {
   border-color: var(--color-border);
 }
