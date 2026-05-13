@@ -24,7 +24,7 @@ export function EmptyState({ title, description, action, showOpenWebLink }: Prop
       ) : null}
       {action}
       {showOpenWebLink ? (
-        <Button type="button" variant="outline" size="sm" onClick={openWebApp}>
+        <Button type="button" variant="brand" size="sm" onClick={openWebApp}>
           Открыть ПромтЛаб
         </Button>
       ) : null}
