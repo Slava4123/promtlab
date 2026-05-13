@@ -44,12 +44,16 @@ export const templateVariableHighlight = ViewPlugin.fromClass(
   },
 )
 
+// {{variable}} остаётся monospace (это идентификатор, не текст), но цвет
+// теперь tied к brand-токену — синхронизируется с light/dark темой и с
+// общей идентичностью.
 export const templateVariableTheme = EditorView.baseTheme({
   ".cm-template-variable": {
-    backgroundColor: "rgb(139 92 246 / 0.15)",
-    color: "rgb(167 139 250)",
-    fontFamily: "monospace",
-    borderRadius: "2px",
-    padding: "0 1px",
+    backgroundColor: "var(--color-brand-muted)",
+    color: "var(--color-brand)",
+    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+    fontSize: "0.92em",
+    borderRadius: "3px",
+    padding: "0 2px",
   },
 })
