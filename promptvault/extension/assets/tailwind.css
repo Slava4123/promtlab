@@ -1,11 +1,17 @@
 @import "tailwindcss";
 
-/* Дефолтная (светлая) тема — CSS переменные на :root */
+/* Дефолтная (светлая) тема — CSS переменные на :root.
+   Mirror frontend/src/index.css design tokens. */
 @theme {
+  /* ── Surfaces ──────────────────────────────────────────── */
   --color-background: oklch(1 0 0);
   --color-foreground: oklch(0.145 0 0);
   --color-card: oklch(1 0 0);
   --color-card-foreground: oklch(0.145 0 0);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.145 0 0);
+
+  /* ── Neutral (default/secondary/muted/accent) ──────────── */
   --color-primary: oklch(0.205 0 0);
   --color-primary-foreground: oklch(0.985 0 0);
   --color-secondary: oklch(0.97 0 0);
@@ -14,14 +20,50 @@
   --color-muted-foreground: oklch(0.556 0 0);
   --color-accent: oklch(0.97 0 0);
   --color-accent-foreground: oklch(0.205 0 0);
-  /* H6: WCAG 2.2 AA ≥4.5:1 на background oklch(1 0 0).
-     Было 0.577 → ~2.8:1 (фейл). 0.45 даёт ~4.6:1 для основного текста. */
+
+  /* ── Brand (фиолетовый из лого ПромтЛаб, 293°) ──────────
+     Используется для CTA, primary-actions, focus-ring, active-tab,
+     FAB. Не меняется между темами — это идентичность бренда. */
+  --color-brand: oklch(0.488 0.243 293);
+  --color-brand-foreground: oklch(1 0 0);
+  --color-brand-muted: oklch(0.488 0.243 293 / 8%);
+  --color-brand-muted-foreground: oklch(0.488 0.243 293);
+
+  /* ── Semantic palette ──────────────────────────────────── */
+  /* WCAG 2.2 AA ≥4.5:1 на background oklch(1 0 0). */
   --color-destructive: oklch(0.45 0.22 27.325);
   --color-destructive-foreground: oklch(0.985 0 0);
+  --color-success: oklch(0.55 0.18 149);
+  --color-success-foreground: oklch(1 0 0);
+  --color-warning: oklch(0.62 0.155 80);
+  --color-warning-foreground: oklch(0.21 0 0);
+  --color-info: oklch(0.55 0.16 254);
+  --color-info-foreground: oklch(1 0 0);
+
+  /* ── Borders / inputs / ring ───────────────────────────── */
   --color-border: oklch(0.922 0 0);
   --color-input: oklch(0.922 0 0);
-  --color-ring: oklch(0.708 0 0);
+  --color-ring: oklch(0.488 0.243 293);  /* brand для focus-ring */
+
+  /* ── Radius scale ──────────────────────────────────────── */
   --radius: 0.5rem;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  /* ── Motion ────────────────────────────────────────────── */
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.37, 0, 0.63, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Composite (gradient, shadow) ──────────────────────── */
+  --brand-gradient: linear-gradient(135deg, oklch(0.488 0.243 293), oklch(0.42 0.243 293));
+  --brand-shadow: 0 4px 16px -2px oklch(0.488 0.243 293 / 25%);
 }
 
 /*
@@ -30,11 +72,14 @@
  * пользователя или prefers-color-scheme).
  */
 .dark {
-  --color-background: oklch(0.145 0 0);
+  --color-background: oklch(0.145 0.005 285);
   --color-foreground: oklch(0.985 0 0);
-  --color-card: oklch(0.205 0 0);
+  --color-card: oklch(0.178 0.005 285);
   --color-card-foreground: oklch(0.985 0 0);
-  --color-primary: oklch(0.985 0 0);
+  --color-popover: oklch(0.188 0.005 285);
+  --color-popover-foreground: oklch(0.985 0 0);
+
+  --color-primary: oklch(0.922 0 0);
   --color-primary-foreground: oklch(0.205 0 0);
   --color-secondary: oklch(0.269 0 0);
   --color-secondary-foreground: oklch(0.985 0 0);
@@ -42,17 +87,33 @@
   --color-muted-foreground: oklch(0.708 0 0);
   --color-accent: oklch(0.269 0 0);
   --color-accent-foreground: oklch(0.985 0 0);
-  /* Destructive для dark — светлее по L для контраста на background 0.145. */
+
+  /* Brand не меняется между темами, но muted-цвета адаптируем для тёмного фона. */
+  --color-brand: oklch(0.488 0.243 293);
+  --color-brand-foreground: oklch(1 0 0);
+  --color-brand-muted: oklch(0.488 0.243 293 / 14%);
+  --color-brand-muted-foreground: oklch(0.811 0.111 293);
+
+  /* Destructive светлее по L для контраста на background 0.145. */
   --color-destructive: oklch(0.72 0.2 27.325);
   --color-destructive-foreground: oklch(0.985 0 0);
-  --color-border: oklch(0.269 0 0);
-  --color-input: oklch(0.269 0 0);
-  --color-ring: oklch(0.556 0 0);
+  --color-success: oklch(0.696 0.17 149);
+  --color-success-foreground: oklch(0.21 0 0);
+  --color-warning: oklch(0.768 0.165 80);
+  --color-warning-foreground: oklch(0.21 0 0);
+  --color-info: oklch(0.682 0.157 254);
+  --color-info-foreground: oklch(0.21 0 0);
+
+  --color-border: oklch(1 0 0 / 6%);
+  --color-input: oklch(1 0 0 / 7%);
+  --color-ring: oklch(0.488 0.243 293);  /* brand остаётся узнаваемым в dark */
+
+  --brand-shadow: 0 4px 16px -2px oklch(0.488 0.243 293 / 35%);
 }
 
-/* H5: prefers-reduced-motion. Уважаем системные настройки пользователей
-   с vestibular-disorders. Отключаем всю motion (drawer slide, toast fade,
-   accordion, hover-transitions) — оставляем мгновенное переключение состояний. */
+/* prefers-reduced-motion. Уважаем системные настройки пользователей
+   с vestibular-disorders. Отключаем всю motion — оставляем мгновенное
+   переключение состояний. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -64,10 +125,8 @@
   }
 }
 
-/* H7: дешёвая виртуализация. Браузер skip'нет layout/paint для off-screen
-   элементов в длинных списках. contain-intrinsic-size задаёт fallback-высоту
-   чтобы scroll-bar не дрожал, когда контент ещё не нарисован. Применяется
-   к card'ам в Home и к li-rows в HistoryPage. Без новых JS-deps. */
+/* Дешёвая виртуализация. Браузер skip'нет layout/paint для off-screen
+   элементов в длинных списках. */
 .cv-auto {
   content-visibility: auto;
   contain-intrinsic-size: 0 88px;
@@ -86,10 +145,22 @@ html,
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    "Geist Variable",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   font-feature-settings: "cv11", "ss01";
   font-variation-settings: "opsz" 32;
 }
