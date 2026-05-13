@@ -17,12 +17,15 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-(--color-border) bg-(--color-background) px-3 py-1 text-sm shadow-sm transition-colors',
+      // min-h-9 + py-1.5 чтобы двухстрочные опции (title + subtitle) комфортно
+      // помещались. Одностроки остаются ровно 36px высотой — нижняя граница.
+      'flex min-h-9 w-full items-center justify-between gap-2 rounded-md border border-(--color-border) bg-(--color-background) px-3 py-1.5 text-sm shadow-sm transition-colors',
       'placeholder:text-(--color-muted-foreground)',
       'focus:outline-none focus:ring-1 focus:ring-(--color-ring)',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'hover:border-(--color-ring)/60 data-[state=open]:border-(--color-ring)',
-      '[&>span]:line-clamp-1',
+      // line-clamp-1 убран: запрещал многострочные value (например, роль с
+      // подзаголовком). Trigger теперь растягивается под content по высоте.
       className,
     )}
     {...props}
