@@ -25,13 +25,26 @@ const editorTheme = EditorView.theme({
     color: "var(--color-foreground)",
     backgroundColor: "transparent",
   },
+  // Все слои editor — transparent, чтобы --color-card обёртки был виден.
+  // Раньше .cm-content имел дефолтный белый фон из uiw 'light' theme prop,
+  // и в dark-режиме editor оставался светло-фиолетовым (selection brand-muted
+  // поверх белого base).
+  ".cm-scroller": {
+    backgroundColor: "transparent",
+  },
   ".cm-content": {
     fontFamily: "inherit",
     padding: "12px",
+    backgroundColor: "transparent",
     caretColor: "var(--color-brand)",
   },
   ".cm-line": {
     fontFamily: "inherit",
+    backgroundColor: "transparent",
+  },
+  ".cm-gutters": {
+    backgroundColor: "transparent",
+    borderRight: "none",
   },
   "&.cm-focused": {
     outline: "none",
@@ -62,6 +75,11 @@ export function CodeEditor({ extraExtensions, ...rest }: CodeEditorProps) {
 
   return (
     <CodeMirror
+      // theme="none" отключает встроенную @uiw/react-codemirror light/dark
+      // theme. Раньше default 'light' инжектил .cm-editor { background: #fff },
+      // и в dark-режиме editor оставался светлым. Теперь все стили — наши,
+      // через editorTheme выше, и фон editor наследует --color-card обёртки.
+      theme="none"
       basicSetup={{
         lineNumbers: false,
         foldGutter: false,
