@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Plus, Edit2, Trash2, ArrowLeft, FolderOpen, Loader2 } from "lucide-react"
+import { Plus, Edit2, Trash2, ArrowLeft, FolderOpen } from "lucide-react"
+import { ListSkeleton } from "../components/list-skeleton"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
@@ -131,9 +132,7 @@ export function CollectionsPage() {
 
       <div className="flex-1 overflow-y-auto p-3">
         {collectionsQuery.isPending ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-5 w-5 animate-spin text-(--color-muted-foreground)" />
-          </div>
+          <ListSkeleton count={4} showSubtitle showBadge />
         ) : (collectionsQuery.data ?? []).length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
             <FolderOpen className="h-10 w-10 text-(--color-muted-foreground)/40" />

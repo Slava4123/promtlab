@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, History as HistoryIcon, Loader2 } from "lucide-react"
+import { ArrowLeft, History as HistoryIcon } from "lucide-react"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { Button } from "../components/ui/button"
+import { RowSkeleton } from "../components/list-skeleton"
 import { sendBg } from "../lib/bg-client"
 import { dateGroupLabel, formatTime } from "@pv/shared/utils/format-date"
 import type { UsageHistoryItem } from "../lib/api"
@@ -24,8 +25,16 @@ export function HistoryPage() {
 
   if (query.isPending) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-(--color-muted-foreground)" />
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-2 border-b border-(--color-border) p-2">
+          <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h2 className="flex-1 text-sm font-semibold">История использования</h2>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3">
+          <RowSkeleton count={10} />
+        </div>
       </div>
     )
   }

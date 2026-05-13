@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Plus, Users, ArrowLeft, Loader2 } from "lucide-react"
+import { Plus, Users, ArrowLeft } from "lucide-react"
+import { ListSkeleton } from "../../components/list-skeleton"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
@@ -47,8 +48,16 @@ export function TeamsIndexPage() {
 
   if (teamsQuery.isPending) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-(--color-muted-foreground)" />
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-2 border-b border-(--color-border) p-2">
+          <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h2 className="flex-1 text-sm font-semibold">Команды</h2>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3">
+          <ListSkeleton count={3} showSubtitle showBadge />
+        </div>
       </div>
     )
   }

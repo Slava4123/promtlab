@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, Plus, Tag as TagIcon, X, Loader2 } from "lucide-react"
+import { ArrowLeft, Plus, Tag as TagIcon, X } from "lucide-react"
+import { Skeleton } from "../components/ui/skeleton"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { ConfirmDialog } from "../components/ui/confirm-dialog"
@@ -122,8 +123,15 @@ export function TagsPage() {
 
         {/* List */}
         {tagsQuery.isPending ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-5 w-5 animate-spin text-(--color-muted-foreground)" />
+          <div
+            className="flex flex-wrap gap-1.5"
+            role="status"
+            aria-live="polite"
+            aria-label="Загружаем теги"
+          >
+            {Array.from({ length: 12 }).map((_, i) => (
+              <Skeleton key={i} className="h-6 w-16 rounded-full" />
+            ))}
           </div>
         ) : (tagsQuery.data ?? []).length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">

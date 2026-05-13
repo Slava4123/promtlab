@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom"
-import { GitBranch, Loader2, Play, History, ArrowLeft, Plus, LayoutGrid } from "lucide-react"
+import { GitBranch, Play, History, ArrowLeft, Plus } from "lucide-react"
 import { Button } from "../../components/ui/button"
+import { ListSkeleton } from "../../components/list-skeleton"
 import { useChains } from "../../hooks/use-chains"
 import { cn } from "../../lib/utils"
 import { pluralAfterDo } from "@pv/shared/utils/plural"
@@ -12,8 +13,16 @@ export function ChainsIndexPage() {
 
   if (chainsQuery.isPending) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-(--color-muted-foreground)" />
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-2 border-b border-(--color-border) p-2">
+          <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h2 className="flex-1 text-sm font-semibold">Цепочки</h2>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3">
+          <ListSkeleton count={4} />
+        </div>
       </div>
     )
   }
@@ -134,17 +143,6 @@ function ChainListCard({ chain }: { chain: Chain }) {
         >
           <Play className="h-3 w-3" />
           Запустить
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => navigate(`/chains/${chain.id}/canvas`)}
-          className="h-7 px-2"
-          aria-label="Граф"
-          title="Граф цепочки"
-        >
-          <LayoutGrid className="h-3 w-3" />
         </Button>
         <Button
           type="button"
