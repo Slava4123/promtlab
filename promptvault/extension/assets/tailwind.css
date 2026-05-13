@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@fontsource-variable/geist";
 
 /* Дефолтная (светлая) тема — CSS переменные на :root.
    Mirror frontend/src/index.css design tokens. */
