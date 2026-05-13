@@ -266,6 +266,7 @@ export function CollectionsPage() {
               </Button>
               <Button
                 type="button"
+                variant="brand"
                 size="sm"
                 onClick={handleSave}
                 disabled={createMut.isPending || updateMut.isPending}
