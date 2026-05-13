@@ -1,19 +1,23 @@
 import type { ReactNode } from 'react';
 import { Button } from './ui/button';
 import { getSettings } from '../lib/storage';
+import { openWebPage } from '../lib/utils';
 
 interface Props {
   title: string;
   description?: string;
   action?: ReactNode;
-  /** Показать кнопку "Открыть ПромтЛаб" ведущую на apiBase */
+  /** Показать кнопку "Открыть ПромтЛаб" ведущую на frontend (не API). */
   showOpenWebLink?: boolean;
 }
 
 export function EmptyState({ title, description, action, showOpenWebLink }: Props) {
+  // openWebPage делает derive backend→frontend (localhost:8080 → :5173 в dev,
+  // promtlabs.ru остаётся promtlabs.ru в prod). Раньше дергали chrome.tabs.create
+  // прямо с apiBase, что в dev открывало backend :8080 (404 page not found).
   const openWebApp = async () => {
     const { apiBase } = await getSettings();
-    void chrome.tabs.create({ url: apiBase });
+    openWebPage(apiBase, '/');
   };
 
   return (
