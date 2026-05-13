@@ -48,10 +48,13 @@ export function ChainNewPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        <div className="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-card) p-3">
-          <GitBranch className="h-4 w-4 text-(--color-brand)" />
-          <p className="text-[10px] text-(--color-muted-foreground)">
-            Создайте многошаговый workflow, чтобы вызывать несколько промптов по очереди.
+        <div className="flex items-start gap-2 rounded-md border border-(--color-brand)/15 bg-(--color-brand-muted) p-3">
+          <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-(--color-brand)" />
+          <p className="text-[11px] leading-relaxed text-(--color-foreground)">
+            <span className="font-medium">Многошаговый workflow.</span>{" "}
+            <span className="text-(--color-muted-foreground)">
+              Цепочка вызывает несколько промптов по очереди — output одного шага становится input следующего.
+            </span>
           </p>
         </div>
 
@@ -92,6 +95,7 @@ export function ChainNewPage() {
         </Button>
         <Button
           type="button"
+          variant="brand"
           size="sm"
           onClick={() => createMut.mutate()}
           disabled={createMut.isPending || !name.trim()}

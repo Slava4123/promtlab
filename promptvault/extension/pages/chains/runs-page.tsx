@@ -2,14 +2,43 @@ import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react"
 import { Button } from "../../components/ui/button"
 import { useChain, useExecutions } from "../../hooks/use-chains"
-import { formatRelativeDate, formatDateTime } from "@pv/shared/utils/format-date"
+import { formatRelativeDate } from "@pv/shared/utils/format-date"
 import { cn } from "../../lib/utils"
 import type { ChainExecutionStatus } from "../../lib/types"
 
-const STATUS_META: Record<ChainExecutionStatus, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
-  in_progress: { label: "В процессе", color: "text-blue-500 bg-blue-500/10", icon: Clock },
-  completed: { label: "Завершено", color: "text-emerald-500 bg-emerald-500/10", icon: CheckCircle2 },
-  abandoned: { label: "Прервано", color: "text-amber-500 bg-amber-500/10", icon: XCircle },
+// Status colors через semantic tokens — синхронизируются с темой и общей
+// идентичностью. Раньше hardcoded blue/emerald/amber — диссонировали с brand.
+const STATUS_META: Record<
+  ChainExecutionStatus,
+  {
+    label: string
+    iconColor: string
+    badgeBg: string
+    cardBorder: string
+    icon: React.ComponentType<{ className?: string }>
+  }
+> = {
+  in_progress: {
+    label: "В процессе",
+    iconColor: "text-(--color-info)",
+    badgeBg: "bg-(--color-info)/10 text-(--color-info)",
+    cardBorder: "border-(--color-info)/40",
+    icon: Clock,
+  },
+  completed: {
+    label: "Завершено",
+    iconColor: "text-(--color-success)",
+    badgeBg: "bg-(--color-success)/10 text-(--color-success)",
+    cardBorder: "border-(--color-border)",
+    icon: CheckCircle2,
+  },
+  abandoned: {
+    label: "Прервано",
+    iconColor: "text-(--color-warning)",
+    badgeBg: "bg-(--color-warning)/10 text-(--color-warning)",
+    cardBorder: "border-(--color-border)",
+    icon: XCircle,
+  },
 }
 
 export function ChainRunsPage() {
@@ -49,6 +78,7 @@ export function ChainRunsPage() {
             <p className="text-sm font-medium">Запусков пока нет</p>
             <Button
               type="button"
+              variant="brand"
               size="sm"
               onClick={() => navigate(`/chains/${chainId}/run`)}
               className="mt-2"
@@ -61,18 +91,29 @@ export function ChainRunsPage() {
             {execs.map((exec) => {
               const meta = STATUS_META[exec.status]
               const Icon = meta.icon
+              // Показываем relative time для завершённых (полезно — «16 ч назад»),
+              // и тот же relative для in_progress (когда «начат» полезнее, чем
+              // абсолютное время — «23 мин назад» сразу даёт контекст).
+              const displayTime = exec.completed_at
+                ? formatRelativeDate(exec.completed_at)
+                : formatRelativeDate(exec.started_at)
               return (
                 <li key={exec.id}>
                   <div
                     className={cn(
-                      "flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-card) px-2.5 py-2",
-                      exec.status === "in_progress" && "border-blue-500/40",
+                      "flex items-center gap-2 rounded-md border bg-(--color-card) px-2.5 py-2",
+                      meta.cardBorder,
                     )}
                   >
-                    <Icon className={cn("h-4 w-4 shrink-0", meta.color.split(" ")[0])} />
+                    <Icon className={cn("h-4 w-4 shrink-0", meta.iconColor)} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 text-xs">
-                        <span className={cn("rounded px-1.5 py-0.5 text-[10px]", meta.color)}>
+                        <span
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                            meta.badgeBg,
+                          )}
+                        >
                           {meta.label}
                         </span>
                         <span className="text-(--color-muted-foreground)">
@@ -80,10 +121,7 @@ export function ChainRunsPage() {
                         </span>
                       </div>
                       <div className="mt-0.5 text-[10px] text-(--color-muted-foreground)">
-                        Начат {formatDateTime(exec.started_at)}
-                        {exec.completed_at && (
-                          <> • Закончен {formatRelativeDate(exec.completed_at)}</>
-                        )}
+                        {displayTime}
                       </div>
                     </div>
                   </div>

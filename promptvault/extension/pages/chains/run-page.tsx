@@ -13,6 +13,7 @@ import { Button } from "../../components/ui/button"
 import { Label } from "../../components/ui/label"
 import { Textarea } from "../../components/ui/textarea"
 import { useToast } from "../../components/ui/toaster"
+import { pluralAfterDo } from "@pv/shared/utils/plural"
 import { useChain, useStartExecution, useExecution, useAdvanceStep } from "../../hooks/use-chains"
 import { useInsertPrompt } from "../../hooks/use-insert-prompt"
 import { useActiveTab } from "../../hooks/use-active-tab"
@@ -136,6 +137,7 @@ export function ChainRunPage() {
           </div>
           <Button
             type="button"
+            variant="brand"
             size="sm"
             onClick={() => navigate(`/chains/${chain.id}/edit`)}
             className="gap-1.5"
@@ -333,10 +335,13 @@ function ChainStepView({ exec, step, chainName, onAdvance, onCancel, insertFn, a
             </p>
           )}
           <div className="flex items-center gap-2">
+            {/* «Вставить» — primary action этого экрана (отправить промпт в чат AI).
+                «Копировать» — fallback secondary. «Далее» — переход к следующему
+                шагу wizard'а, тоже primary но в другой плоскости (workflow vs use). */}
             <Button
               type="button"
+              variant="brand"
               size="sm"
-              variant="outline"
               onClick={() => insertFn(resolvedContent)}
               className="gap-1.5"
               disabled={advancing || !canInsert}
@@ -365,6 +370,7 @@ function ChainStepView({ exec, step, chainName, onAdvance, onCancel, insertFn, a
             <div className="flex-1" />
             <Button
               type="button"
+              variant="brand"
               size="sm"
               onClick={() => onAdvance("")}
               disabled={advancing}
@@ -396,7 +402,7 @@ function ForkStepUI({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <GitBranch className="h-4 w-4 text-purple-500" />
+        <GitBranch className="h-4 w-4 text-(--color-brand)" />
         <div className="text-xs font-medium">Выберите ветку</div>
       </div>
       <p className="text-[10px] text-(--color-muted-foreground)">
@@ -412,7 +418,7 @@ function ForkStepUI({
             disabled={advancing}
             className="w-full justify-start gap-2 text-left"
           >
-            <span className="rounded bg-purple-500/15 px-1.5 py-0.5 font-mono text-[10px]">
+            <span className="rounded bg-(--color-brand-muted) px-1.5 py-0.5 font-mono text-[10px] text-(--color-brand)">
               {i + 1}
             </span>
             <span>{b.label}</span>
@@ -432,19 +438,50 @@ function ChainCompletionView({
   chainName: string
   onClose: () => void
 }) {
+  const navigate = useNavigate()
   const stepsCount = Object.keys(exec.step_outputs).length
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-      <div>
+    <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="rounded-full bg-(--color-success)/10 p-3">
+        <CheckCircle2 className="h-10 w-10 text-(--color-success)" />
+      </div>
+      <div className="max-w-[260px]">
         <h3 className="text-sm font-semibold">Цепочка завершена</h3>
         <p className="mt-1 text-xs text-(--color-muted-foreground)">
-          {chainName}: пройдено {stepsCount} шагов
+          <span className="font-medium text-(--color-foreground)">{chainName}</span>
+          {": пройдено "}
+          {pluralAfterDo(stepsCount, "шаг", "шага", "шагов")}
         </p>
       </div>
-      <Button type="button" onClick={onClose} size="sm">
-        К списку цепочек
-      </Button>
+      <div className="flex w-full max-w-[260px] flex-col gap-2 pt-2">
+        <Button
+          type="button"
+          variant="brand"
+          size="sm"
+          onClick={() => navigate(`/chains/${exec.chain_id}/run`, { replace: true })}
+          className="w-full"
+        >
+          Запустить ещё раз
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => navigate(`/chains/${exec.chain_id}/runs`, { replace: true })}
+          className="w-full"
+        >
+          История запусков
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          className="w-full"
+        >
+          К списку цепочек
+        </Button>
+      </div>
     </div>
   )
 }
