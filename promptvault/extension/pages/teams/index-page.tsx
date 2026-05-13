@@ -9,6 +9,15 @@ import { Textarea } from "../../components/ui/textarea"
 import { useToast } from "../../components/ui/toaster"
 import { useTeams, useCreateTeam } from "../../hooks/use-teams-crud"
 import { useWorkspaceStore } from "../../stores/workspace-store"
+import type { TeamRole } from "../../lib/types"
+
+// Перевод роли для badge на карточке команды. До этого выводили raw enum-значение
+// от backend (OWNER/EDITOR/VIEWER) — это англицизм. Mirror ROLE_META в detail-page.
+const ROLE_LABELS: Record<TeamRole, string> = {
+  owner: "Владелец",
+  editor: "Редактор",
+  viewer: "Просмотр",
+}
 
 export function TeamsIndexPage() {
   const navigate = useNavigate()
@@ -71,7 +80,7 @@ export function TeamsIndexPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h2 className="flex-1 text-sm font-semibold">Команды</h2>
-        <Button type="button" size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
+        <Button type="button" variant="brand" size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />
           Создать
         </Button>
@@ -139,7 +148,7 @@ export function TeamsIndexPage() {
               </div>
               {team.role && (
                 <span className="rounded bg-(--color-muted) px-1.5 py-0.5 text-[9px] uppercase tracking-wide">
-                  {team.role}
+                  {ROLE_LABELS[team.role as TeamRole] ?? team.role}
                 </span>
               )}
             </button>

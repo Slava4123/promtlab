@@ -8,12 +8,19 @@ import { qk } from "../lib/query-keys"
 import { cn } from "../lib/utils"
 import type { Plan } from "../lib/types"
 
+// Platform-aware shortcut hint для Free-tier feature «Поиск».
+// Mac: ⌘K, Windows/Linux: Ctrl+K. На SSR/в test environment fallback на Ctrl+K.
+const isMacPlatform =
+  typeof navigator !== "undefined" &&
+  /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent)
+const SHORTCUT_HINT = isMacPlatform ? "⌘K" : "Ctrl+K"
+
 const PLAN_FEATURES: Record<string, string[]> = {
-  free: ["До 50 промптов", "Личное пространство", "Поиск Cmd+K", "Базовые цепочки"],
+  free: ["До 50 промптов", "Личное пространство", `Поиск ${SHORTCUT_HINT}`, "Базовые цепочки"],
   pro: [
     "До 1000 промптов",
     "Команды (до 10 человек)",
-    "Smart Insights",
+    "Умные подсказки по библиотеке",
     "До 5 цепочек × 10 шагов",
     "Email-поддержка",
   ],
@@ -148,7 +155,7 @@ export function PricingPage() {
               <ul className="mt-3 space-y-1">
                 {features.map((f, i) => (
                   <li key={i} className="flex items-start gap-1.5 text-[10px]">
-                    <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
+                    <Check className="mt-0.5 h-3 w-3 shrink-0 text-(--color-success)" />
                     <span>{f}</span>
                   </li>
                 ))}
@@ -156,6 +163,7 @@ export function PricingPage() {
               {!isCurrent && plan.price_kop > 0 && (
                 <Button
                   type="button"
+                  variant="brand"
                   onClick={() => openCheckout(plan.id)}
                   className="mt-3 w-full gap-1.5"
                   size="sm"

@@ -95,6 +95,7 @@ export function ShareDialog({ promptId, open, onClose }: ShareDialogProps) {
             <div className="flex gap-2">
               <Button
                 type="button"
+                variant="brand"
                 size="sm"
                 onClick={() => copy(link.url)}
                 className="flex-1 gap-1.5"
