@@ -113,10 +113,10 @@ function ChainListCard({ chain }: { chain: Chain }) {
             <div key={i} className="flex items-center gap-1">
               <div
                 className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded text-[9px]",
+                  "flex h-5 w-5 items-center justify-center rounded text-[9px] font-semibold",
                   step.step_type === "fork"
-                    ? "rotate-45 bg-purple-500/20 text-purple-500"
-                    : "bg-(--color-brand)/20 text-(--color-brand)",
+                    ? "rotate-45 bg-(--color-brand) text-(--color-brand-foreground) opacity-80"
+                    : "bg-(--color-brand) text-(--color-brand-foreground)",
                 )}
               >
                 <span className={step.step_type === "fork" ? "-rotate-45" : ""}>
