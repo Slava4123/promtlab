@@ -12,7 +12,7 @@ import type { TeamRole, TeamInvitation } from "../lib/types"
 
 const ROLE_META: Record<TeamRole, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
   owner: { label: "Владелец", icon: ShieldCheck, color: "text-amber-500" },
-  editor: { label: "Редактор", icon: Shield, color: "text-(--color-primary)" },
+  editor: { label: "Редактор", icon: Shield, color: "text-(--color-brand)" },
   viewer: { label: "Просмотр", icon: Eye, color: "text-(--color-muted-foreground)" },
 }
 
