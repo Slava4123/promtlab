@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 
@@ -272,6 +273,9 @@ func (h *Handler) IncrementUsage(w http.ResponseWriter, r *http.Request) {
 		if err := h.quotas.IncrementExtensionUsage(ctx, userID); err != nil {
 			slog.WarnContext(ctx, "prompt.use.quota_increment_failed",
 				"user_id", userID, "prompt_id", id, "err", err)
+			if hub := sentry.GetHubFromContext(ctx); hub != nil {
+				hub.CaptureException(err)
+			}
 		}
 	}
 
@@ -324,6 +328,9 @@ func (h *Handler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	responses := NewVersionListResponse(versions)
+	// enrichVersionsWithActors уже логирует partial-failures внутри
+	// (см. prompt.history.actor_lookup_failed / actors_partial), поэтому
+	// bool result игнорируем — caller'у он не нужен.
 	_ = h.enrichVersionsWithActors(r.Context(), versions, responses)
 	utils.WritePaginated(w, responses, total, page, pageSize)
 }

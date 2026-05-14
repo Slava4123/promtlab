@@ -1108,7 +1108,12 @@ func (t *toolHandlers) teamActivityFeed(ctx context.Context, _ *sdkmcp.CallToolR
 	for i, e := range events {
 		var meta map[string]any
 		if len(e.Metadata) > 0 {
-			_ = json.Unmarshal(e.Metadata, &meta)
+			if err := json.Unmarshal(e.Metadata, &meta); err != nil {
+				// Битый JSON в team_activities.metadata — ручная правка,
+				// миграция, write race. Event без контекста, но не падаем.
+				slog.Warn("mcp.team_activity_feed.metadata_unmarshal_failed",
+					"event_id", e.ID, "team_id", e.TeamID, "err", err)
+			}
 		}
 		items[i] = ActivityItemResponse{
 			ID: e.ID, TeamID: e.TeamID, ActorID: e.ActorID,

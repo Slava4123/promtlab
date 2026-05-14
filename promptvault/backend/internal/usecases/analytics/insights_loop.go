@@ -131,7 +131,13 @@ func (l *InsightsComputeLoop) compute() {
 			return nil
 		})
 	}
-	_ = g.Wait()
+	if err := g.Wait(); err != nil {
+		// errgroup отлавливает первую ошибку из горутин (panic/ctx cancel/
+		// pool exhaustion). Раньше эту ошибку молча проглатывали через
+		// `_ = g.Wait()`, и operators читали "ok=0 failed=0 total=N" как
+		// "нечего обрабатывать" вместо "всё упало".
+		slog.Error("analytics.insights_loop.run.wait_failed", "err", err)
+	}
 	slog.Info("analytics.insights_loop.run",
 		"ok", okCount.Load(), "failed", failCount.Load(), "total", len(ids),
 		"team_ok", teamOk.Load(), "team_failed", teamFail.Load())
