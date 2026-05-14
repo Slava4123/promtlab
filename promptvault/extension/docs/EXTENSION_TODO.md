@@ -35,11 +35,10 @@
 - **Что**: страница «промпты с этим тегом»
 - **API**: `GET /api/prompts?tag_ids=:id`
 
-### `/teams/:slug/analytics` — аналитика команды
-- **Где**: `routes.tsx` (placeholder)
-- **Что**: метрики команды (top contributors, top prompts)
-- **Reference**: `frontend/src/pages/team-analytics.tsx`
-- **API**: `GET /api/analytics/teams/:id`
+### ~~`/teams/:slug/analytics` — аналитика команды~~ (removed)
+- **Статус**: удалена перед launch (узкий sidepanel ~400px не подходит для
+  диаграмм). Команда смотрит аналитику в web-frontend по тому же URL.
+- **API**: `GET /api/analytics/teams/:id` остаётся для frontend.
 
 ### `/teams/:slug/activity` — лента активности команды
 - **Где**: `routes.tsx` (placeholder)
@@ -72,12 +71,10 @@
 - **Сложность**: высокая — требует tree-walking logic, prompt picker, fork conditions builder
 - **Зависимости**: уже установлен `@dnd-kit/sortable` (но не используется ещё)
 
-### `/chains/:id/canvas` — DAG-визуализация
-- **Где**: `routes.tsx` (placeholder)
-- **Что**: graph через `@xyflow/react` + `elkjs` (auto-layout)
-- **Reference**: `frontend/src/pages/chains/canvas.tsx`
-- **Зависимости**: `@xyflow/react`, `elkjs` — нужно установить
-- **Адаптация под sidepanel**: на узком viewport — vertical timeline вместо canvas
+### ~~`/chains/:id/canvas` — DAG-визуализация~~ (removed)
+- **Статус**: удалена перед launch. DAG-canvas через `@xyflow/react` +
+  `elkjs` (~30KB зависимостей) в узком sidepanel нерабочий. Edit-page
+  даёт vertical-timeline вид. Web-frontend сохраняет full canvas.
 
 ### Chain run: AI response autocapture
 - **Где**: `pages/chains/run-page.tsx` — кнопка «Захватить из вкладки» уже есть
@@ -88,12 +85,11 @@
 
 ## Phase 4 polish (teams)
 
-### `/teams/:slug/branding` — редактирование брендинга
-- **Где**: `routes.tsx` (placeholder «Phase 4 polish»)
-- **Что**: текущая страница только display; нужно: upload logo (bytea), color palette picker, save
-- **Reference**: `frontend/src/components/teams/branding-form.tsx`, `logo-uploader.tsx`, `color-palette-picker.tsx`
-- **API**: `POST /api/teams/:slug/branding/logo` (multipart), `PUT /api/teams/:slug/branding` — уже есть
-- **Сложность**: medium — bytea upload требует multipart/form-data в bg-client
+### ~~`/teams/:slug/branding` — редактирование брендинга~~ (removed)
+- **Статус**: удалена перед launch. Color-palette-picker и logo upload
+  лучше работают в web-frontend (полноразмерные превью, drag&drop файлов).
+- **API**: `POST /api/teams/:slug/branding/logo`, `PUT /api/teams/:slug/branding`
+  остаются для frontend.
 
 ### Team invitations: мои приглашения
 - **Где**: ещё нет route
@@ -264,4 +260,7 @@
 
 2. **chain_var format**: backend пишет в `step_outputs[step_<id>]`, extension в `resolveStepContent` ищет `step_${src.var_name}`. Несоответствие может ломать chains с chain_var переменными. Нужна верификация через тест end-to-end.
 
-3. **CWS submission**: privacy policy URL, иконки 128px, screenshots, описание — `extension/store-screenshots/` есть только promo-small.html.
+3. **CWS submission**: privacy policy URL, иконки 128px, screenshots,
+   описание — всё готово. Текущий чек-лист подачи: `PUBLISHING_CHECKLIST.md`.
+   Скриншоты лежат в `extension/store-screenshots/` (5×1280×800 + promo-large
+   1400×560 + promo-small 920×680).

@@ -152,10 +152,14 @@
 - Нужно: на каждом сайте — открыть DevTools, проверить актуальные селекторы, обновить `lib/selectors.ts` + `lib/chat-selectors.ts`
 
 ### B-19. CWS + AMO release
-- Privacy policy URL
-- Screenshots (нужны 5 штук 1280x800)
-- Promo tile (440x280)
-- Описание для store
+- ✅ Privacy policy URL: `https://promtlabs.ru/legal/extension-privacy`
+- ✅ Screenshots: 5×1280×800 в `extension/store-screenshots/`
+- ✅ Promo tile (large 1400×560 + small 920×680 в той же папке;
+  440×280 small marketing tile — опционально, пока нет)
+- ✅ Описание: `docs/CWS_LISTING.md` §2.2 (3000 символов RU)
+- ✅ Single-purpose statement: `CWS_LISTING.md` §8
+- ✅ Чек-лист подачи: `docs/PUBLISHING_CHECKLIST.md`
+- AMO (Firefox) — отложен на следующую итерацию
 
 ---
 
