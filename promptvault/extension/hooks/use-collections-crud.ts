@@ -1,15 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { sendBg } from "../lib/bg-client"
 import { qk } from "../lib/query-keys"
-import { useWorkspaceStore } from "../stores/workspace-store"
+import { useWorkspace } from "./use-workspace"
 import type { Collection, CollectionDTO } from "../lib/types"
 import type { CreateCollectionBody } from "../lib/api"
 
 export function useCollections() {
-  const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
+  // Workspace через chrome.storage (синхронно с WorkspaceSelector в Home).
+  const { workspaceId } = useWorkspace()
   return useQuery<CollectionDTO[]>({
-    queryKey: [...qk.collections, teamId],
-    queryFn: () => sendBg({ type: "api.listCollections", teamId }),
+    queryKey: [...qk.collections, workspaceId],
+    queryFn: () => sendBg({ type: "api.listCollections", teamId: workspaceId }),
     staleTime: 60_000,
   })
 }

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { sendBg } from "../lib/bg-client"
 import { qk } from "../lib/query-keys"
-import { useWorkspaceStore } from "../stores/workspace-store"
+import { useWorkspace } from "./use-workspace"
 import type {
   ChainListResponse,
   ChainDetail,
@@ -10,10 +10,13 @@ import type {
 } from "../lib/types"
 
 export function useChains() {
-  const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
+  // Workspace source of truth — chrome.storage (через useWorkspace).
+  // Раньше использовался Zustand store, который рассинхронизирован с
+  // WorkspaceSelector в Home, что давало пустой список chains при «Личное».
+  const { workspaceId } = useWorkspace()
   return useQuery<ChainListResponse>({
-    queryKey: [...qk.chains, teamId],
-    queryFn: () => sendBg({ type: "api.listChains", teamId }),
+    queryKey: [...qk.chains, workspaceId],
+    queryFn: () => sendBg({ type: "api.listChains", teamId: workspaceId }),
     staleTime: 60_000,
   })
 }
