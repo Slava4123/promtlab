@@ -18,6 +18,8 @@ export function useRestoreTrashPrompt() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.trash })
       void qc.invalidateQueries({ queryKey: qk.prompts })
+      // Prompts count растёт обратно.
+      void qc.invalidateQueries({ queryKey: qk.usage })
     },
   })
 }
@@ -29,6 +31,8 @@ export function useRestoreTrashCollection() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.trash })
       void qc.invalidateQueries({ queryKey: qk.collections })
+      // Collections count растёт обратно.
+      void qc.invalidateQueries({ queryKey: qk.usage })
     },
   })
 }

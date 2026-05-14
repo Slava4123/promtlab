@@ -30,6 +30,8 @@ export function ChainDetailPage() {
     mutationFn: () => sendBg({ type: "api.deleteChain", id: chainId! }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["chains"] })
+      // Chains count уменьшается.
+      void qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
       toast({ title: "Цепочка удалена", variant: "info" })
       navigate("/chains", { replace: true })
     },

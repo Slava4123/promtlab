@@ -14,6 +14,8 @@ export function useCreatePrompt() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.prompts })
       void qc.invalidateQueries({ queryKey: qk.trash })
+      // Prompts count в Подписке/quota-indicator растёт.
+      void qc.invalidateQueries({ queryKey: qk.usage })
     },
   })
 }
@@ -40,6 +42,8 @@ export function useDeletePrompt() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.prompts })
       void qc.invalidateQueries({ queryKey: qk.trash })
+      // Prompts count уменьшается (soft-delete).
+      void qc.invalidateQueries({ queryKey: qk.usage })
     },
   })
 }
@@ -50,6 +54,8 @@ export function useDuplicatePrompt() {
     mutationFn: (id) => sendBg({ type: "api.duplicatePrompt", id }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.prompts })
+      // Дубликат = новый промпт, Prompts count растёт.
+      void qc.invalidateQueries({ queryKey: qk.usage })
     },
   })
 }

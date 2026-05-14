@@ -6,9 +6,19 @@ import { useQueryClient } from "@tanstack/react-query"
 import { sendBg } from "../lib/bg-client"
 import { addLocalRecent } from "../lib/storage"
 import { hostLabel } from "../lib/messages"
+import { qk } from "../lib/query-keys"
 import { ApiError, type Prompt } from "../lib/types"
 import { useToast } from "../components/ui/toaster"
 import { useActiveTab } from "./use-active-tab"
+
+// После incrementUsage: ExtUsesToday в Подписке растёт, streak может
+// инкрементиться (первое использование за день), usage_count в карточке
+// промпта растёт. Делаем централизованно, чтобы не дублировать в insert/insertAll.
+function invalidateAfterUsage(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: qk.usage })
+  void qc.invalidateQueries({ queryKey: qk.streak })
+  void qc.invalidateQueries({ queryKey: qk.prompts })
+}
 
 export interface InsertOptions {
   silent?: boolean
@@ -28,8 +38,11 @@ export function useInsertPrompt() {
       setError(null)
       try {
         await sendBg({ type: "cmd.insertPrompt", text })
+        // incrementUsage fire-and-forget — UI оптимистично инвалидирует кеш
+        // сразу (Подписка/Streak/usage_count). Если запрос упадёт, на
+        // следующем refetch значения вернутся к реальным backend'овским.
         void sendBg({ type: "api.incrementUsage", promptId: prompt.id }).catch(() => undefined)
-        void queryClient.invalidateQueries({ queryKey: ["prompts", "recent"] })
+        invalidateAfterUsage(queryClient)
 
         void addLocalRecent({
           promptId: prompt.id,
@@ -91,7 +104,7 @@ export function useInsertPrompt() {
       try {
         const result = await sendBg({ type: "cmd.insertPromptAll", text })
         void sendBg({ type: "api.incrementUsage", promptId: prompt.id }).catch(() => undefined)
-        void queryClient.invalidateQueries({ queryKey: ["prompts", "recent"] })
+        invalidateAfterUsage(queryClient)
         if (result.successes === 0) {
           toast({
             title: "Нет открытых вкладок",

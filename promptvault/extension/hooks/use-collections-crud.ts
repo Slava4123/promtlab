@@ -19,7 +19,11 @@ export function useCreateCollection() {
   const qc = useQueryClient()
   return useMutation<Collection, Error, CreateCollectionBody>({
     mutationFn: (body) => sendBg({ type: "api.createCollection", body }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.collections }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.collections })
+      // Collections count в Подписке растёт.
+      void qc.invalidateQueries({ queryKey: qk.usage })
+    },
   })
 }
 
@@ -38,6 +42,10 @@ export function useDeleteCollection() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.collections })
       void qc.invalidateQueries({ queryKey: qk.trash })
+      // Промпты в коллекции теряют привязку — у них меняется отображение.
+      void qc.invalidateQueries({ queryKey: qk.prompts })
+      // Collections count уменьшается.
+      void qc.invalidateQueries({ queryKey: qk.usage })
     },
   })
 }

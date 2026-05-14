@@ -26,6 +26,8 @@ export function ChainNewPage() {
       }),
     onSuccess: (chain) => {
       void qc.invalidateQueries({ queryKey: ["chains"] })
+      // Chains count в Подписке/quota-indicator растёт.
+      void qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
       toast({ title: "Цепочка создана", variant: "success" })
       navigate(`/chains/${chain.id}/edit`, { replace: true })
     },
