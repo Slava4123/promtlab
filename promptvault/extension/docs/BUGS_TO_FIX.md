@@ -84,16 +84,11 @@
 
 ## 🟡 Medium — chains UX
 
-### B-9. Chains: editor, detail, canvas (`/chains/new`, `/chains/:id`, `/chains/:id/edit`, `/chains/:id/canvas`) ✅ ИСПРАВЛЕНО
-- Все 4 страницы реализованы. Canvas — vertical timeline вместо @xyflow (для узкого sidepanel).
-  Тонкое редактирование variable_mapping и conditions — deep-link на веб.
-- **Симптом**: 4 placeholders «Phase 3 polish»
-- **Сложность**: высокая
-- **Что нужно**:
-  - New: dialog с name/description → POST /api/chains
-  - Detail: read-only обзор + actions
-  - Edit: inline-tree editor (35KB в frontend), prompt picker, fork conditions
-  - Canvas: DAG через `@xyflow/react` + `elkjs` (нужно установить, или vertical timeline для узкого sidepanel)
+### B-9. Chains: editor, detail (`/chains/new`, `/chains/:id`, `/chains/:id/edit`) ✅ ИСПРАВЛЕНО
+- New/Detail/Edit реализованы. Canvas-страница (`/chains/:id/canvas`) удалена
+  перед launch (commit 45d4b39): DAG через `@xyflow/react`+`elkjs` нерабочий в
+  узком sidepanel. Vertical timeline в edit-page остаётся как замена.
+  Тонкое редактирование variable_mapping и conditions — deep-link на web.
 
 ### B-10. Chain run: chain_var resolution (известный edge-case) ✅ ИСПРАВЛЕНО
 - Убрал fallback `exec.step_outputs[step_<var_name>]` — backend ключ `step_<id>` (uint),

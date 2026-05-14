@@ -88,7 +88,10 @@ async function request<T>(
     if (res.status === 422) throw new ApiError(msg ?? 'validation', 422, 'validation');
     if (res.status === 429) throw new ApiError(msg ?? 'rate limited', 429, 'rate_limited');
     if (res.status >= 400 && res.status < 500) {
-      throw new ApiError(msg ?? `http ${res.status}`, res.status, 'validation');
+      // Для непознанных 4xx (418/451/410 etc.) код 'client_error', а не
+      // 'validation' — иначе form-handlers вроде prompt-editor решат, что
+      // это ошибка валидации полей и покажут неуместное сообщение.
+      throw new ApiError(msg ?? `http ${res.status}`, res.status, 'client_error');
     }
     throw new ApiError(msg ?? `http ${res.status}`, res.status, 'network');
   }

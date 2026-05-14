@@ -85,18 +85,20 @@ describe('request() — body parsing for 4xx', () => {
     }
   });
 
-  it('catch-all для прочих 4xx возвращает status + msg', async () => {
+  it('catch-all для прочих 4xx возвращает status + msg + code=client_error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes(418, { message: "I'm a teapot" })));
     await expect(getMe()).rejects.toMatchObject({
       status: 418,
+      code: 'client_error',
       message: "I'm a teapot",
     });
   });
 
-  it('catch-all для 4xx без тела даёт generic http NNN', async () => {
+  it('catch-all для 4xx без тела даёт generic http NNN + code=client_error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(textRes(418, '')));
     await expect(getMe()).rejects.toMatchObject({
       status: 418,
+      code: 'client_error',
       message: 'http 418',
     });
   });
