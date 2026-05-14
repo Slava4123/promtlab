@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react"
-import { Route, Routes } from "react-router-dom"
+import { Navigate, Route, Routes } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { AppShell } from "./components/layout"
 import { AuthGate } from "./components/auth-gate"
@@ -57,9 +57,6 @@ const ChangelogPage = lazy(() =>
 const HistoryPage = lazy(() =>
   import("./pages/history-page").then((m) => ({ default: m.HistoryPage })),
 )
-const AnalyticsPage = lazy(() =>
-  import("./pages/analytics-page").then((m) => ({ default: m.AnalyticsPage })),
-)
 const ChainsIndexPage = lazy(() =>
   import("./pages/chains/index-page").then((m) => ({ default: m.ChainsIndexPage })),
 )
@@ -72,9 +69,6 @@ const ChainDetailPage = lazy(() =>
 const ChainEditorPage = lazy(() =>
   import("./pages/chains/editor-page").then((m) => ({ default: m.ChainEditorPage })),
 )
-const ChainCanvasPage = lazy(() =>
-  import("./pages/chains/canvas-page").then((m) => ({ default: m.ChainCanvasPage })),
-)
 const ChainRunPage = lazy(() =>
   import("./pages/chains/run-page").then((m) => ({ default: m.ChainRunPage })),
 )
@@ -86,12 +80,6 @@ const TeamsIndexPage = lazy(() =>
 )
 const TeamDetailPage = lazy(() =>
   import("./pages/teams/detail-page").then((m) => ({ default: m.TeamDetailPage })),
-)
-const TeamBrandingPage = lazy(() =>
-  import("./pages/teams/branding-page").then((m) => ({ default: m.TeamBrandingPage })),
-)
-const TeamAnalyticsPage = lazy(() =>
-  import("./pages/teams/analytics-page").then((m) => ({ default: m.TeamAnalyticsPage })),
 )
 const TeamActivityPage = lazy(() =>
   import("./pages/teams/activity-page").then((m) => ({ default: m.TeamActivityPage })),
@@ -159,26 +147,16 @@ export function AppRoutes() {
             <Route path="/chains/:id/edit" element={<ChainEditorPage />} />
             <Route path="/chains/:id/run" element={<ChainRunPage />} />
             <Route path="/chains/:id/runs" element={<ChainRunsPage />} />
-            <Route path="/chains/:id/canvas" element={<ChainCanvasPage />} />
             {/* Phase 4: Teams */}
             <Route path="/teams" element={<TeamsIndexPage />} />
             <Route path="/teams/:slug" element={<TeamDetailPage />} />
-            <Route path="/teams/:slug/branding" element={<TeamBrandingPage />} />
-            <Route path="/teams/:slug/analytics" element={<TeamAnalyticsPage />} />
             <Route path="/teams/:slug/activity" element={<TeamActivityPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/badges" element={<BadgesPage />} />
+            {/* /notifications — backward-compat redirect на реальную страницу */}
             <Route
               path="/notifications"
-              element={
-                <PlaceholderPage
-                  title="Уведомления"
-                  description="Настройте email-уведомления в веб-приложении."
-                  phase="Phase 5"
-                  webPath="/settings/notifications"
-                />
-              }
+              element={<Navigate to="/settings/notifications" replace />}
             />
             <Route path="/changelog" element={<ChangelogPage />} />
             <Route path="/pricing" element={<PricingPage />} />
