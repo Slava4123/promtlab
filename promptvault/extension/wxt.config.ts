@@ -39,7 +39,7 @@ export default defineConfig({
       name: 'ПромтЛаб — библиотека AI-промптов',
       short_name: 'ПромтЛаб',
       description:
-        'Полный клиент ПромтЛаба: библиотека, цепочки, команды и подписка на 9 AI-сайтах (ChatGPT, Claude, Gemini, Perplexity, Yandex GPT, GigaChat, DeepSeek, Mistral, Qwen). Требует аккаунт promtlabs.ru.',
+        'Управление AI-промптами в браузере. Библиотека, шаблоны и цепочки. Вставка в ChatGPT, Claude, Gemini и ещё 6 чатов.',
       version: '1.0.0',
       ...(isFirefox
         ? {}
