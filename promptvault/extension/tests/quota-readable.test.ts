@@ -13,15 +13,24 @@ beforeEach(() => {
 
 describe('readableQuotaType — техкей-маппинг', () => {
   it.each([
+    // Источник истины — backend usecases/quota/quota.go::newQuotaExceeded.
     ['prompts', 'Промпты'],
     ['collections', 'Коллекции'],
     ['chains', 'Цепочки'],
     ['teams', 'Команды'],
-    ['ext_uses_today', 'Вставки сегодня'],
-    ['mcp_uses_today', 'MCP-вызовы сегодня'],
+    ['ext_daily', 'Вставки сегодня'],
+    ['mcp_daily', 'MCP-вызовы сегодня'],
+    ['team_prompts', 'Промпты команды'],
+    ['team_collections', 'Коллекции команды'],
+    ['team_chains', 'Цепочки команды'],
+    ['team_members', 'Участники команды'],
+    ['chain_steps', 'Шаги в цепочке'],
     ['api_keys', 'API-ключи'],
     ['share_links', 'Публичные ссылки'],
-    ['team_members', 'Участники команды'],
+    ['branding', 'Брендинг команды'],
+    // Алиасы из UsageSummary endpoint
+    ['ext_uses_today', 'Вставки сегодня'],
+    ['mcp_uses_today', 'MCP-вызовы сегодня'],
   ])('маппит %s → %s', (key, expected) => {
     expect(readableQuotaType(key, null)).toBe(expected);
   });

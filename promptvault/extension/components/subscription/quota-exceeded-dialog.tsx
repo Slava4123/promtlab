@@ -2,19 +2,31 @@ import { ExternalLink, X, Zap } from "lucide-react"
 import { Button } from "../ui/button"
 import { useQuotaStore } from "../../stores/quota-store"
 
-// Маппинг технических quota_type'ов → читаемые названия. quotaType
-// сейчас передаётся как 'unknown' (см. bg-client.ts), поэтому также пытаемся
-// угадать тип по тексту backend-сообщения.
+// Маппинг технических quota_type'ов → читаемые названия.
+// Источник истины: backend usecases/quota/quota.go::newQuotaExceeded().
+// Дополнительно поддерживаем алиасы из UsageSummary ответа (ext_uses_today,
+// mcp_uses_today) — на случай если кто-то прокинет эти имена напрямую.
 const QUOTA_LABELS: Record<string, string> = {
+  // Personal — из quota.go::newQuotaExceeded
   prompts: "Промпты",
   collections: "Коллекции",
   chains: "Цепочки",
   teams: "Команды",
-  ext_uses_today: "Вставки сегодня",
-  mcp_uses_today: "MCP-вызовы сегодня",
+  ext_daily: "Вставки сегодня",
+  mcp_daily: "MCP-вызовы сегодня",
+  // Team-pool (Pack T) — отдельные имена в backend
+  team_prompts: "Промпты команды",
+  team_collections: "Коллекции команды",
+  team_chains: "Цепочки команды",
+  team_members: "Участники команды",
+  chain_steps: "Шаги в цепочке",
+  // Прочие
   api_keys: "API-ключи",
   share_links: "Публичные ссылки",
-  team_members: "Участники команды",
+  branding: "Брендинг команды",
+  // Алиасы из subscription/usage endpoint (если кто-то передаст напрямую)
+  ext_uses_today: "Вставки сегодня",
+  mcp_uses_today: "MCP-вызовы сегодня",
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -41,8 +53,8 @@ export function readableQuotaType(quotaType: string | null, message: string | nu
     if (m.includes("коллекц")) return QUOTA_LABELS.collections
     if (m.includes("команд")) return QUOTA_LABELS.teams
     // "встав" покрывает «вставки/вставку/вставок/вставкой» — все формы.
-    if (m.includes("встав") || m.includes("использовани")) return QUOTA_LABELS.ext_uses_today
-    if (m.includes("mcp")) return QUOTA_LABELS.mcp_uses_today
+    if (m.includes("встав") || m.includes("использовани") || m.includes("расширен")) return QUOTA_LABELS.ext_daily
+    if (m.includes("mcp")) return QUOTA_LABELS.mcp_daily
     if (m.includes("api-ключ") || m.includes("api ключ")) return QUOTA_LABELS.api_keys
   }
   // Если backend менял copy — заметим в логах. Не флудим, если пришёл
