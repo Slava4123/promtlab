@@ -1,0 +1,15 @@
+{
+  "name": "@pv/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types/index.ts",
+    "./template": "./src/template/parse.ts",
+    "./utils/plural": "./src/utils/plural.ts",
+    "./utils/format-date": "./src/utils/format-date.ts"
+  }
+}
