@@ -51,6 +51,8 @@ export function useCreateChain() {
       api<Chain>("/chains", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["chains"] })
+      // Chains count в Подписке растёт.
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
     },
   })
 }
@@ -73,6 +75,8 @@ export function useDeleteChain() {
     mutationFn: (id: number) => apiVoid(`/chains/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["chains"] })
+      // Chains count уменьшается.
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
     },
   })
 }

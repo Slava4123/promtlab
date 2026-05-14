@@ -23,7 +23,11 @@ export function useCreateTeam() {
   return useMutation({
     mutationFn: (data: { name: string; description?: string }) =>
       api<Team>("/teams", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["teams"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["teams"] })
+      // Teams count в Подписке растёт.
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
+    },
   })
 }
 
@@ -43,7 +47,11 @@ export function useDeleteTeam() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (slug: string) => apiVoid(`/teams/${slug}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["teams"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["teams"] })
+      // Teams count уменьшается.
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
+    },
   })
 }
 

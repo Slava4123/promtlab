@@ -29,6 +29,8 @@ export function useCreateCollection() {
       api<CollectionResponse>("/collections", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["collections"] })
+      // Collections count в Подписке растёт.
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
       handleBadges(data.newly_unlocked_badges)
     },
   })
@@ -55,6 +57,8 @@ export function useDeleteCollection() {
       qc.invalidateQueries({ queryKey: ["prompts"] })
       qc.invalidateQueries({ queryKey: ["trash"] })
       qc.invalidateQueries({ queryKey: ["trash-count"] })
+      // Collections count уменьшается.
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
     },
   })
 }

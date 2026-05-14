@@ -66,6 +66,8 @@ export function useCreatePrompt() {
       qc.invalidateQueries({ queryKey: ["collections"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["tags"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["streak"], refetchType: "active" })
+      // Prompts count в Настройки → Подписка растёт.
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"], refetchType: "active" })
       // Activity feed обновляется в team-mode после создания promptа.
       qc.invalidateQueries({ queryKey: ["activity"], refetchType: "active" })
       handleBadges(data.newly_unlocked_badges)
@@ -109,6 +111,8 @@ export function useDeletePrompt() {
       qc.invalidateQueries({ queryKey: ["tags"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["trash"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["trash-count"], refetchType: "active" })
+      // Prompts count уменьшается (soft-delete).
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["activity"], refetchType: "active" })
     },
   })
@@ -123,6 +127,8 @@ export function useIncrementUsage() {
       qc.invalidateQueries({ queryKey: ["prompts"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["prompts", "recent"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["streak"], refetchType: "active" })
+      // ExtUsesToday + Prompts.UsageCount в Подписке растут.
+      qc.invalidateQueries({ queryKey: ["subscription", "usage"], refetchType: "active" })
       handleBadges(data.newly_unlocked_badges)
     },
     onError: (err) => {
