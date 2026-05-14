@@ -60,8 +60,14 @@ function errorToStatus(code: string): number {
       return 422;
     case 'quota_exceeded':
       return 402;
+    case 'payload_too_large':
+      return 413;
+    case 'unsupported_media_type':
+      return 415;
     case 'rate_limited':
       return 429;
+    case 'client_error':
+      return 400;
     case 'network':
       return 0;
     case 'no_target':

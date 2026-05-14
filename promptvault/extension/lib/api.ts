@@ -95,6 +95,11 @@ async function request<T>(
     if (res.status === 403) throw new ApiError(msg ?? 'forbidden', 403, 'forbidden', details);
     if (res.status === 404) throw new ApiError(msg ?? 'not found', 404, 'not_found', details);
     if (res.status === 409) throw new ApiError(msg ?? 'conflict', 409, 'conflict', details);
+    // 413 PayloadTooLarge / 415 UnsupportedMediaType — отдельные коды важны
+    // для branding logo upload UX: разные toast'ы «файл слишком большой» vs
+    // «формат не поддерживается». Без них всё валилось в client_error.
+    if (res.status === 413) throw new ApiError(msg ?? 'payload too large', 413, 'payload_too_large', details);
+    if (res.status === 415) throw new ApiError(msg ?? 'unsupported media type', 415, 'unsupported_media_type', details);
     if (res.status === 422) throw new ApiError(msg ?? 'validation', 422, 'validation', details);
     if (res.status === 429) throw new ApiError(msg ?? 'rate limited', 429, 'rate_limited', details);
     if (res.status >= 400 && res.status < 500) {
@@ -416,12 +421,20 @@ export async function listTrash(): Promise<TrashListResponse> {
 
 // Backend ожидает singular ItemType — "prompt" / "collection" (см.
 // backend/internal/usecases/trash/types.go). Plural форма даёт 400.
-export async function restoreTrashPrompt(id: number): Promise<Prompt> {
-  return request<Prompt>(`/api/trash/prompt/${id}/restore`, { method: 'POST' });
+//
+// Backend trash/handler.go отвечает {status: "restored"}, не полным Prompt/
+// Collection — поэтому возвращаем именно этот shape. Раньше тип врал
+// "Promise<Prompt>", и любой consumer .title / .id получал бы undefined.
+export interface TrashRestoreResponse {
+  status: 'restored';
 }
 
-export async function restoreTrashCollection(id: number): Promise<Collection> {
-  return request<Collection>(`/api/trash/collection/${id}/restore`, { method: 'POST' });
+export async function restoreTrashPrompt(id: number): Promise<TrashRestoreResponse> {
+  return request<TrashRestoreResponse>(`/api/trash/prompt/${id}/restore`, { method: 'POST' });
+}
+
+export async function restoreTrashCollection(id: number): Promise<TrashRestoreResponse> {
+  return request<TrashRestoreResponse>(`/api/trash/collection/${id}/restore`, { method: 'POST' });
 }
 
 export async function permanentDeleteTrashPrompt(id: number): Promise<void> {

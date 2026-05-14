@@ -245,6 +245,9 @@ export type BgError =
   | 'conflict'
   | 'validation'
   | 'quota_exceeded'
+  | 'payload_too_large'
+  | 'unsupported_media_type'
+  | 'client_error'
   | 'network'
   | 'rate_limited'
   | 'unknown'
@@ -282,8 +285,8 @@ export interface BgResultMap {
   'api.revertVersion': Prompt;
   // --- Trash ---
   'api.listTrash': TrashListResponse;
-  'api.restoreTrashPrompt': Prompt;
-  'api.restoreTrashCollection': Collection;
+  'api.restoreTrashPrompt': { status: 'restored' };
+  'api.restoreTrashCollection': { status: 'restored' };
   'api.permanentDeleteTrashPrompt': { ok: true };
   'api.permanentDeleteTrashCollection': { ok: true };
   'api.emptyTrash': { ok: true };
