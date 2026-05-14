@@ -114,9 +114,16 @@ export async function api<T>(
       if (accessToken) {
         headers.set("Authorization", `Bearer ${accessToken}`)
       }
-    } catch {
-      // Refresh упал (no cookie / expired) — продолжаем запрос как есть,
-      // backend вернёт 401 и юзер увидит "Сессия истекла".
+    } catch (err) {
+      // Transient ошибки (сеть, 5xx) прокидываем — иначе юзер увидит
+      // фальш-«Сессия истекла» при flaky-соединении. true auth-fail
+      // ('Сессия истекла') тоже прокидываем — нет смысла слать запрос
+      // без токена, всё равно 401.
+      if (err instanceof Error && err.message.startsWith("transient:")) {
+        throw err
+      }
+      // Auth-fail (no cookie / expired refresh) — пробрасываем.
+      throw err
     }
   }
 

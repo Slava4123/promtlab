@@ -164,26 +164,32 @@ describe("api() — proactive refresh", () => {
     expect((apiCall[1].headers as Headers).get("Authorization")).toBe("Bearer proactive-token")
   })
 
-  it("при провале proactive refresh запрос всё равно идёт без Authorization", async () => {
-    // Refresh fails (например, нет refresh-cookie), запрос продолжает работу
-    // без токена, backend вернёт 401 — это ожидаемое поведение.
+  it("при auth-fail proactive refresh пробрасывает 'Сессия истекла' без дополнительного запроса", async () => {
+    // 401 на refresh = истинный auth-fail (нет cookie / expired). Нет смысла
+    // слать основной запрос без токена — всё равно 401. Сразу throw.
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 401,
       json: () => Promise.resolve({ error: "no refresh cookie" }),
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 401,
-      json: () => Promise.resolve({ error: "unauthorized" }),
-    })
 
-    await expect(api("/prompts")).rejects.toThrow()
+    await expect(api("/prompts")).rejects.toThrow("Сессия истекла")
 
-    // Запрос на /prompts отправлен без Authorization.
-    const apiCall = mockFetch.mock.calls[1]
-    expect(apiCall[0]).toBe("/api/prompts")
-    expect((apiCall[1].headers as Headers).get("Authorization")).toBeNull()
+    // Только один fetch — refresh. Основной запрос не делается.
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(mockFetch.mock.calls[0][0]).toBe("/api/auth/refresh")
+  })
+
+  it("при transient ошибке (network) proactive refresh пробрасывает 'transient:' — auth-store не делает logout", async () => {
+    // Refresh упал из-за сети (fetch reject), а не auth-fail. Прокидываем
+    // transient-ошибку, чтобы auth-store не редиректил юзера на /sign-in
+    // при flaky-соединении.
+    mockFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"))
+
+    await expect(api("/prompts")).rejects.toThrow(/transient:/)
+
+    // Основной запрос не делается — нет смысла без токена.
+    expect(mockFetch).toHaveBeenCalledTimes(1)
   })
 
   it.each([
