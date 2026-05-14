@@ -8,11 +8,11 @@ import { useQuery } from "@tanstack/react-query"
 import { Sparkles } from "lucide-react"
 import { sendBg } from "../../lib/bg-client"
 import { useAuthStore } from "../../stores/auth-store"
-import { useWorkspaceStore } from "../../stores/workspace-store"
+import { useWorkspace } from "../../hooks/use-workspace"
 
 export function AppHeader() {
   const user = useAuthStore((s) => s.user)
-  const team = useWorkspaceStore((s) => s.team)
+  const { currentTeam } = useWorkspace()
 
   const streakQuery = useQuery({
     queryKey: ["streak"],
@@ -36,13 +36,13 @@ export function AppHeader() {
             🔥 {streakQuery.data.current_streak}
           </span>
         )}
-        {team ? (
+        {currentTeam ? (
           <Link
-            to={`/teams/${team.teamSlug}`}
+            to={`/teams/${currentTeam.slug}`}
             className="max-w-[120px] truncate rounded-md bg-(--color-muted) px-2 py-0.5 text-[10px] text-(--color-foreground)"
-            title={`Команда: ${team.teamName}`}
+            title={`Команда: ${currentTeam.name}`}
           >
-            {team.teamName}
+            {currentTeam.name}
           </Link>
         ) : (
           <span className="text-[10px] text-(--color-muted-foreground)">Личное</span>

@@ -7,7 +7,7 @@ import { Input } from "../components/ui/input"
 import { ConfirmDialog } from "../components/ui/confirm-dialog"
 import { useToast } from "../components/ui/toaster"
 import { useTags, useCreateTag, useDeleteTag } from "../hooks/use-tags-crud"
-import { useWorkspaceStore } from "../stores/workspace-store"
+import { useWorkspace } from "../hooks/use-workspace"
 import { cn } from "../lib/utils"
 
 const TAG_COLORS = [
@@ -26,7 +26,7 @@ const TAG_COLORS = [
 export function TagsPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const team = useWorkspaceStore((s) => s.team)
+  const { workspaceId } = useWorkspace()
   const tagsQuery = useTags()
   const createMut = useCreateTag()
   const deleteMut = useDeleteTag()
@@ -44,7 +44,7 @@ export function TagsPage() {
       await createMut.mutateAsync({
         name: trimmed,
         color,
-        team_id: team?.teamId ?? null,
+        team_id: workspaceId,
       })
       setName("")
       toast({ title: "Тег создан", variant: "success" })

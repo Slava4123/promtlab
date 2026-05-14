@@ -4,7 +4,7 @@ import { PromptEditor } from "../../components/prompts/prompt-editor"
 import { usePrompt } from "../../hooks/use-prompts"
 import { useCreatePrompt, useUpdatePrompt } from "../../hooks/use-prompts-crud"
 import { useToast } from "../../components/ui/toaster"
-import { useWorkspaceStore } from "../../stores/workspace-store"
+import { useWorkspace } from "../../hooks/use-workspace"
 import type { PromptFormValues } from "../../lib/validation/prompt-schema"
 
 // Универсальная страница: /prompts/new (без id) или /prompts/:id/edit.
@@ -12,7 +12,7 @@ export function PromptEditorPage() {
   const { id } = useParams<{ id?: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
-  const team = useWorkspaceStore((s) => s.team)
+  const { workspaceId } = useWorkspace()
   const promptId = id ? Number(id) : null
   const isEdit = promptId !== null
 
@@ -44,7 +44,7 @@ export function PromptEditorPage() {
       model: values.model ?? "",
       collection_ids: values.collection_ids ?? [],
       tag_ids: values.tag_ids ?? [],
-      team_id: values.team_id ?? team?.teamId ?? null,
+      team_id: values.team_id ?? workspaceId,
       is_public: values.is_public ?? false,
     }
 

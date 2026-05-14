@@ -4,7 +4,7 @@ import { Command } from "cmdk"
 import { Search, FileText, FolderOpen, Tag as TagIcon, Plus, X } from "lucide-react"
 import { sendBg } from "../lib/bg-client"
 import { useDebounced } from "../hooks/use-debounced"
-import { useWorkspaceStore } from "../stores/workspace-store"
+import { useWorkspace } from "../hooks/use-workspace"
 import type { SearchResult } from "../lib/types"
 
 interface CommandPaletteProps {
@@ -17,13 +17,16 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState("")
   const debounced = useDebounced(query, 250)
   const navigate = useNavigate()
-  const team = useWorkspaceStore((s) => s.team)
+  const { workspaceId } = useWorkspace()
   const [results, setResults] = useState<SearchResult | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!open) {
+      // Reset search state при закрытии палитры (внешний event).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery("")
+       
       setResults(null)
       return
     }
@@ -32,6 +35,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   useEffect(() => {
     if (!open) return
     if (!debounced.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setResults(null)
       return
     }
@@ -40,7 +44,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     sendBg({
       type: "api.searchPrompts",
       q: debounced,
-      filter: { teamId: team?.teamId ?? null },
+      filter: { teamId: workspaceId },
     })
       .then((r) => {
         if (!cancelled) setResults(r)
@@ -54,7 +58,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     return () => {
       cancelled = true
     }
-  }, [debounced, open, team])
+  }, [debounced, open, workspaceId])
 
   function go(path: string) {
     onClose()
@@ -65,6 +69,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   return (
     <div className="fixed inset-0 z-50">
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop, focus trap на диалоге */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="absolute left-1/2 top-1/4 w-[90%] max-w-md -translate-x-1/2 rounded-lg border border-(--color-border) bg-(--color-background) shadow-2xl">
         <Command label="Глобальный поиск" shouldFilter={false}>

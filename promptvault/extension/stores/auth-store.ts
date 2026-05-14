@@ -3,8 +3,7 @@ import { devtools } from "zustand/middleware"
 import type { MeResponse } from "@pv/shared/types"
 import { ApiError } from "@pv/shared/types"
 import { sendBg } from "../lib/bg-client"
-import { setApiKey, clearApiKey } from "../lib/storage"
-import { useWorkspaceStore } from "./workspace-store"
+import { setApiKey, clearApiKey, setWorkspace, setCollection } from "../lib/storage"
 import { useQuotaStore } from "./quota-store"
 
 // Extension auth-store. Сейчас работает поверх API-key flow (storage.ts ставит
@@ -45,7 +44,10 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         await clearApiKey()
-        useWorkspaceStore.getState().clearTeam()
+        // Чистим workspace selection в chrome.storage, иначе при re-login
+        // другого юзера он увидит чужой teamId/collectionId.
+        await setWorkspace(null)
+        await setCollection(null)
         useQuotaStore.getState().clear()
         set({ user: null, isAuthenticated: false, sessionError: null })
       },

@@ -7,7 +7,7 @@ import { Label } from "../ui/label"
 import { Textarea } from "../ui/textarea"
 import { useToast } from "../ui/toaster"
 import { useCreatePrompt } from "../../hooks/use-prompts-crud"
-import { useWorkspaceStore } from "../../stores/workspace-store"
+import { useWorkspace } from "../../hooks/use-workspace"
 
 const PENDING_KEY = "pv.pendingCapture"
 
@@ -22,7 +22,7 @@ interface PendingCapture {
 export function QuickSaveDialog() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const team = useWorkspaceStore((s) => s.team)
+  const { workspaceId } = useWorkspace()
   const createMut = useCreatePrompt()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState("")
@@ -71,7 +71,7 @@ export function QuickSaveDialog() {
         title: title.trim(),
         content: content.trim(),
         description: sourceUrl ? `Источник: ${sourceUrl}` : "",
-        team_id: team?.teamId ?? null,
+        team_id: workspaceId,
       })
       toast({ title: "Промпт сохранён", variant: "success" })
       setOpen(false)
@@ -87,6 +87,7 @@ export function QuickSaveDialog() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
       <div className="relative w-full max-w-md rounded-lg border border-(--color-border) bg-(--color-background) p-4 shadow-xl">
         <div className="flex items-center justify-between">

@@ -1,7 +1,5 @@
 export { useAuthStore } from "./auth-store"
-export { useWorkspaceStore } from "./workspace-store"
 export { useQuotaStore } from "./quota-store"
 export { useThemeStore } from "./theme-store"
-export type { TeamContext } from "./workspace-store"
 export type { QuotaPayload } from "./quota-store"
 export type { Theme } from "./theme-store"

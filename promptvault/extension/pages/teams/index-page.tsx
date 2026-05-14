@@ -8,7 +8,7 @@ import { Label } from "../../components/ui/label"
 import { Textarea } from "../../components/ui/textarea"
 import { useToast } from "../../components/ui/toaster"
 import { useTeams, useCreateTeam } from "../../hooks/use-teams-crud"
-import { useWorkspaceStore } from "../../stores/workspace-store"
+import { useWorkspace } from "../../hooks/use-workspace"
 import type { TeamRole } from "../../lib/types"
 
 // Перевод роли для badge на карточке команды. До этого выводили raw enum-значение
@@ -24,8 +24,7 @@ export function TeamsIndexPage() {
   const { toast } = useToast()
   const teamsQuery = useTeams()
   const createMut = useCreateTeam()
-  const setTeam = useWorkspaceStore((s) => s.setTeam)
-  const currentTeam = useWorkspaceStore((s) => s.team)
+  const { workspaceId, setWorkspaceId } = useWorkspace()
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -44,7 +43,7 @@ export function TeamsIndexPage() {
       setCreateOpen(false)
       setName("")
       setDescription("")
-      setTeam(team.slug, team.id, team.name)
+      setWorkspaceId(team.id)
       navigate(`/teams/${team.slug}`)
     } catch (err) {
       toast({
@@ -91,12 +90,12 @@ export function TeamsIndexPage() {
         <button
           type="button"
           onClick={() => {
-            useWorkspaceStore.getState().clearTeam()
+            setWorkspaceId(null)
             navigate("/")
           }}
           className={
             "flex w-full items-center gap-2 rounded-md border p-2.5 text-left transition-colors " +
-            (currentTeam === null
+            (workspaceId === null
               ? "border-(--color-brand) bg-(--color-brand-muted)"
               : "border-(--color-border) bg-(--color-card) hover:bg-(--color-muted)/40")
           }
@@ -108,7 +107,7 @@ export function TeamsIndexPage() {
             <div className="text-xs font-medium">Личное</div>
             <div className="text-[10px] text-(--color-muted-foreground)">Ваши промпты</div>
           </div>
-          {currentTeam === null && <span className="text-[10px] text-(--color-brand)">текущее</span>}
+          {workspaceId === null && <span className="text-[10px] text-(--color-brand)">текущее</span>}
         </button>
 
         {teams.length === 0 ? (
@@ -125,12 +124,12 @@ export function TeamsIndexPage() {
               key={team.id}
               type="button"
               onClick={() => {
-                setTeam(team.slug, team.id, team.name)
+                setWorkspaceId(team.id)
                 navigate(`/teams/${team.slug}`)
               }}
               className={
                 "flex w-full items-center gap-2 rounded-md border p-2.5 text-left transition-colors " +
-                (currentTeam?.teamId === team.id
+                (workspaceId === team.id
                   ? "border-(--color-brand) bg-(--color-brand-muted)"
                   : "border-(--color-border) bg-(--color-card) hover:bg-(--color-muted)/40")
               }
@@ -159,6 +158,7 @@ export function TeamsIndexPage() {
       {/* Create dialog */}
       {createOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setCreateOpen(false)}

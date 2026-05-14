@@ -13,7 +13,7 @@ import {
   useUpdateCollection,
   useDeleteCollection,
 } from "../hooks/use-collections-crud"
-import { useWorkspaceStore } from "../stores/workspace-store"
+import { useWorkspace } from "../hooks/use-workspace"
 import { cn } from "../lib/utils"
 import type { CollectionDTO } from "../lib/types"
 import {
@@ -50,7 +50,7 @@ const emptyForm: FormState = {
 export function CollectionsPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const team = useWorkspaceStore((s) => s.team)
+  const { workspaceId } = useWorkspace()
   const collectionsQuery = useCollections()
   const createMut = useCreateCollection()
   const updateMut = useUpdateCollection()
@@ -81,7 +81,7 @@ export function CollectionsPage() {
           description: form.description.trim(),
           color: form.color,
           icon: form.icon,
-          team_id: team?.teamId ?? null,
+          team_id: workspaceId,
         })
         toast({ title: "Коллекция создана", variant: "success" })
       }
@@ -193,6 +193,7 @@ export function CollectionsPage() {
       {/* Edit/create dialog */}
       {form && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop */}
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setForm(null)} />
           <div className="relative w-full max-w-sm rounded-lg border border-(--color-border) bg-(--color-background) p-4 shadow-xl">
             <h3 className="mb-3 text-sm font-semibold">

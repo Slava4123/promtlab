@@ -13,6 +13,9 @@ import type { CollectionDTO, TeamDTO } from '../lib/types';
 export interface WorkspaceState extends WorkspaceSelection {
   teams: TeamDTO[];
   collections: CollectionDTO[];
+  // Текущая команда (lookup по workspaceId в teams[]). null если workspaceId=null
+  // или команда не найдена (например, был выгнан).
+  currentTeam: TeamDTO | null;
   isLoading: boolean;
   setWorkspaceId: (id: number | null) => void;
   setCollectionId: (id: number | null) => void;
@@ -65,11 +68,18 @@ export function useWorkspace(): WorkspaceState {
     void setCollection(id);
   }, []);
 
+  const teams = teamsQuery.data ?? [];
+  const currentTeam =
+    selection.workspaceId != null
+      ? teams.find((t) => t.id === selection.workspaceId) ?? null
+      : null;
+
   return {
     workspaceId: selection.workspaceId,
     collectionId: selection.collectionId,
-    teams: teamsQuery.data ?? [],
+    teams,
     collections: collectionsQuery.data ?? [],
+    currentTeam,
     isLoading: teamsQuery.isPending || collectionsQuery.isPending,
     setWorkspaceId,
     setCollectionId,

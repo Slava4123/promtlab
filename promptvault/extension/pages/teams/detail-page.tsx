@@ -31,7 +31,7 @@ import {
   useRemoveTeamMember,
   useUpdateTeamMemberRole,
 } from "../../hooks/use-teams-crud"
-import { useWorkspaceStore } from "../../stores/workspace-store"
+import { useWorkspace } from "../../hooks/use-workspace"
 import type { TeamRole } from "../../lib/types"
 import { cn } from "../../lib/utils"
 
@@ -51,7 +51,7 @@ export function TeamDetailPage() {
   const inviteMut = useInviteTeamMember(slug ?? "")
   const removeMut = useRemoveTeamMember(slug ?? "")
   const updateRoleMut = useUpdateTeamMemberRole(slug ?? "")
-  const clearWorkspace = useWorkspaceStore((s) => s.clearTeam)
+  const { setWorkspaceId } = useWorkspace()
 
   const [inviteOpen, setInviteOpen] = useState(false)
   const [editName, setEditName] = useState("")
@@ -133,7 +133,7 @@ export function TeamDetailPage() {
     try {
       await deleteMut.mutateAsync(team!.slug)
       toast({ title: "Команда удалена", variant: "info" })
-      clearWorkspace()
+      setWorkspaceId(null)
       navigate("/teams")
     } catch {
       toast({ title: "Не удалось удалить", variant: "error" })
@@ -286,6 +286,7 @@ export function TeamDetailPage() {
       {/* Invite dialog */}
       {inviteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop */}
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setInviteOpen(false)} />
           <div className="relative w-full max-w-sm rounded-lg border border-(--color-border) bg-(--color-background) p-4 shadow-xl">
             <h3 className="mb-3 text-sm font-semibold">Пригласить участника</h3>
