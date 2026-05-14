@@ -59,10 +59,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		pageSize = 20
 	}
 
+	// Принимаем оба имени параметра — frontend исторически шлёт `favorite`,
+	// extension `favorite_only`. Старые клиенты не должны ломаться при
+	// обновлении контракта.
 	filter := repo.PromptListFilter{
 		UserID:       userID,
 		Query:        q.Get("q"),
-		FavoriteOnly: q.Get("favorite") == "true",
+		FavoriteOnly: q.Get("favorite") == "true" || q.Get("favorite_only") == "true",
 		Page:         page,
 		PageSize:     pageSize,
 	}
@@ -261,9 +264,15 @@ func (h *Handler) IncrementUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extension usage increment
+	// Extension usage increment. Логируем ошибку — раньше swallow'или silently
+	// через `_ =`, и при падении PG счётчик «Вставки сегодня» переставал расти
+	// без следов в логах/Sentry. Юзер видел 0/500 после реальных вставок,
+	// SRE никогда не узнавал.
 	if isExtension && h.quotas != nil {
-		_ = h.quotas.IncrementExtensionUsage(ctx, userID)
+		if err := h.quotas.IncrementExtensionUsage(ctx, userID); err != nil {
+			slog.WarnContext(ctx, "prompt.use.quota_increment_failed",
+				"user_id", userID, "prompt_id", id, "err", err)
+		}
 	}
 
 	utils.WriteOK(w, IncrementUsageResponse{
