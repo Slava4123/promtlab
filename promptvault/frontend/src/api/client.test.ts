@@ -20,6 +20,7 @@ beforeEach(() => {
 
 describe("api()", () => {
   it("successful JSON response", async () => {
+    setAccessToken("existing") // skip proactive refresh
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -37,6 +38,7 @@ describe("api()", () => {
   })
 
   it("non-200 throws Error with server message", async () => {
+    setAccessToken("existing")
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 400,
@@ -47,6 +49,7 @@ describe("api()", () => {
   })
 
   it("204 returns undefined", async () => {
+    setAccessToken("existing")
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 204,
@@ -116,6 +119,7 @@ describe("api()", () => {
   })
 
   it("non-200 with unparseable body falls back to generic message", async () => {
+    setAccessToken("existing")
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -126,10 +130,104 @@ describe("api()", () => {
   })
 })
 
+// ---------- proactive refresh (новое поведение после a4ea7f4) ----------
+
+describe("api() — proactive refresh", () => {
+  it("вызывает ensureFreshToken ДО запроса если accessToken отсутствует", async () => {
+    // Нет токена → должен сделать refresh-запрос, затем основной запрос с новым токеном.
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          access_token: "proactive-token",
+          expires_in: 900,
+        }),
+    })
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 42 }),
+    })
+
+    const result = await api<{ id: number }>("/prompts")
+
+    expect(result).toEqual({ id: 42 })
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+
+    // Первый вызов — refresh.
+    expect(mockFetch.mock.calls[0][0]).toBe("/api/auth/refresh")
+
+    // Второй вызов — protected эндпоинт с подмешанным Bearer.
+    const apiCall = mockFetch.mock.calls[1]
+    expect(apiCall[0]).toBe("/api/prompts")
+    expect((apiCall[1].headers as Headers).get("Authorization")).toBe("Bearer proactive-token")
+  })
+
+  it("при провале proactive refresh запрос всё равно идёт без Authorization", async () => {
+    // Refresh fails (например, нет refresh-cookie), запрос продолжает работу
+    // без токена, backend вернёт 401 — это ожидаемое поведение.
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: () => Promise.resolve({ error: "no refresh cookie" }),
+    })
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: () => Promise.resolve({ error: "unauthorized" }),
+    })
+
+    await expect(api("/prompts")).rejects.toThrow()
+
+    // Запрос на /prompts отправлен без Authorization.
+    const apiCall = mockFetch.mock.calls[1]
+    expect(apiCall[0]).toBe("/api/prompts")
+    expect((apiCall[1].headers as Headers).get("Authorization")).toBeNull()
+  })
+
+  it.each([
+    "/auth/login",
+    "/auth/register",
+    "/auth/refresh",
+    "/auth/verify-totp",
+  ])("НЕ вызывает proactive refresh для auth-эндпоинта %s", async (path) => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({}),
+    })
+
+    await api(path, { method: "POST" })
+
+    // Только один вызов — proactive refresh пропущен.
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(mockFetch.mock.calls[0][0]).toBe(`/api${path}`)
+  })
+
+  it("НЕ дёргает proactive refresh если accessToken уже установлен", async () => {
+    setAccessToken("existing-token")
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({}),
+    })
+
+    await api("/prompts")
+
+    // Только один вызов — refresh пропущен.
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    const call = mockFetch.mock.calls[0]
+    expect((call[1].headers as Headers).get("Authorization")).toBe("Bearer existing-token")
+  })
+})
+
 // ---------- apiVoid() ----------
 
 describe("apiVoid()", () => {
   it("returns void on 204", async () => {
+    setAccessToken("existing")
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 204,
