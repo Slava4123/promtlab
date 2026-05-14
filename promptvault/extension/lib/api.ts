@@ -56,6 +56,11 @@ async function request<T>(
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${apiKey}`);
   headers.set('X-Client', `chrome-extension/${EXTENSION_VERSION}`);
+  // X-Client-Source отдельный заголовок, его backend проверяет в
+  // prompt/handler.go::IncrementUsage чтобы инкрементить daily_feature_usage
+  // (квоту «Вставки сегодня»). Без него юзер вставляет промпты, а счётчик
+  // в Подписке остаётся 0/500.
+  headers.set('X-Client-Source', 'extension');
   headers.set('Accept', 'application/json');
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
