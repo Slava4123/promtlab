@@ -64,6 +64,53 @@ describe('request() — body parsing for 4xx', () => {
     });
   });
 
+  it('пробрасывает quota_type/used/limit/plan в ApiError.details для 402', async () => {
+    // Backend RespondQuotaError шлёт {error, quota_type, used, limit, plan, upgrade_url}.
+    // Эти поля должны попасть в ApiError.details, иначе quota dialog в Side Panel
+    // не получит quota_type и покажет generic fallback "Лимит ресурса".
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonRes(402, {
+          error: 'Лимит промптов исчерпан',
+          quota_type: 'prompts',
+          used: 15,
+          limit: 15,
+          plan: 'free',
+          upgrade_url: '/pricing',
+        }),
+      ),
+    );
+    await expect(getMe()).rejects.toMatchObject({
+      status: 402,
+      code: 'quota_exceeded',
+      message: 'Лимит промптов исчерпан',
+      details: {
+        quota_type: 'prompts',
+        used: 15,
+        limit: 15,
+        plan: 'free',
+        upgrade_url: '/pricing',
+      },
+    });
+  });
+
+  it('details содержит body для всех 4xx (validation errors и т.п.)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonRes(422, { message: 'Ошибка', errors: [{ field: 'title', message: 'обязательно' }] }),
+      ),
+    );
+    await expect(getMe()).rejects.toMatchObject({
+      status: 422,
+      code: 'validation',
+      details: {
+        errors: [{ field: 'title', message: 'обязательно' }],
+      },
+    });
+  });
+
   it.each([
     [401, 'unauthorized'],
     [402, 'quota_exceeded'],

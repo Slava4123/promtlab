@@ -629,7 +629,10 @@ async function reinjectContentScripts(): Promise<void> {
 function toErrorResponse(err: unknown): BgResponse {
   if (err instanceof ApiError) {
     const code = (err.code ?? 'unknown') as BgError;
-    return { ok: false, error: code, message: err.message };
+    // details — body 4xx-ответа (для 402: quota_type/used/limit/plan).
+    // Без этого Side Panel получает только code+message и не может показать
+    // структурированный quota dialog.
+    return { ok: false, error: code, message: err.message, details: err.details };
   }
   if (err && typeof err === 'object' && 'code' in err) {
     const code = ((err as { code?: string }).code ?? 'unknown') as BgError;

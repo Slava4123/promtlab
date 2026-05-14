@@ -84,21 +84,26 @@ async function request<T>(
     // или {"message": "..."} в delivery/http/errors. Без этого юзер видел
     // «http 400» вместо нормального текста ошибки.
     const body = await safeJson(res);
-    const msg = body?.message ?? body?.error;
-    if (res.status === 401) throw new ApiError(msg ?? 'unauthorized', 401, 'unauthorized');
-    if (res.status === 402) throw new ApiError(msg ?? 'quota exceeded', 402, 'quota_exceeded');
-    if (res.status === 403) throw new ApiError(msg ?? 'forbidden', 403, 'forbidden');
-    if (res.status === 404) throw new ApiError(msg ?? 'not found', 404, 'not_found');
-    if (res.status === 409) throw new ApiError(msg ?? 'conflict', 409, 'conflict');
-    if (res.status === 422) throw new ApiError(msg ?? 'validation', 422, 'validation');
-    if (res.status === 429) throw new ApiError(msg ?? 'rate limited', 429, 'rate_limited');
+    const msg = pickErrMsg(body);
+    // Backend для 402 шлёт {quota_type, used, limit, plan, upgrade_url} —
+    // нужно пробросить эти поля в ApiError.details, иначе quota dialog в UI
+    // не получит quota_type и покажет generic 'Лимит ресурса' fallback.
+    // Для других 4xx тоже сохраняем body — может пригодиться (validation errors).
+    const details = body ?? undefined;
+    if (res.status === 401) throw new ApiError(msg ?? 'unauthorized', 401, 'unauthorized', details);
+    if (res.status === 402) throw new ApiError(msg ?? 'quota exceeded', 402, 'quota_exceeded', details);
+    if (res.status === 403) throw new ApiError(msg ?? 'forbidden', 403, 'forbidden', details);
+    if (res.status === 404) throw new ApiError(msg ?? 'not found', 404, 'not_found', details);
+    if (res.status === 409) throw new ApiError(msg ?? 'conflict', 409, 'conflict', details);
+    if (res.status === 422) throw new ApiError(msg ?? 'validation', 422, 'validation', details);
+    if (res.status === 429) throw new ApiError(msg ?? 'rate limited', 429, 'rate_limited', details);
     if (res.status >= 400 && res.status < 500) {
       // Для непознанных 4xx (418/451/410 etc.) код 'client_error', а не
       // 'validation' — иначе form-handlers вроде prompt-editor решат, что
       // это ошибка валидации полей и покажут неуместное сообщение.
-      throw new ApiError(msg ?? `http ${res.status}`, res.status, 'client_error');
+      throw new ApiError(msg ?? `http ${res.status}`, res.status, 'client_error', details);
     }
-    throw new ApiError(msg ?? `http ${res.status}`, res.status, 'network');
+    throw new ApiError(msg ?? `http ${res.status}`, res.status, 'network', details);
   }
 
   try {
@@ -108,12 +113,23 @@ async function request<T>(
   }
 }
 
-async function safeJson(res: Response): Promise<{ message?: string; error?: string } | null> {
+async function safeJson(res: Response): Promise<Record<string, unknown> | null> {
   try {
-    return await res.json();
+    const body = await res.json();
+    return body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
   } catch {
     return null;
   }
+}
+
+// Достаёт строку из произвольного body. Backend кладёт текст ошибки в
+// "message" или "error" — но safeJson теперь возвращает Record<string,unknown>,
+// поэтому прямого .message с типом string нет.
+function pickErrMsg(body: Record<string, unknown> | null): string | undefined {
+  if (!body) return undefined;
+  if (typeof body.message === 'string') return body.message;
+  if (typeof body.error === 'string') return body.error;
+  return undefined;
 }
 
 // --- Auth/Me ---
@@ -375,7 +391,12 @@ export async function listVersions(
   limit = 20,
   offset = 0,
 ): Promise<{ items: PromptVersion[]; total: number; has_more: boolean }> {
-  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  // Backend handler.go::ListVersions читает `page` и `page_size`, не `offset`/`limit`.
+  // Раньше extension слал `limit/offset`, backend дефолтил к page=1/pageSize=20 →
+  // юзер всегда видел только первую страницу истории версий, "Показать больше"
+  // не работало silently.
+  const page = limit > 0 ? Math.floor(offset / limit) + 1 : 1;
+  const params = new URLSearchParams({ page: String(page), page_size: String(limit) });
   return request<{ items: PromptVersion[]; total: number; has_more: boolean }>(
     `/api/prompts/${promptId}/versions?${params}`,
   );
@@ -845,7 +866,7 @@ export async function loginEmailPassword(
     if (res.status === 401) throw new ApiError('Неверный email или пароль', 401, 'unauthorized');
     if (res.status === 403) {
       const body = await safeJson(res);
-      throw new ApiError(body?.message ?? 'Доступ заблокирован', 403, 'forbidden');
+      throw new ApiError(pickErrMsg(body) ?? 'Доступ заблокирован', 403, 'forbidden');
     }
     if (res.status === 429) throw new ApiError('Слишком много попыток', 429, 'rate_limited');
     throw new ApiError(`Ошибка входа: ${res.status}`, res.status, 'network');
@@ -872,7 +893,7 @@ export async function registerEmailPassword(body: {
     if (res.status === 409) throw new ApiError('Email уже зарегистрирован', 409, 'conflict');
     if (res.status === 422) {
       const data = await safeJson(res);
-      throw new ApiError(data?.message ?? 'Ошибка валидации', 422, 'validation');
+      throw new ApiError(pickErrMsg(data) ?? 'Ошибка валидации', 422, 'validation');
     }
     throw new ApiError(`Ошибка регистрации: ${res.status}`, res.status, 'network');
   }
@@ -906,7 +927,7 @@ export async function resetPassword(body: {
   if (!res.ok) {
     if (res.status === 400 || res.status === 422) {
       const data = await safeJson(res);
-      throw new ApiError(data?.message ?? 'Неверный код или email', res.status, 'validation');
+      throw new ApiError(pickErrMsg(data) ?? 'Неверный код или email', res.status, 'validation');
     }
     if (res.status === 410) throw new ApiError('Код истёк', 410, 'validation');
     throw new ApiError(`Ошибка: ${res.status}`, res.status, 'network');
@@ -1044,7 +1065,7 @@ export async function uploadTeamLogoDirect(
     if (res.status === 401) throw new ApiError('unauthorized', 401, 'unauthorized');
     if (res.status === 402) {
       const body = await safeJson(res);
-      throw new ApiError(body?.message ?? 'upgrade required', 402, 'quota_exceeded');
+      throw new ApiError(pickErrMsg(body) ?? 'upgrade required', 402, 'quota_exceeded', body ?? undefined);
     }
     if (res.status === 413) throw new ApiError('file too large', 413, 'validation');
     if (res.status === 415) throw new ApiError('unsupported format', 415, 'validation');

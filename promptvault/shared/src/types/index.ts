@@ -664,16 +664,25 @@ export interface ChainExecution {
 }
 
 // ApiError — runtime class, не type-only. Используется обеими сторонами.
+//
+// `details` хранит сырой body ответа backend'а для structured-ошибок:
+//   402 quota_exceeded: { quota_type, used, limit, plan, upgrade_url }
+//   422 validation: { errors: [...] }
+//   и др.
+// Без этого quota dialog в UI терял quota_type и показывал generic fallback,
+// даже когда backend явно слал "quota_type": "prompts".
 
 export class ApiError extends Error {
   status: number
   code?: string
+  details?: Record<string, unknown>
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, details?: Record<string, unknown>) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.code = code
+    this.details = details
   }
 }
 

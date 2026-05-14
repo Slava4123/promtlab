@@ -227,7 +227,16 @@ export type BgRequest =
 
 export type BgResponse<T = unknown> =
   | { ok: true; data: T }
-  | { ok: false; error: BgError; message?: string };
+  | {
+      ok: false
+      error: BgError
+      message?: string
+      // details — сырой body 4xx-ответа backend'а (quota_type/used/limit/plan
+      // для 402; errors[] для 422; и т.п.). Без этого UI на стороне Side Panel
+      // не может показать структурированную ошибку — quota dialog терял
+      // quota_type и сваливался в generic fallback.
+      details?: Record<string, unknown>
+    };
 
 export type BgError =
   | 'unauthorized'
