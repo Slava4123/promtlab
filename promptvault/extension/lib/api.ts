@@ -75,20 +75,22 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    if (res.status === 401) throw new ApiError('unauthorized', 401, 'unauthorized');
-    if (res.status === 402) {
-      const body = await safeJson(res);
-      throw new ApiError(body?.message ?? 'quota exceeded', 402, 'quota_exceeded');
+    // Извлекаем сообщение из тела для всех 4xx — backend пишет {"error": "..."}
+    // или {"message": "..."} в delivery/http/errors. Без этого юзер видел
+    // «http 400» вместо нормального текста ошибки.
+    const body = await safeJson(res);
+    const msg = body?.message ?? body?.error;
+    if (res.status === 401) throw new ApiError(msg ?? 'unauthorized', 401, 'unauthorized');
+    if (res.status === 402) throw new ApiError(msg ?? 'quota exceeded', 402, 'quota_exceeded');
+    if (res.status === 403) throw new ApiError(msg ?? 'forbidden', 403, 'forbidden');
+    if (res.status === 404) throw new ApiError(msg ?? 'not found', 404, 'not_found');
+    if (res.status === 409) throw new ApiError(msg ?? 'conflict', 409, 'conflict');
+    if (res.status === 422) throw new ApiError(msg ?? 'validation', 422, 'validation');
+    if (res.status === 429) throw new ApiError(msg ?? 'rate limited', 429, 'rate_limited');
+    if (res.status >= 400 && res.status < 500) {
+      throw new ApiError(msg ?? `http ${res.status}`, res.status, 'validation');
     }
-    if (res.status === 403) throw new ApiError('forbidden', 403, 'forbidden');
-    if (res.status === 404) throw new ApiError('not found', 404, 'not_found');
-    if (res.status === 409) throw new ApiError('conflict', 409, 'conflict');
-    if (res.status === 422) {
-      const body = await safeJson(res);
-      throw new ApiError(body?.message ?? 'validation', 422, 'validation');
-    }
-    if (res.status === 429) throw new ApiError('rate limited', 429, 'rate_limited');
-    throw new ApiError(`http ${res.status}`, res.status, 'network');
+    throw new ApiError(msg ?? `http ${res.status}`, res.status, 'network');
   }
 
   try {
@@ -98,7 +100,7 @@ async function request<T>(
   }
 }
 
-async function safeJson(res: Response): Promise<{ message?: string } | null> {
+async function safeJson(res: Response): Promise<{ message?: string; error?: string } | null> {
   try {
     return await res.json();
   } catch {
@@ -383,20 +385,22 @@ export async function listTrash(): Promise<TrashListResponse> {
   return request<TrashListResponse>('/api/trash');
 }
 
+// Backend ожидает singular ItemType — "prompt" / "collection" (см.
+// backend/internal/usecases/trash/types.go). Plural форма даёт 400.
 export async function restoreTrashPrompt(id: number): Promise<Prompt> {
-  return request<Prompt>(`/api/trash/prompts/${id}/restore`, { method: 'POST' });
+  return request<Prompt>(`/api/trash/prompt/${id}/restore`, { method: 'POST' });
 }
 
 export async function restoreTrashCollection(id: number): Promise<Collection> {
-  return request<Collection>(`/api/trash/collections/${id}/restore`, { method: 'POST' });
+  return request<Collection>(`/api/trash/collection/${id}/restore`, { method: 'POST' });
 }
 
 export async function permanentDeleteTrashPrompt(id: number): Promise<void> {
-  await request<void>(`/api/trash/prompts/${id}`, { method: 'DELETE' });
+  await request<void>(`/api/trash/prompt/${id}`, { method: 'DELETE' });
 }
 
 export async function permanentDeleteTrashCollection(id: number): Promise<void> {
-  await request<void>(`/api/trash/collections/${id}`, { method: 'DELETE' });
+  await request<void>(`/api/trash/collection/${id}`, { method: 'DELETE' });
 }
 
 export async function emptyTrash(): Promise<void> {
