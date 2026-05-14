@@ -108,6 +108,8 @@ export function Home({ onSelect, highlightedId }: Props) {
   }, [searching, list.hasNextPage, list.isFetchingNextPage, list.fetchNextPage, list]);
 
   useEffect(() => {
+    // Reset focus index когда меняется содержимое списка (legitimate use case).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFocusIdx(0);
   }, [visiblePrompts.length, tab, searching]);
 

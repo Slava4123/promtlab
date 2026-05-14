@@ -73,6 +73,10 @@ export function QuotaExceededDialog() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Modal backdrop. Полная клавиатурная навигация — на уровне dialog
+          (Escape по document keydown), backdrop сам по себе не должен быть
+          tab-focusable. ESLint правило слишком строгое для этого паттерна. */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={dismiss} />
       <div className="relative w-full max-w-sm rounded-lg border border-(--color-border) bg-(--color-background) p-4 shadow-xl">
         <div className="flex items-start gap-3">

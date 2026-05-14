@@ -83,11 +83,15 @@ export function ReferralPage() {
 
             {/* Code */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-medium uppercase tracking-wide text-(--color-muted-foreground)">
+              <label
+                htmlFor="referral-code"
+                className="text-[10px] font-medium uppercase tracking-wide text-(--color-muted-foreground)"
+              >
                 Ваш код
               </label>
               <div className="flex gap-1.5">
                 <Input
+                  id="referral-code"
                   value={info.data.code}
                   readOnly
                   className="font-mono text-xs"
@@ -107,11 +111,14 @@ export function ReferralPage() {
             {/* Invite link */}
             {inviteUrl && (
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium uppercase tracking-wide text-(--color-muted-foreground)">
+                <label
+                  htmlFor="referral-link"
+                  className="text-[10px] font-medium uppercase tracking-wide text-(--color-muted-foreground)"
+                >
                   Реферальная ссылка
                 </label>
                 <div className="flex gap-1.5">
-                  <Input value={inviteUrl} readOnly className="text-xs" />
+                  <Input id="referral-link" value={inviteUrl} readOnly className="text-xs" />
                   <Button
                     type="button"
                     size="icon"

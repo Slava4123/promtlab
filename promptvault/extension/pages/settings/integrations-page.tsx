@@ -187,6 +187,7 @@ export function IntegrationsPage() {
       {/* Create dialog */}
       {createOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop */}
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCreateOpen(false)} />
           <div className="relative w-full max-w-sm rounded-lg border border-(--color-border) bg-(--color-background) p-4 shadow-xl">
             <h3 className="mb-3 text-sm font-semibold">Новый API-ключ</h3>

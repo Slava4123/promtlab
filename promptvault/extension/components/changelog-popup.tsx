@@ -39,6 +39,9 @@ export function ChangelogPopup() {
     } catch {
       // localStorage недоступен — продолжаем
     }
+    // Legitimate setState-in-effect: показываем popup только когда query
+    // вернёт has_unread=true, а это асинхронное событие извне React.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShow(true)
   }, [changelogQuery.data?.has_unread, dismissed])
 

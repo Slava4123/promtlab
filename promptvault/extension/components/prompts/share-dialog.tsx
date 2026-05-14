@@ -68,6 +68,7 @@ export function ShareDialog({ promptId, open, onClose }: ShareDialogProps) {
       aria-modal
       aria-labelledby="share-title"
     >
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-lg border border-(--color-border) bg-(--color-background) p-4 shadow-xl">
         <div className="flex items-center gap-2 mb-3">

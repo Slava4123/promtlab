@@ -25,7 +25,10 @@ export function ProfilePage() {
 
   useEffect(() => {
     if (user) {
+      // Заполняем форму данными юзера после auth-restore (async извне).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(user.name ?? "")
+       
       setUsername(user.username ?? "")
     }
   }, [user])

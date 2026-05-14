@@ -60,6 +60,8 @@ interface CollectionIconProps {
 }
 
 export function CollectionIcon({ icon, color, size = 16, className }: CollectionIconProps) {
+  /* eslint-disable react-hooks/static-components -- Icon — lookup готового
+     lucide-компонента из COLLECTION_ICONS map, не создание нового. */
   const Icon = getCollectionIcon(icon)
   return (
     <Icon
@@ -69,4 +71,5 @@ export function CollectionIcon({ icon, color, size = 16, className }: Collection
       style={color ? { color } : undefined}
     />
   )
+  /* eslint-enable react-hooks/static-components */
 }

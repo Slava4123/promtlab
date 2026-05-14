@@ -1,5 +1,5 @@
 import { Search, X } from 'lucide-react';
-import { forwardRef, useEffect, useState, type Ref } from 'react';
+import { forwardRef, useState, type Ref } from 'react';
 import { Input } from './ui/input';
 import { cn } from '../lib/utils';
 
@@ -14,13 +14,13 @@ interface Props {
 // useState + useEffect — `navigator` доступен только в браузере (SSR-safe
 // если когда-нибудь будем делать pre-render).
 function useShortcutHint(): string {
-  const [hint, setHint] = useState('Ctrl+K');
-  useEffect(() => {
-    const isMac =
-      typeof navigator !== 'undefined' &&
-      /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
-    setHint(isMac ? '⌘K' : 'Ctrl+K');
-  }, []);
+  // Lazy initializer — определяем платформу единожды на mount, без эффекта.
+  // SSR-safe: navigator проверяется внутри функции.
+  const [hint] = useState(() => {
+    if (typeof navigator === 'undefined') return 'Ctrl+K';
+    const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
+    return isMac ? '⌘K' : 'Ctrl+K';
+  });
   return hint;
 }
 

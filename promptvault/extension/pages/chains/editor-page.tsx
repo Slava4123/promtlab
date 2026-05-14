@@ -44,8 +44,13 @@ export function ChainEditorPage() {
 
   useEffect(() => {
     if (chainQuery.data) {
+      // Заполняем форму после async-загрузки chainQuery — стандартный паттерн
+      // для form-state, где значения приходят из сервера.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(chainQuery.data.name)
+       
       setDescription(chainQuery.data.description ?? "")
+       
       setDirty(false)
     }
   }, [chainQuery.data])

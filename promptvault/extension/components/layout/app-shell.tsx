@@ -23,14 +23,18 @@ export function AppShell() {
   //    нового контента, screen-reader перечитывает page-context.
   // 3. Объявляем смену route в live-region. Берём pathname как fallback;
   //    отдельные страницы могут override через document.title (TODO).
+  // drawer/palette НЕ в deps — иначе закрытие drawer внутри эффекта
+  // вызовет бесконечный цикл. setPageAnnouncement в effect правомерен:
+  // ARIA-live announcement — это side-effect синхронизации с DOM.
+  /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
   useEffect(() => {
     if (drawer.open) drawer.closeDrawer()
     if (palette.open) palette.closePalette()
     mainRef.current?.focus()
     const announcement = document.title || `Открыта ${location.pathname}`
     setPageAnnouncement(announcement)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname])
+  /* eslint-enable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
   return (
     <div className="flex h-full flex-col">
