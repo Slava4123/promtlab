@@ -25,7 +25,11 @@ const PLAN_LABELS: Record<string, string> = {
   max_yearly: "Max (год)",
 }
 
-function readableQuotaType(quotaType: string | null, message: string | null): string | null {
+// Fallback-метка когда ни quotaType, ни эвристика по тексту не сработали —
+// показываем хоть что-то осмысленное вместо пустоты.
+const QUOTA_FALLBACK_LABEL = "Лимит ресурса"
+
+export function readableQuotaType(quotaType: string | null, message: string | null): string {
   if (quotaType && quotaType !== "unknown" && QUOTA_LABELS[quotaType]) {
     return QUOTA_LABELS[quotaType]
   }
@@ -36,11 +40,17 @@ function readableQuotaType(quotaType: string | null, message: string | null): st
     if (m.includes("промпт")) return QUOTA_LABELS.prompts
     if (m.includes("коллекц")) return QUOTA_LABELS.collections
     if (m.includes("команд")) return QUOTA_LABELS.teams
-    if (m.includes("вставк") || m.includes("использовани")) return QUOTA_LABELS.ext_uses_today
+    // "встав" покрывает «вставки/вставку/вставок/вставкой» — все формы.
+    if (m.includes("встав") || m.includes("использовани")) return QUOTA_LABELS.ext_uses_today
     if (m.includes("mcp")) return QUOTA_LABELS.mcp_uses_today
     if (m.includes("api-ключ") || m.includes("api ключ")) return QUOTA_LABELS.api_keys
   }
-  return null
+  // Если backend менял copy — заметим в логах. Не флудим, если пришёл
+  // совсем пустой контекст (quotaType=null && message=null).
+  if (quotaType || message) {
+    console.warn("[QuotaDialog] не распознан тип квоты", { quotaType, message })
+  }
+  return QUOTA_FALLBACK_LABEL
 }
 
 // Глобальный модал — показывается когда bg-client получает 402.
