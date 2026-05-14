@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractVariables, renderTemplate } from '../lib/template';
+import { extractVariables, hasVariables, renderTemplate } from '@pv/shared/template';
 
 describe('extractVariables', () => {
   it('extracts simple ASCII variables', () => {
@@ -92,5 +92,23 @@ describe('renderTemplate', () => {
     expect(renderTemplate('line1\n{{name}}\nline3', { name: 'John' })).toBe(
       'line1\nJohn\nline3',
     );
+  });
+
+  it('single-pass: substituted values are NOT re-scanned for {{...}}', () => {
+    expect(renderTemplate('{{x}}', { x: '{{y}}', y: 'recursed' })).toBe('{{y}}');
+  });
+});
+
+describe('hasVariables', () => {
+  it('true when content has at least one variable', () => {
+    expect(hasVariables('say {{hi}}')).toBe(true);
+  });
+
+  it('false for plain text', () => {
+    expect(hasVariables('no variables here')).toBe(false);
+  });
+
+  it('false for malformed braces', () => {
+    expect(hasVariables('{single} or {{ }}')).toBe(false);
   });
 });

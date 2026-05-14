@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react"
 import { usePrompt } from "../hooks/use-prompts"
 import { useInsertPrompt } from "../hooks/use-insert-prompt"
 import { VariableForm } from "../components/variable-form"
-import { extractVariables } from "../lib/template"
+import { extractVariables } from "@pv/shared/template"
 
 // Страница "Использовать промпт" — VariableForm с подгрузкой full content.
 // Открывается из dashboard при клике на промпт. Если переменных нет —

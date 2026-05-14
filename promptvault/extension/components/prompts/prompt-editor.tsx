@@ -1,5 +1,5 @@
 import { useMemo, useEffect } from "react"
-import { useForm, Controller } from "react-hook-form"
+import { useForm, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { ArrowLeft, Save, Eye, Edit3 } from "lucide-react"
 import { Button } from "../ui/button"
@@ -16,8 +16,8 @@ import {
   CONTENT_LENGTH_WARNING,
   type PromptFormValues,
 } from "../../lib/validation/prompt-schema"
-import { renderTemplate, extractVariables } from "../../lib/template"
-import { useWorkspaceStore } from "../../stores/workspace-store"
+import { renderTemplate, extractVariables } from "@pv/shared/template"
+import { useWorkspace } from "../../hooks/use-workspace"
 import { ApiError, type Prompt } from "../../lib/types"
 import { cn } from "../../lib/utils"
 
@@ -31,7 +31,7 @@ interface PromptEditorProps {
 }
 
 export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptEditorProps) {
-  const team = useWorkspaceStore((s) => s.team)
+  const { workspaceId } = useWorkspace()
   const { toast } = useToast()
   const [mode, setMode] = useState<"edit" | "preview">("edit")
 
@@ -40,7 +40,6 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
     register,
     handleSubmit,
     formState: { errors, isDirty },
-    watch,
   } = useForm<PromptFormValues>({
     resolver: zodResolver(promptSchema),
     defaultValues: {
@@ -50,13 +49,14 @@ export function PromptEditor({ prompt, onCancel, onSubmit, submitting }: PromptE
       model: prompt?.model ?? "",
       collection_ids: prompt?.collections.map((c) => c.id) ?? [],
       tag_ids: prompt?.tags.map((t) => t.id) ?? [],
-      team_id: team?.teamId ?? null,
+      team_id: workspaceId,
       is_public: prompt?.is_public ?? false,
       change_note: "",
     },
   })
 
-  const content = watch("content")
+  // useWatch вместо watch() — memoization-safe; см. react-hooks/incompatible-library.
+  const content = useWatch({ control, name: "content" }) ?? ""
   const charCount = content.length
   const isWarning = charCount >= CONTENT_LENGTH_WARNING
 

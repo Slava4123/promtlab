@@ -5,7 +5,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { useToast } from './ui/toaster';
 import type { Prompt } from '../lib/types';
-import { extractVariables, renderTemplate } from '../lib/template';
+import { extractVariables, renderTemplate } from '@pv/shared/template';
 import { getSavedVars, setSavedVars } from '../lib/storage';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { sendBg } from '../lib/bg-client';

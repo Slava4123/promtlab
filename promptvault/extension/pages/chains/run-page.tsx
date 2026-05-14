@@ -18,7 +18,7 @@ import { useChain, useStartExecution, useExecution, useAdvanceStep } from "../..
 import { useInsertPrompt } from "../../hooks/use-insert-prompt"
 import { useActiveTab } from "../../hooks/use-active-tab"
 import { hostLabel } from "../../lib/messages"
-import { renderTemplate, extractVariables } from "../../lib/template"
+import { renderTemplate, extractVariables } from "@pv/shared/template"
 import type {
   ChainStep,
   VariableMapping,
