@@ -13,9 +13,13 @@ import type { CollectionDTO, TeamDTO } from '../lib/types';
 export interface WorkspaceState extends WorkspaceSelection {
   teams: TeamDTO[];
   collections: CollectionDTO[];
-  // Текущая команда (lookup по workspaceId в teams[]). null если workspaceId=null
-  // или команда не найдена (например, был выгнан).
-  currentTeam: TeamDTO | null;
+  // Текущая команда (lookup по workspaceId в teams[]).
+  //   null      — workspaceId=null (явный personal workspace)
+  //   undefined — workspaceId есть, но teamsQuery ещё грузится (UI должен
+  //               показывать skeleton, а не «Личное»)
+  //   TeamDTO   — найдена команда
+  //   null      — команда не найдена (юзера выгнали из команды)
+  currentTeam: TeamDTO | null | undefined;
   isLoading: boolean;
   setWorkspaceId: (id: number | null) => void;
   setCollectionId: (id: number | null) => void;
@@ -69,10 +73,17 @@ export function useWorkspace(): WorkspaceState {
   }, []);
 
   const teams = teamsQuery.data ?? [];
-  const currentTeam =
-    selection.workspaceId != null
-      ? teams.find((t) => t.id === selection.workspaceId) ?? null
-      : null;
+  // currentTeam: пока teams грузится — undefined (unknown), чтобы UI не
+  // мигал «Личное». null означает явный personal workspace или потерянную
+  // команду (kicked out), и UI обрабатывает это иначе.
+  let currentTeam: TeamDTO | null | undefined;
+  if (selection.workspaceId == null) {
+    currentTeam = null;
+  } else if (teamsQuery.isPending && !teamsQuery.data) {
+    currentTeam = undefined;
+  } else {
+    currentTeam = teams.find((t) => t.id === selection.workspaceId) ?? null;
+  }
 
   return {
     workspaceId: selection.workspaceId,

@@ -36,7 +36,12 @@ export function AppHeader() {
             🔥 {streakQuery.data.current_streak}
           </span>
         )}
-        {currentTeam ? (
+        {currentTeam === undefined ? (
+          // Teams query грузится — workspaceId есть, но мы не знаем имя
+          // команды. Показываем нейтральный skeleton, чтобы не мигало
+          // «Личное» при холодном старте.
+          <span className="h-4 w-16 animate-pulse rounded bg-(--color-muted)" />
+        ) : currentTeam ? (
           <Link
             to={`/teams/${currentTeam.slug}`}
             className="max-w-[120px] truncate rounded-md bg-(--color-muted) px-2 py-0.5 text-[10px] text-(--color-foreground)"

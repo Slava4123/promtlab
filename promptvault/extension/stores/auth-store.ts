@@ -5,6 +5,7 @@ import { ApiError } from "@pv/shared/types"
 import { sendBg } from "../lib/bg-client"
 import { setApiKey, clearApiKey, setWorkspace, setCollection } from "../lib/storage"
 import { useQuotaStore } from "./quota-store"
+import { useNotificationsReadStore } from "./notifications-read-store"
 
 // Extension auth-store. Сейчас работает поверх API-key flow (storage.ts ставит
 // apiKey в chrome.storage.local; background.ts читает и добавляет в Authorization).
@@ -49,6 +50,11 @@ export const useAuthStore = create<AuthState>()(
         await setWorkspace(null)
         await setCollection(null)
         useQuotaStore.getState().clear()
+        // Прочитанные уведомления — per-user state (id'ы invitation-<id> и
+        // quota-<resource_key> могут коллидировать между аккаунтами на
+        // shared computer). Чистим in-memory + persisted localStorage.
+        useNotificationsReadStore.getState().clear()
+        useNotificationsReadStore.persist?.clearStorage()
         set({ user: null, isAuthenticated: false, sessionError: null })
       },
 
