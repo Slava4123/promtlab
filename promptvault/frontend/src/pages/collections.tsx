@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { PageLayout } from "@/components/layout/page-layout"
 import { useCollections, useCreateCollection, useUpdateCollection, useDeleteCollection } from "@/hooks/use-collections"
 import type { Collection } from "@/api/types"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeam } from "@/hooks/use-current-team"
 import { useQuotaStore } from "@/stores/quota-store"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
@@ -58,7 +58,7 @@ function CollectionIcon({ icon, color, size = 16 }: { icon?: string; color?: str
 
 export default function Collections() {
   const navigate = useNavigate()
-  const team = useWorkspaceStore((s) => s.team)
+  const team = useCurrentTeam()
   const teamId = team?.teamId ?? null
   const teamName = team?.teamName ?? null
   const { data: collections, isLoading } = useCollections(teamId)

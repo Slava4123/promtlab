@@ -15,10 +15,10 @@ import {
 import { useSearch } from "@/hooks/use-search"
 import { useSuggest } from "@/hooks/use-suggest"
 import { HighlightMatch } from "@/lib/highlight"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeamId } from "@/hooks/use-current-team"
 
 export function CommandPalette() {
-  const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
+  const teamId = useCurrentTeamId()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")

@@ -56,7 +56,7 @@ import type { ChainStep } from "@/api/types"
 import { PromptPicker } from "@/components/chains/prompt-picker"
 import { useAuthStore } from "@/stores/auth-store"
 import { useCurrentTeamRole } from "@/hooks/use-team-role"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeam } from "@/hooks/use-current-team"
 
 const MAX_TIERS = new Set(["max", "max_yearly"])
 
@@ -123,7 +123,7 @@ function ChainEditorForm({
   const updateStep = useUpdateStep(chainID)
 
   const planId = useAuthStore((s) => s.user?.plan_id ?? "free")
-  const team = useWorkspaceStore((s) => s.team)
+  const team = useCurrentTeam()
   const teamId = team?.teamId ?? null
   const { canWrite, isPersonal } = useCurrentTeamRole()
   // Fork-gate UI: для personal — по своему плану; для team — оптимистично

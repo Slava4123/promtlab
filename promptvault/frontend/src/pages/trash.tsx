@@ -5,7 +5,7 @@ import { toast } from "sonner"
 
 import { useTrash, useRestoreItem, usePermanentDelete, useEmptyTrash } from "@/hooks/use-trash"
 import { PageLayout } from "@/components/layout/page-layout"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeam } from "@/hooks/use-current-team"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import type { TrashPrompt, TrashCollection } from "@/api/types"
@@ -13,7 +13,7 @@ import type { TrashPrompt, TrashCollection } from "@/api/types"
 type DeletingItem = { type: "prompt" | "collection" | "tag"; id: number; title: string } | null
 
 export default function TrashPage() {
-  const team = useWorkspaceStore((s) => s.team)
+  const team = useCurrentTeam()
   const teamId = team?.teamId ?? null
   const { data, isLoading } = useTrash({ team_id: teamId })
   const restore = useRestoreItem()

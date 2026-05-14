@@ -5,7 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { useHistory } from "@/hooks/use-history"
 import { PageLayout } from "@/components/layout/page-layout"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeam } from "@/hooks/use-current-team"
 import type { UsageLogEntry } from "@/api/types"
 
 // MJ-19 final: flat row-list для virtualizer.
@@ -51,7 +51,7 @@ function buildFlatRows(items: UsageLogEntry[]): FlatRow[] {
 
 export default function History() {
   const navigate = useNavigate()
-  const team = useWorkspaceStore((s) => s.team)
+  const team = useCurrentTeam()
   const teamId = team?.teamId ?? null
 
   const {

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { X, Plus } from "lucide-react"
 import { useTags, useCreateTag } from "@/hooks/use-tags"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeamId } from "@/hooks/use-current-team"
 
 interface TagInputProps {
   selectedTagIds: number[]
@@ -9,7 +9,7 @@ interface TagInputProps {
 }
 
 export function TagInput({ selectedTagIds, onChange }: TagInputProps) {
-  const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
+  const teamId = useCurrentTeamId()
   const { data: tags } = useTags(teamId)
   const createTag = useCreateTag()
   const [input, setInput] = useState("")

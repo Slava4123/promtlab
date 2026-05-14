@@ -106,6 +106,10 @@ export const useAuthStore = create<AuthState>()(
         const authData = data as AuthResponse
         setTokens(authData.tokens)
         markSessionHint()
+        // Если в localStorage лежит workspace другого юзера (browser crash
+        // без logout / account switch), очистим до того, как любой компонент
+        // отправит ?team_id=N для команды нового юзера в которой он не состоит.
+        useWorkspaceStore.getState().syncOwner(authData.user.id)
         set({ user: authData.user, isAuthenticated: true })
         setSentryUser({
           id: authData.user.id,
@@ -129,6 +133,7 @@ export const useAuthStore = create<AuthState>()(
         })
         setAccessToken(data.access_token)
         markSessionHint()
+        useWorkspaceStore.getState().syncOwner(data.user.id)
         set({ user: data.user, isAuthenticated: true })
         setSentryUser({
           id: data.user.id,
@@ -187,6 +192,10 @@ export const useAuthStore = create<AuthState>()(
           try {
             await ensureFreshToken()
             const user = await api<User>("/auth/me")
+            // Critical: проверяем что persisted workspace принадлежит этому
+            // юзеру до того, как Provider'ы начнут читать team_id. Иначе
+            // первый рендер выдаст 403 на /api/collections?team_id=N.
+            useWorkspaceStore.getState().syncOwner(user.id)
             set({ user, isAuthenticated: true, isLoading: false, sessionError: null })
             setSentryUser({
               id: user.id,

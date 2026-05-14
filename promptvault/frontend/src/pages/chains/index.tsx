@@ -8,11 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useChains, useDeleteChain } from "@/hooks/use-chains"
 import { useCurrentTeamRole } from "@/hooks/use-team-role"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeam } from "@/hooks/use-current-team"
 import { ChainCard } from "@/components/chains/chain-card"
 
 export default function ChainsPage() {
-  const team = useWorkspaceStore((s) => s.team)
+  const team = useCurrentTeam()
   const teamId = team?.teamId ?? null
   const teamName = team?.teamName ?? null
   const { canWrite, isViewer } = useCurrentTeamRole()

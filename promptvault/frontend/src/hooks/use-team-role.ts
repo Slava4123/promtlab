@@ -4,7 +4,7 @@
 // Используется для RBAC-проверок UI: viewer не должен видеть кнопки create/edit/delete.
 
 import { useTeams } from "@/hooks/use-teams"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeam } from "@/hooks/use-current-team"
 import type { TeamRole } from "@/api/types"
 
 export interface TeamRoleInfo {
@@ -19,7 +19,7 @@ export interface TeamRoleInfo {
 }
 
 export function useCurrentTeamRole(): TeamRoleInfo {
-  const team = useWorkspaceStore((s) => s.team)
+  const team = useCurrentTeam()
   const { data: teams } = useTeams()
 
   if (!team) {

@@ -13,7 +13,7 @@ import { useRestoreItem } from "@/hooks/use-trash"
 import { useTags } from "@/hooks/use-tags"
 import { useCollections } from "@/hooks/use-collections"
 import { useStreak } from "@/hooks/use-streaks"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeam } from "@/hooks/use-current-team"
 import { hasVariables } from "@/lib/template/parse"
 import { captureException } from "@/lib/sentry"
 import type { Prompt } from "@/api/types"
@@ -21,7 +21,7 @@ import type { Prompt } from "@/api/types"
 export default function Dashboard() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const team = useWorkspaceStore((s) => s.team)
+  const team = useCurrentTeam()
   const teamId = team?.teamId ?? null
   const teamName = team?.teamName ?? null
   const collectionId = searchParams.get("collection_id") ? Number(searchParams.get("collection_id")) : undefined

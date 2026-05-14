@@ -10,7 +10,7 @@ import { PromptCard, PromptCardSkeleton } from "@/components/prompts/prompt-card
 import { UsePromptDialog } from "@/components/prompts/use-prompt-dialog"
 import { useCollection } from "@/hooks/use-collections"
 import { usePrompts, useToggleFavorite, useUpdatePrompt, useIncrementUsage } from "@/hooks/use-prompts"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeamId } from "@/hooks/use-current-team"
 import { hasVariables } from "@/lib/template/parse"
 import type { Prompt } from "@/api/types"
 
@@ -34,7 +34,7 @@ export default function CollectionView() {
   const collectionId = Number(id)
 
   const qc = useQueryClient()
-  const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
+  const teamId = useCurrentTeamId()
   const { data: collection, isLoading: loadingCollection } = useCollection(collectionId)
   const { data: promptsData, isLoading: loadingPrompts } = usePrompts({ collection_id: collectionId, team_id: teamId })
   const { data: allPromptsData } = usePrompts({ team_id: teamId })

@@ -44,6 +44,7 @@ import { useCollections } from "@/hooks/use-collections"
 import { useTeams } from "@/hooks/use-teams"
 import { useTrashCount } from "@/hooks/use-trash"
 import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeam } from "@/hooks/use-current-team"
 
 interface NavItem {
   title: string
@@ -97,7 +98,9 @@ export function AppSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { isMobile, setOpenMobile } = useSidebar()
-  const team = useWorkspaceStore((s) => s.team)
+  // useCurrentTeam — effective team с учётом текущего user.id. Защищает от
+  // запросов вида ?team_id=N (от прошлого юзера) при холодном старте.
+  const team = useCurrentTeam()
   const setTeam = useWorkspaceStore((s) => s.setTeam)
   const clearTeam = useWorkspaceStore((s) => s.clearTeam)
   const teamSlug = team?.teamSlug ?? null
@@ -154,7 +157,10 @@ export function AppSidebar() {
   }
 
   const handleSwitchToTeam = (slug: string, id: number, name: string) => {
-    setTeam(slug, id, name)
+    // Привязываем persisted team к текущему юзеру — иначе при браузер-крэше
+    // и последующем login другого аккаунта новый юзер получит чужой team_id.
+    const userId = useAuthStore.getState().user?.id ?? 0
+    setTeam(slug, id, name, userId)
     invalidateWorkspaceQueries()
     setSwitcherOpen(false)
     stayOrRedirect()

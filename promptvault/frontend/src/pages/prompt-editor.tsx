@@ -9,7 +9,7 @@ import { toast } from "sonner"
 import { usePrompt, useCreatePrompt, useUpdatePrompt, useIncrementUsage, useDeletePrompt } from "@/hooks/use-prompts"
 import { Button } from "@/components/ui/button"
 import { useCollections } from "@/hooks/use-collections"
-import { useWorkspaceStore } from "@/stores/workspace-store"
+import { useCurrentTeamId } from "@/hooks/use-current-team"
 import { TagInput } from "@/components/tags/tag-input"
 import { CollectionsCombobox } from "@/components/prompts/collections-combobox"
 import { PromptSplitEditor } from "@/components/prompts/prompt-split-editor"
@@ -87,7 +87,7 @@ export default function PromptEditor() {
   const promptId = isEdit ? Number(id) : 0
   const preselectedCollectionId = searchParams.get("collection_id") ? Number(searchParams.get("collection_id")) : undefined
 
-  const teamId = useWorkspaceStore((s) => s.team?.teamId ?? null)
+  const teamId = useCurrentTeamId()
   const { data: existing, isLoading: loadingExisting } = usePrompt(promptId)
   const { data: collections } = useCollections(teamId)
   const createPrompt = useCreatePrompt()
