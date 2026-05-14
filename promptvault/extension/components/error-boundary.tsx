@@ -15,14 +15,15 @@ interface State {
 // removeItem на старте (см. также frontend веб-приложения — тот же паттерн).
 const CHUNK_RELOAD_FLAG = 'pv.chunkErrorReloaded';
 
-function isChunkLoadError(err: Error): boolean {
+// Покрывает варианты текста из Chrome/Edge/Firefox/Safari. WebKit/Firefox
+// иногда выставляют `err.name === 'ChunkLoadError'` без узнаваемого message.
+const CHUNK_ERROR_PATTERN =
+  /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Loading (CSS )?chunk|Unable to preload (CSS|module)/i;
+
+export function isChunkLoadError(err: Error): boolean {
+  if (err.name === 'ChunkLoadError') return true;
   const msg = err.message ?? '';
-  return (
-    msg.includes('Failed to fetch dynamically imported module') ||
-    msg.includes('Importing a module script failed') ||
-    msg.includes('Loading chunk') ||
-    msg.includes('Loading CSS chunk')
-  );
+  return CHUNK_ERROR_PATTERN.test(msg);
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -47,8 +48,10 @@ export class ErrorBoundary extends Component<Props, State> {
           location.reload();
           return;
         }
-      } catch {
-        // sessionStorage недоступен — fallthrough на error UI
+      } catch (storageErr) {
+        // sessionStorage недоступен (приватный режим / quota) — auto-reload
+        // пропускаем, но логируем, чтобы видеть в Sentry-breadcrumbs.
+        console.warn('[ErrorBoundary] sessionStorage недоступен, auto-reload пропущен', storageErr);
       }
     }
   }

@@ -14,8 +14,10 @@ initSentry({
 // ошибке можно снова auto-recover (см. ErrorBoundary).
 try {
   sessionStorage.removeItem('pv.chunkErrorReloaded');
-} catch {
-  // ignore
+} catch (storageErr) {
+  // sessionStorage недоступен — флаг останется и блокирует следующий
+  // auto-reload. Логируем, чтобы видеть в Sentry breadcrumbs.
+  console.debug('[sidepanel] chunk-reload flag cleanup пропущен', storageErr);
 }
 
 const root = document.getElementById('root');
