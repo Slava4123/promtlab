@@ -31,7 +31,11 @@ func Middleware(cfg *config.Config) func(http.Handler) http.Handler {
 			return ok
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Timezone", "X-Client"},
+		// X-Client-Source — backend читает в prompt/handler.go:245 чтобы инкрементить
+		// daily_feature_usage для extension. Без whitelist'а строгая CORS реализация
+		// может silently вырезать заголовок на preflight'е, и квота "Вставки сегодня"
+		// никогда не растёт (регрессия c022242).
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Timezone", "X-Client", "X-Client-Source"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
