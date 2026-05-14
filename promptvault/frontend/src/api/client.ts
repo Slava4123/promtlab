@@ -99,6 +99,27 @@ export async function api<T>(
   // credentials: include для auth-эндпоинтов (cookie)
   const credentials = path.startsWith("/auth") ? "include" as const : undefined
 
+  // Proactive refresh: если accessToken отсутствует (page reload до restoreSession,
+  // tab restore в новой сессии), пытаемся получить fresh JWT через refresh cookie
+  // перед отправкой запроса. Иначе protected-эндпоинт ответит 401 «missing auth».
+  // Auth-эндпоинты пропускаем (refresh сам по себе auth-эндпоинт).
+  const isAuthEndpoint =
+    path.startsWith("/auth/login") ||
+    path.startsWith("/auth/register") ||
+    path.startsWith("/auth/refresh") ||
+    path.startsWith("/auth/verify-totp")
+  if (!accessToken && !isAuthEndpoint) {
+    try {
+      await ensureFreshToken()
+      if (accessToken) {
+        headers.set("Authorization", `Bearer ${accessToken}`)
+      }
+    } catch {
+      // Refresh упал (no cookie / expired) — продолжаем запрос как есть,
+      // backend вернёт 401 и юзер увидит "Сессия истекла".
+    }
+  }
+
   let res = await fetch(url, { ...options, headers, credentials })
 
   // Auto-refresh ТОЛЬКО на 401 от auth middleware (истёкший/невалидный JWT).
@@ -109,11 +130,6 @@ export async function api<T>(
   // endpoint делала retry, что приводило к двойному запросу при неверном
   // TOTP коде. Теперь backend маппит бизнес-валидацию в 422, а client
   // ретритит только истинные auth failures (401 без токена или с expired).
-  const isAuthEndpoint =
-    path.startsWith("/auth/login") ||
-    path.startsWith("/auth/register") ||
-    path.startsWith("/auth/refresh") ||
-    path.startsWith("/auth/verify-totp")
   if (res.status === 401 && !isAuthEndpoint && accessToken) {
     try {
       await ensureFreshToken()
