@@ -30,17 +30,27 @@ import (
 // --- Mocks ---
 
 // mockProvider — payment.PaymentProvider stub.
+// initFunc/chargeFunc — опциональные callbacks для тестов вне webhook-сценариев
+// (renewal_test.go). Если nil — panic, как раньше: webhook-тесты эти методы не дёргают.
 type mockProvider struct {
 	verifyResult bool
 	verifyCalls  int
 	verifyParams map[string]string
+	initFunc     func(context.Context, payment.InitRequest) (*payment.InitResult, error)
+	chargeFunc   func(context.Context, payment.ChargeRequest) (*payment.ChargeResult, error)
 }
 
-func (m *mockProvider) Init(_ context.Context, _ payment.InitRequest) (*payment.InitResult, error) {
-	panic("unused in webhook tests")
+func (m *mockProvider) Init(ctx context.Context, req payment.InitRequest) (*payment.InitResult, error) {
+	if m.initFunc != nil {
+		return m.initFunc(ctx, req)
+	}
+	panic("Init: initFunc not set in this test")
 }
-func (m *mockProvider) Charge(_ context.Context, _ payment.ChargeRequest) (*payment.ChargeResult, error) {
-	panic("unused in webhook tests")
+func (m *mockProvider) Charge(ctx context.Context, req payment.ChargeRequest) (*payment.ChargeResult, error) {
+	if m.chargeFunc != nil {
+		return m.chargeFunc(ctx, req)
+	}
+	panic("Charge: chargeFunc not set in this test")
 }
 func (m *mockProvider) VerifyWebhookSignature(params map[string]string, _ string) bool {
 	m.verifyCalls++

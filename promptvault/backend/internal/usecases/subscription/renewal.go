@@ -136,6 +136,14 @@ func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) er
 		return fmt.Errorf("get plan: %w", err)
 	}
 
+	// Email юзера нужен для Receipt 54-ФЗ при включённой фискализации.
+	// Без чека терминал с обязательной фискализацией отбивает Init кодом 309
+	// (request.validate.expected.receipt) — инцидент 14.05.2026, sub_id=2.
+	user, err := l.users.GetByID(ctx, sub.UserID)
+	if err != nil {
+		return fmt.Errorf("get user: %w", err)
+	}
+
 	idemKey, err := generateRenewalKey()
 	if err != nil {
 		return fmt.Errorf("generate key: %w", err)
@@ -164,12 +172,14 @@ func (l *RenewalLoop) renewOne(ctx context.Context, sub *models.Subscription) er
 	}
 
 	// Init без Recurrent (рекуррент уже подключен) — нужен PaymentId для Charge.
+	// Receipt обязателен при включённой фискализации (см. инцидент 14.05.2026).
 	initResult, err := l.payment.Init(ctx, payment.InitRequest{
 		OrderID:     orderID,
 		Amount:      plan.PriceKop,
 		Description: fmt.Sprintf("Автопродление подписки %s", plan.Name),
 		WebhookURL:  l.cfg.WebhookBaseURL + "/api/webhooks/tbank",
 		CustomerKey: fmt.Sprintf("%d", sub.UserID),
+		Receipt:     buildReceipt(l.cfg, user.Email, plan),
 	})
 	if err != nil {
 		if statusErr := l.pays.UpdateStatus(ctx, pay.ID, models.PaymentFailed); statusErr != nil {
