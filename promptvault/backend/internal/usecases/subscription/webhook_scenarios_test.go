@@ -179,7 +179,7 @@ func (m *mockUsersRepo) GetByReferralCode(context.Context, string) (*models.User
 func (m *mockUsersRepo) MarkReferralRewarded(context.Context, uint) (bool, error) {
 	panic("unused")
 }
-func (m *mockUsersRepo) ListMaxUsers(context.Context) ([]uint, error) { panic("unused") }
+func (m *mockUsersRepo) ListPaidUsers(context.Context) ([]uint, error) { panic("unused") }
 func (m *mockUsersRepo) SetInsightEmailsEnabled(context.Context, uint, bool) error {
 	panic("unused")
 }

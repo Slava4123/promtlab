@@ -87,7 +87,7 @@ func (m *mockUserRepo) GetByReferralCode(ctx context.Context, code string) (*mod
 func (m *mockUserRepo) MarkReferralRewarded(ctx context.Context, userID uint) (bool, error) {
 	return false, nil
 }
-func (m *mockUserRepo) ListMaxUsers(_ context.Context) ([]uint, error) { return nil, nil }
+func (m *mockUserRepo) ListPaidUsers(_ context.Context) ([]uint, error) { return nil, nil }
 func (m *mockUserRepo) SetInsightEmailsEnabled(_ context.Context, _ uint, _ bool) error {
 	return nil
 }

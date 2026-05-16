@@ -54,10 +54,11 @@ type UserRepository interface {
 	// Защищает от повторной выдачи награды при повторных платежах того же рефери.
 	MarkReferralRewarded(ctx context.Context, userID uint) (bool, error)
 
-	// ListMaxUsers возвращает ID активных юзеров на тарифе Max (включая max_yearly).
-	// Используется analytics.InsightsComputeLoop для ежесуточного пересчёта
-	// детерминированных Smart Insights. Ограничение — active (не frozen/deleted).
-	ListMaxUsers(ctx context.Context) ([]uint, error)
+	// ListPaidUsers возвращает ID активных юзеров на Pro/Max (с любой periodicity).
+	// Используется в analytics insights loop — Pro имеет teaser, Max — полный набор.
+	// Ограничение — status='active' (не frozen/deleted). Per-plan dispatch
+	// (Pro vs Max) делается на loop-уровне через GetByID + insightsForPlan.
+	ListPaidUsers(ctx context.Context) ([]uint, error)
 
 	// SetInsightEmailsEnabled атомарно меняет users.insight_emails_enabled
 	// (Phase 14 M-10). Opt-in по ФЗ-152.

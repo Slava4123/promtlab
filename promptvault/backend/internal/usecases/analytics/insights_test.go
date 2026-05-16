@@ -287,7 +287,7 @@ func (f *fakeUsersForLookup) GetByReferralCode(context.Context, string) (*models
 func (f *fakeUsersForLookup) MarkReferralRewarded(context.Context, uint) (bool, error) {
 	panic("unused")
 }
-func (f *fakeUsersForLookup) ListMaxUsers(context.Context) ([]uint, error) { panic("unused") }
+func (f *fakeUsersForLookup) ListPaidUsers(context.Context) ([]uint, error) { panic("unused") }
 func (f *fakeUsersForLookup) SetInsightEmailsEnabled(context.Context, uint, bool) error {
 	panic("unused")
 }

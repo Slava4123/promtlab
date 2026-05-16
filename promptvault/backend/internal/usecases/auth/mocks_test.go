@@ -85,7 +85,7 @@ func (m *mockUserRepo) MarkReferralRewarded(ctx context.Context, userID uint) (b
 	args := m.Called(ctx, userID)
 	return args.Bool(0), args.Error(1)
 }
-func (m *mockUserRepo) ListMaxUsers(_ context.Context) ([]uint, error) { return nil, nil }
+func (m *mockUserRepo) ListPaidUsers(_ context.Context) ([]uint, error) { return nil, nil }
 func (m *mockUserRepo) SetInsightEmailsEnabled(_ context.Context, _ uint, _ bool) error {
 	return nil
 }

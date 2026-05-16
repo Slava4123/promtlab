@@ -58,7 +58,7 @@ func (s *stubUserRepo) GetByReferralCode(context.Context, string) (*models.User,
 func (s *stubUserRepo) MarkReferralRewarded(context.Context, uint) (bool, error) {
 	panic("unused")
 }
-func (s *stubUserRepo) ListMaxUsers(context.Context) ([]uint, error) { panic("unused") }
+func (s *stubUserRepo) ListPaidUsers(context.Context) ([]uint, error) { panic("unused") }
 func (s *stubUserRepo) SetInsightEmailsEnabled(context.Context, uint, bool) error {
 	panic("unused")
 }
