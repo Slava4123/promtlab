@@ -157,8 +157,13 @@ func (p *Provider) Init(ctx context.Context, req payment.InitRequest) (*payment.
 	if req.SuccessURL != "" {
 		tokenParams["SuccessURL"] = req.SuccessURL
 	}
-	// FailURL не передаём — T-Bank покажет свой экран ошибки с кнопкой "Повторить".
-	// Юзер сам вернётся в приложение.
+	// FailURL — наш экран /settings/subscription?payment=failure: юзер видит
+	// что списание не прошло и получает кнопку «Обновить способ оплаты». Без
+	// этого редиректа застрянет на T-Bank-экране с generic «Повторить попытку»,
+	// который ведёт обратно к тому же провалу — bad UX retention.
+	if req.FailURL != "" {
+		tokenParams["FailURL"] = req.FailURL
+	}
 	if req.WebhookURL != "" {
 		tokenParams["NotificationURL"] = req.WebhookURL
 	}
@@ -177,6 +182,7 @@ func (p *Provider) Init(ctx context.Context, req payment.InitRequest) (*payment.
 		Description:     req.Description,
 		Token:           token,
 		SuccessURL:      req.SuccessURL,
+		FailURL:         req.FailURL,
 		NotificationURL: req.WebhookURL,
 		CustomerKey:     req.CustomerKey,
 		Receipt:         toReceiptDTO(req.Receipt),
