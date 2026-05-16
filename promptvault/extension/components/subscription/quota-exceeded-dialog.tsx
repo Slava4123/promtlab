@@ -1,69 +1,12 @@
 import { ExternalLink, X, Zap } from "lucide-react"
 import { Button } from "../ui/button"
 import { useQuotaStore } from "../../stores/quota-store"
+import { PLAN_LABELS, readableQuotaType } from "../../lib/quota-labels"
+import type { PlanID } from "../../lib/types"
 
-// Маппинг технических quota_type'ов → читаемые названия.
-// Источник истины: backend usecases/quota/quota.go::newQuotaExceeded().
-// Дополнительно поддерживаем алиасы из UsageSummary ответа (ext_uses_today,
-// mcp_uses_today) — на случай если кто-то прокинет эти имена напрямую.
-const QUOTA_LABELS: Record<string, string> = {
-  // Personal — из quota.go::newQuotaExceeded
-  prompts: "Промпты",
-  collections: "Коллекции",
-  chains: "Цепочки",
-  teams: "Команды",
-  ext_daily: "Вставки сегодня",
-  mcp_daily: "MCP-вызовы сегодня",
-  // Team-pool (Pack T) — отдельные имена в backend
-  team_prompts: "Промпты команды",
-  team_collections: "Коллекции команды",
-  team_chains: "Цепочки команды",
-  team_members: "Участники команды",
-  chain_steps: "Шаги в цепочке",
-  // Прочие
-  api_keys: "API-ключи",
-  share_links: "Публичные ссылки",
-  branding: "Брендинг команды",
-  // Алиасы из subscription/usage endpoint (если кто-то передаст напрямую)
-  ext_uses_today: "Вставки сегодня",
-  mcp_uses_today: "MCP-вызовы сегодня",
-}
-
-const PLAN_LABELS: Record<string, string> = {
-  free: "Free",
-  pro: "Pro",
-  pro_yearly: "Pro (год)",
-  max: "Max",
-  max_yearly: "Max (год)",
-}
-
-// Fallback-метка когда ни quotaType, ни эвристика по тексту не сработали —
-// показываем хоть что-то осмысленное вместо пустоты.
-const QUOTA_FALLBACK_LABEL = "Лимит ресурса"
-
-export function readableQuotaType(quotaType: string | null, message: string | null): string {
-  if (quotaType && quotaType !== "unknown" && QUOTA_LABELS[quotaType]) {
-    return QUOTA_LABELS[quotaType]
-  }
-  // Угадываем по сообщению: «Лимит цепочек исчерпан» → chains.
-  if (message) {
-    const m = message.toLowerCase()
-    if (m.includes("цепоч")) return QUOTA_LABELS.chains
-    if (m.includes("промпт")) return QUOTA_LABELS.prompts
-    if (m.includes("коллекц")) return QUOTA_LABELS.collections
-    if (m.includes("команд")) return QUOTA_LABELS.teams
-    // "встав" покрывает «вставки/вставку/вставок/вставкой» — все формы.
-    if (m.includes("встав") || m.includes("использовани") || m.includes("расширен")) return QUOTA_LABELS.ext_daily
-    if (m.includes("mcp")) return QUOTA_LABELS.mcp_daily
-    if (m.includes("api-ключ") || m.includes("api ключ")) return QUOTA_LABELS.api_keys
-  }
-  // Если backend менял copy — заметим в логах. Не флудим, если пришёл
-  // совсем пустой контекст (quotaType=null && message=null).
-  if (quotaType || message) {
-    console.warn("[QuotaDialog] не распознан тип квоты", { quotaType, message })
-  }
-  return QUOTA_FALLBACK_LABEL
-}
+// readableQuotaType re-export'нут для тестов и legacy-консьюмеров, которые
+// импортили его отсюда. Источник теперь — lib/quota-labels.ts.
+export { readableQuotaType }
 
 // Глобальный модал — показывается когда bg-client получает 402.
 // Подключается в AppShell.
@@ -73,7 +16,7 @@ export function QuotaExceededDialog() {
   if (!open) return null
 
   const readable = readableQuotaType(quotaType, message)
-  const planLabel = plan ? PLAN_LABELS[plan] ?? plan : null
+  const planLabel = plan ? (PLAN_LABELS[plan as PlanID] ?? plan) : null
 
   async function openUpgrade() {
     const { getSettings } = await import("../../lib/storage")

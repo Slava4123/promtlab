@@ -33,19 +33,11 @@ import {
   type TeamInvitation,
   type TeamRole,
 } from "../../lib/types"
+import { quotaTypeLabel } from "../../lib/quota-labels"
 
 // Полный центр уведомлений: приглашения в команды + over-limit warnings.
 // OverLimitBanner был убран из AppShell — все «срочные» сигналы стекаются
 // сюда. Email-настройки (Smart Insights и пр.) — теперь только в веб-приложении.
-
-const QUOTA_LABELS: Record<string, string> = {
-  prompts: "Промпты",
-  collections: "Коллекции",
-  chains: "Цепочки",
-  teams: "Команды",
-  ext_uses_today: "Вставки сегодня",
-  mcp_uses_today: "MCP-вызовы сегодня",
-}
 
 const ROLE_META: Record<TeamRole, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
   owner: { label: "Владелец", icon: ShieldCheck, color: "text-amber-500" },
@@ -178,7 +170,7 @@ export function NotificationsPage() {
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-medium">
-                        Лимит «{QUOTA_LABELS[o.key]}» исчерпан
+                        Лимит «{quotaTypeLabel(o.key)}» исчерпан
                       </div>
                       <div className="mt-0.5 text-[10px] text-(--color-muted-foreground)">
                         Использовано {o.info.used} из {o.info.limit}. Обновите тариф,

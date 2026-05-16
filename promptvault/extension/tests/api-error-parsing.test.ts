@@ -166,7 +166,10 @@ describe('request() — body parsing for 4xx', () => {
     });
   });
 
-  it('200 с невалидным JSON даёт ApiError code=network', async () => {
+  it('200 с невалидным JSON даёт ApiError code=unknown (бэк-баг, не network)', async () => {
+    // Раньше code='network' маскировало битый ответ под сетевую ошибку и
+    // background::handleRequest пропускал event в Sentry. Теперь 'unknown' —
+    // SRE получит уведомление о реальной проблеме (broken JSON от backend).
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -175,7 +178,7 @@ describe('request() — body parsing for 4xx', () => {
     );
     await expect(getMe()).rejects.toMatchObject({
       status: 500,
-      code: 'network',
+      code: 'unknown',
       message: 'invalid json response',
     });
   });
