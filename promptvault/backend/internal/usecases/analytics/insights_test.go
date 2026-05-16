@@ -286,3 +286,39 @@ func (f *fakeUsersForLookup) ListMaxUsers(context.Context) ([]uint, error) { pan
 func (f *fakeUsersForLookup) SetInsightEmailsEnabled(context.Context, uint, bool) error {
 	panic("unused")
 }
+
+// TestInsightsForPlan — Pricing Iteration v3 Task 4: helper для маппинга
+// plan_id → разрешённый набор insight типов. Free/unknown → nil, Pro → 2
+// housekeeping типа (teaser), Max → все 7. Решение зафиксировано в ADR-0008.
+func TestInsightsForPlan(t *testing.T) {
+	cases := []struct {
+		plan string
+		want []string
+	}{
+		{"free", nil},
+		{"pro", []string{models.InsightUnusedPrompts, models.InsightPossibleDuplicates}},
+		{"pro_yearly", []string{models.InsightUnusedPrompts, models.InsightPossibleDuplicates}},
+		{"max", allInsightTypes()},
+		{"max_yearly", allInsightTypes()},
+		{"unknown", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.plan, func(t *testing.T) {
+			got := insightsForPlan(tc.plan)
+			require.ElementsMatch(t, tc.want, got)
+		})
+	}
+}
+
+// helper для теста — все 7 типов.
+func allInsightTypes() []string {
+	return []string{
+		models.InsightUnusedPrompts,
+		models.InsightTrending,
+		models.InsightDeclining,
+		models.InsightMostEdited,
+		models.InsightPossibleDuplicates,
+		models.InsightOrphanTags,
+		models.InsightEmptyCollections,
+	}
+}

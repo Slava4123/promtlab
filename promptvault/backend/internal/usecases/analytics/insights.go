@@ -8,6 +8,45 @@ import (
 	"promptvault/internal/models"
 )
 
+// proAllowedInsights — типы Smart Insights, доступные на Pro тарифе.
+// Pro получает teaser из 2 housekeeping-типов; остальные 5 (trending,
+// declining, most_edited, orphan_tags, empty_collections) — Max-only.
+// Решение принято в ADR-0008. Изменение состава тиров требует:
+//  1. обновить этот список
+//  2. обновить ADR-0008
+//  3. проверить frontend `analytics.tsx` (зеркало lock-карточек)
+var proAllowedInsights = []string{
+	models.InsightUnusedPrompts,
+	models.InsightPossibleDuplicates,
+}
+
+// maxAllInsights — все 7 типов, доступные на Max.
+var maxAllInsights = []string{
+	models.InsightUnusedPrompts,
+	models.InsightTrending,
+	models.InsightDeclining,
+	models.InsightMostEdited,
+	models.InsightPossibleDuplicates,
+	models.InsightOrphanTags,
+	models.InsightEmptyCollections,
+}
+
+// insightsForPlan возвращает список разрешённых insight типов для plan'а.
+// nil — план не имеет доступа (Free / unknown). Pro имеет 2 типа,
+// Max — все 7. Используется в GetInsightsGated и ComputeInsights.
+// NOTE: На Task 9 эта функция станет методом Service для guard'а
+// feature flag PRO_INSIGHTS_TEASER_ENABLED.
+func insightsForPlan(planID string) []string {
+	switch planID {
+	case "pro", "pro_yearly":
+		return proAllowedInsights
+	case "max", "max_yearly":
+		return maxAllInsights
+	default:
+		return nil
+	}
+}
+
 // ComputeInsights — полный пересчёт детерминистических инсайтов для юзера
 // (Max-only). Идемпотентно: UpsertInsight перезапишет существующие записи.
 //
