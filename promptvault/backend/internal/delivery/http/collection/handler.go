@@ -113,7 +113,25 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, err := h.svc.Update(r.Context(), id, userID, utils.SanitizeString(req.Name), utils.SanitizeString(req.Description), req.Color, req.Icon)
+	// Partial update: nil = «не трогать», sanitized non-nil = новое значение.
+	// До правки `Description string` (без указателя) превращал отсутствие поля
+	// в пустую строку → silent data loss при PUT с только {name}.
+	var name, description, color, icon *string
+	if req.Name != nil {
+		s := utils.SanitizeString(*req.Name)
+		name = &s
+	}
+	if req.Description != nil {
+		s := utils.SanitizeString(*req.Description)
+		description = &s
+	}
+	if req.Color != nil {
+		color = req.Color
+	}
+	if req.Icon != nil {
+		icon = req.Icon
+	}
+	c, err := h.svc.Update(r.Context(), id, userID, name, description, color, icon)
 	if err != nil {
 		respondError(w, err)
 		return

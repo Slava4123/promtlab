@@ -335,7 +335,11 @@ func TestUpdate_Success(t *testing.T) {
 	}, nil)
 	cr.On("Update", ctx, mock.AnythingOfType("*models.Collection")).Return(nil)
 
-	c, err := svc.Update(ctx, 1, 10, "Новое", "Описание", "#ff0000", "📝")
+	name := "Новое"
+	desc := "Описание"
+	col := "#ff0000"
+	ic := "📝"
+	c, err := svc.Update(ctx, 1, 10, &name, &desc, &col, &ic)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "Новое", c.Name)
@@ -356,7 +360,9 @@ func TestUpdate_TeamViewerForbidden(t *testing.T) {
 	tr.On("GetMember", ctx, uint(5), uint(20)).
 		Return(&models.TeamMember{Role: models.RoleViewer}, nil)
 
-	_, err := svc.Update(ctx, 1, 20, "Новое", "", "", "")
+	name := "Новое"
+	empty := ""
+	_, err := svc.Update(ctx, 1, 20, &name, &empty, &empty, &empty)
 
 	assert.ErrorIs(t, err, ErrViewerReadOnly)
 }
@@ -367,7 +373,9 @@ func TestUpdate_NotFound(t *testing.T) {
 
 	cr.On("GetByID", ctx, uint(99)).Return(nil, repo.ErrNotFound)
 
-	_, err := svc.Update(ctx, 99, 10, "Новое", "", "", "")
+	name := "Новое"
+	empty := ""
+	_, err := svc.Update(ctx, 99, 10, &name, &empty, &empty, &empty)
 
 	assert.ErrorIs(t, err, ErrNotFound)
 }

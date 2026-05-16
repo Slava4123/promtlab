@@ -148,9 +148,15 @@ func (h *Handler) InviteMember(w http.ResponseWriter, r *http.Request) {
 		httperr.Respond(w, httperr.BadRequest(err.Error()))
 		return
 	}
+	// Validator не покрывает «Query OR Email» — проверяем вручную после.
+	lookup := req.LookupValue()
+	if lookup == "" {
+		httperr.Respond(w, httperr.BadRequest("Поле 'query' или 'email' обязательно"))
+		return
+	}
 
 	inv, err := h.svc.InviteMember(r.Context(), slug, userID, teamuc.AddMemberInput{
-		Query: req.Query,
+		Query: lookup,
 		Role:  models.TeamRole(req.Role),
 	})
 	if err != nil {

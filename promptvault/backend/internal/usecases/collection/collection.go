@@ -138,7 +138,10 @@ func (s *Service) List(ctx context.Context, userID uint, teamIDs []uint) ([]mode
 	return s.collections.ListWithCounts(ctx, userID, teamIDs)
 }
 
-func (s *Service) Update(ctx context.Context, id, userID uint, name, description, color, icon string) (*models.Collection, error) {
+// Update — partial update. Аргументы как *string: nil = «не трогать», non-nil
+// (включая "") = новое значение. До правки `description string` без указателя
+// перетирал поле пустой строкой при PUT с {name} only → silent data loss.
+func (s *Service) Update(ctx context.Context, id, userID uint, name, description, color, icon *string) (*models.Collection, error) {
 	c, err := s.GetByID(ctx, id, userID)
 	if err != nil {
 		return nil, err
@@ -149,21 +152,23 @@ func (s *Service) Update(ctx context.Context, id, userID uint, name, description
 		return nil, err
 	}
 
-	if name != "" {
-		c.Name = name
+	if name != nil && *name != "" {
+		c.Name = *name
 	}
-	c.Description = description
-	if color != "" {
-		if !validHexColor.MatchString(color) {
+	if description != nil {
+		c.Description = *description
+	}
+	if color != nil && *color != "" {
+		if !validHexColor.MatchString(*color) {
 			return nil, ErrInvalidColor
 		}
-		c.Color = models.HexColor(color)
+		c.Color = models.HexColor(*color)
 	}
-	if icon != "" {
-		if len(icon) > 30 {
+	if icon != nil && *icon != "" {
+		if len(*icon) > 30 {
 			return nil, ErrInvalidIcon
 		}
-		c.Icon = icon
+		c.Icon = *icon
 	}
 
 	if err := s.collections.Update(ctx, c); err != nil {

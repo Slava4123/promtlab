@@ -65,6 +65,28 @@ func (a *mcpCollectionAdapter) Create(ctx context.Context, userID uint, name, de
 	return c, err
 }
 
+// Update — MCP-сервер передаёт string-параметры (старый контракт интерфейса
+// mcpserver.CollectionService). Адаптер конвертирует в *string для нового
+// сервиса (partial update fix B4): "" → nil (не трогать), non-empty → &str.
+// Для MCP "пустая строка" семантически = «не задано», что соответствует
+// поведению до фикса.
+func (a *mcpCollectionAdapter) Update(ctx context.Context, id, userID uint, name, description, color, icon string) (*models.Collection, error) {
+	var namePtr, descPtr, colorPtr, iconPtr *string
+	if name != "" {
+		namePtr = &name
+	}
+	if description != "" {
+		descPtr = &description
+	}
+	if color != "" {
+		colorPtr = &color
+	}
+	if icon != "" {
+		iconPtr = &icon
+	}
+	return a.Service.Update(ctx, id, userID, namePtr, descPtr, colorPtr, iconPtr)
+}
+
 // adminHealthAdapter — узкий HealthCounter для adminhttp.Handler.
 type adminHealthAdapter struct {
 	repo repo.AdminRepository
