@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Check, Sparkles, Zap, Crown, Loader2, type LucideIcon } from "lucide-react"
 import { PageLayout } from "@/components/layout/page-layout"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DowngradePreviewDialog } from "@/components/subscription/downgrade-preview-dialog"
-import { RecurrentConsent } from "@/components/subscription/recurrent-consent"
+import { CheckoutConfirmDialog } from "@/components/subscription/checkout-confirm-dialog"
 import {
   useCheckout,
   useDowngrade,
@@ -186,11 +187,31 @@ export default function Pricing() {
   const [downgradeOpen, setDowngradeOpen] = useState(false)
   const downgradePreview = useDowngradePreview("free")
 
-  // Phase 16-Z: согласие на recurrent — per-plan (юзер выбирает Pro или Max),
-  // обнуляется при перезагрузке страницы (сброс state). Без него кнопка
-  // checkout каждого платного тарифа disabled. Требование T-Bank для
-  // активации Charge — без явной отметки списания не пропускают.
-  const [consents, setConsents] = useState<Record<string, boolean>>({})
+  // Phase 16-Z2: checkout-confirmation dialog. Клик «Получить Pro» теперь
+  // не уводит сразу в T-Bank — открывает диалог со сводкой + чек-боксом
+  // согласия на recurrent (требование T-Bank). plan=null → диалог закрыт.
+  const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null)
+
+  // Точка входа из quota-exceeded-dialog: navigate('/pricing?upgrade=pro').
+  // После загрузки списка планов открываем dialog с нужным планом и
+  // очищаем query, чтобы back/forward не показывал его снова.
+  //
+  // setState внутри useEffect здесь — единственный способ синхронизировать
+  // dialog с async data из usePlans(). Effect срабатывает один раз, когда
+  // оба зависимости заполнены, и сразу убирает upgrade из query, чтобы при
+  // повторном рендере условие if(!upgradeId) короткозамыкало useEffect.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const upgradeId = searchParams.get("upgrade")
+    if (!upgradeId || !plans) return
+    const found = plans.find((p) => p.id === upgradeId)
+    if (found) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async data sync; effect самоликвидируется через setSearchParams ниже.
+      setConfirmPlan(found)
+      searchParams.delete("upgrade")
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [plans, searchParams, setSearchParams])
 
   // Фильтруем планы под выбранный цикл: free всегда, остальные — по суффиксу
   // `_yearly` в ID. Раньше различали по period_days >= 300, но это ломалось
@@ -379,22 +400,8 @@ export default function Pricing() {
                     ))}
                   </ul>
 
-                  {plan.price_kop > 0 && !isCurrent && (
-                    <RecurrentConsent
-                      plan={plan}
-                      checked={consents[plan.id] ?? false}
-                      onChange={(c) => setConsents((prev) => ({ ...prev, [plan.id]: c }))}
-                      idSuffix="pricing"
-                    />
-                  )}
-
                   <button
-                    disabled={
-                      isCurrent ||
-                      checkout.isPending ||
-                      downgrade.isPending ||
-                      (plan.price_kop > 0 && !consents[plan.id])
-                    }
+                    disabled={isCurrent || checkout.isPending || downgrade.isPending}
                     onClick={() => {
                       if (isCurrent) return
                       if (plan.id === "free") {
@@ -404,7 +411,9 @@ export default function Pricing() {
                         setDowngradeOpen(true)
                         downgradePreview.refetch()
                       } else {
-                        checkout.mutate({ planId: plan.id, consent: consents[plan.id] ?? false })
+                        // Открываем confirmation dialog — checkout.mutate
+                        // запустится после явного клика «Перейти к оплате».
+                        setConfirmPlan(plan)
                       }
                     }}
                     className={`flex h-11 w-full items-center justify-center rounded-lg text-[0.85rem] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
@@ -506,6 +515,17 @@ export default function Pricing() {
             onSettled: () => setDowngradeOpen(false),
           })
         }}
+      />
+
+      <CheckoutConfirmDialog
+        plan={confirmPlan}
+        features={confirmPlan ? planFeatures(confirmPlan).slice(0, 5) : []}
+        onClose={() => setConfirmPlan(null)}
+        onConfirm={(consent) => {
+          if (!confirmPlan) return
+          checkout.mutate({ planId: confirmPlan.id, consent })
+        }}
+        isPending={checkout.isPending}
       />
     </PageLayout>
   )
