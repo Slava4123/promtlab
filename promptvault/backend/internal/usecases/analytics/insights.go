@@ -33,13 +33,20 @@ var maxAllInsights = []string{
 }
 
 // insightsForPlan возвращает список разрешённых insight типов для plan'а.
-// nil — план не имеет доступа (Free / unknown). Pro имеет 2 типа,
-// Max — все 7. Используется в GetInsightsGated и ComputeInsights.
-// NOTE: На Task 9 эта функция станет методом Service для guard'а
-// feature flag PRO_INSIGHTS_TEASER_ENABLED.
-func insightsForPlan(planID string) []string {
+// nil — план не имеет доступа (Free / unknown / Pro при выключенном teaser).
+// Pro имеет 2 типа (только при включённом teaser-flag), Max — все 7.
+// Используется в GetInsightsGated и InsightsComputeLoop.
+//
+// Pricing iteration v3 (ADR-0008): feature flag PRO_INSIGHTS_TEASER_ENABLED
+// (s.proInsightsTeaserEnabled) — kill-switch для Pro teaser'а. При выключенном
+// flag'е Pro/pro_yearly обрабатываются как Free (nil) → legacy Max-only поведение.
+// Max не зависит от флага — всегда 7 типов.
+func (s *Service) insightsForPlan(planID string) []string {
 	switch planID {
 	case "pro", "pro_yearly":
+		if !s.proInsightsTeaserEnabled {
+			return nil
+		}
 		return proAllowedInsights
 	case "max", "max_yearly":
 		return maxAllInsights

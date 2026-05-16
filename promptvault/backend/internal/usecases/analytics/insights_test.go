@@ -3,6 +3,7 @@ package analytics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -161,6 +162,12 @@ func newServiceForTest(repo *trackingAnalyticsRepo, experimental, trgm bool) *Se
 	s := NewService(repo, nil, nil, nil, nil)
 	s.SetExperimentalInsights(experimental)
 	s.SetTrgmAvailable(trgm)
+	// Pricing iteration v3 (Task 9): тесты, использующие этот helper, написаны
+	// до feature flag'а и ожидают что Pro получает teaser. Включаем flag
+	// по умолчанию, чтобы избежать каскадных правок. Тесты, специально
+	// проверяющие выключенный flag (TestService_insightsForPlan), создают
+	// Service вручную без этого helper'а.
+	s.SetProInsightsTeaserEnabled(true)
 	return s
 }
 
@@ -356,24 +363,39 @@ func TestComputeInsights_EmptyAllowedNoOp(t *testing.T) {
 	assert.Equal(t, 0, r.calls["EmptyCollections"])
 }
 
-// TestInsightsForPlan — Pricing Iteration v3 Task 4: helper для маппинга
-// plan_id → разрешённый набор insight типов. Free/unknown → nil, Pro → 2
-// housekeeping типа (teaser), Max → все 7. Решение зафиксировано в ADR-0008.
-func TestInsightsForPlan(t *testing.T) {
+// TestService_insightsForPlan — Pricing Iteration v3 Task 4 + Task 9:
+// метод Service.insightsForPlan маппит plan_id на разрешённые insight типы
+// под guard'ом feature flag PRO_INSIGHTS_TEASER_ENABLED.
+//
+//   - Free/unknown → nil (всегда, независимо от flag'а).
+//   - Pro / pro_yearly → 2 типа teaser при flag=true; nil при flag=false (legacy fallback).
+//   - Max / max_yearly → все 7 типов всегда (Max не зависит от flag'а).
+//
+// Решение зафиксировано в ADR-0008.
+func TestService_insightsForPlan(t *testing.T) {
+	proTeaser := []string{models.InsightUnusedPrompts, models.InsightPossibleDuplicates}
 	cases := []struct {
-		plan string
-		want []string
+		plan          string
+		teaserEnabled bool
+		want          []string
 	}{
-		{"free", nil},
-		{"pro", []string{models.InsightUnusedPrompts, models.InsightPossibleDuplicates}},
-		{"pro_yearly", []string{models.InsightUnusedPrompts, models.InsightPossibleDuplicates}},
-		{"max", allInsightTypes()},
-		{"max_yearly", allInsightTypes()},
-		{"unknown", nil},
+		{"pro", true, proTeaser},
+		{"pro", false, nil}, // teaser off → free-like fallback
+		{"pro_yearly", true, proTeaser},
+		{"pro_yearly", false, nil},
+		{"max", true, allInsightTypes()},
+		{"max", false, allInsightTypes()}, // Max не зависит от flag'а
+		{"max_yearly", true, allInsightTypes()},
+		{"max_yearly", false, allInsightTypes()},
+		{"free", true, nil},
+		{"free", false, nil},
+		{"unknown", true, nil},
+		{"unknown", false, nil},
 	}
 	for _, tc := range cases {
-		t.Run(tc.plan, func(t *testing.T) {
-			got := insightsForPlan(tc.plan)
+		t.Run(fmt.Sprintf("%s/teaser=%v", tc.plan, tc.teaserEnabled), func(t *testing.T) {
+			svc := &Service{proInsightsTeaserEnabled: tc.teaserEnabled}
+			got := svc.insightsForPlan(tc.plan)
 			require.ElementsMatch(t, tc.want, got)
 		})
 	}
@@ -399,6 +421,8 @@ func allInsightTypes() []string {
 //   - Max/max_yearly → все 7 типов.
 //
 // Repo возвращает все 7 типов; service фильтрует по тарифу.
+// Task 9: для Pro cases выставляем PRO_INSIGHTS_TEASER_ENABLED=true,
+// иначе Pro обработался бы как Free (legacy fallback).
 func TestService_GetInsightsGated_PerTypeFilter(t *testing.T) {
 	ctx := context.Background()
 	allTypes := []models.SmartInsight{
@@ -429,6 +453,8 @@ func TestService_GetInsightsGated_PerTypeFilter(t *testing.T) {
 			}
 			users := &fakeUsersForLookup{user: &models.User{ID: 1, PlanID: tc.plan}}
 			svc := NewService(repo, nil, nil, users, nil)
+			// Task 9: Pro teaser flag должен быть включён, иначе Pro → Free fallback.
+			svc.SetProInsightsTeaserEnabled(true)
 			// Не выставляем planFromCtx — lookupPlanID идёт через users.GetByID.
 			insights, err := svc.GetInsightsGated(ctx, 1, nil)
 			if tc.wantErr != nil {

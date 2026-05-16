@@ -182,6 +182,10 @@ func defaults() map[string]any {
 			// экстренного отключения 4 расширенных типов (most_edited,
 			// possible_duplicates, orphan_tags, empty_collections) без деплоя.
 			"experimental_insights": true,
+			// Pricing iteration v3 (ADR-0008): включает Smart Insights teaser
+			// на Pro (2 типа из 7). Default false — включить вручную после
+			// 1 недели observability после backend deploy.
+			"pro_insights_teaser_enabled": false,
 		},
 		"telemetry": map[string]any{
 			"enabled":            false,

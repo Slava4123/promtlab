@@ -126,11 +126,12 @@ func (l *InsightsComputeLoop) compute() {
 				metrics.InsightsRefresh.WithLabelValues("error").Inc()
 				return nil
 			}
-			allowed := insightsForPlan(user.PlanID)
+			allowed := l.svc.insightsForPlan(user.PlanID)
 			if len(allowed) == 0 {
 				// Race: юзер на Free/unknown plan (downgrade между ListPaidUsers
-				// и GetByID). Skip без compute — ComputeInsights бы no-op'нул,
-				// но мы избегаем лишних SQL-запросов в svc.
+				// и GetByID), либо Pro при выключенном PRO_INSIGHTS_TEASER_ENABLED.
+				// Skip без compute — ComputeInsights бы no-op'нул, но мы избегаем
+				// лишних SQL-запросов в svc.
 				skipCount.Add(1)
 				return nil
 			}

@@ -200,6 +200,10 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	analyticsSvc := analyticsuc.NewService(analyticsRepo, promptRepo, teamRepo, userRepo, quotaSvc)
 	// kill-switch расширенных Smart Insights (Phase 15: default true).
 	analyticsSvc.SetExperimentalInsights(cfg.Analytics.ExperimentalInsights)
+	// Pricing iteration v3 (ADR-0008): kill-switch для Pro Smart Insights teaser.
+	// Default false — включается вручную после 1 недели observability post-deploy.
+	// При выключенном flag'е Pro обрабатывается как Free (ErrProRequired).
+	analyticsSvc.SetProInsightsTeaserEnabled(cfg.Analytics.ProInsightsTeaserEnabled)
 	// M9: чтение PlanID из ctx без users.GetByID на каждый запрос.
 	// Передаём через callback чтобы analytics не импортировал middleware/auth.
 	analyticsSvc.SetPlanFromCtx(func(ctx context.Context) (string, bool) {
