@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -632,7 +633,11 @@ func (s *Service) RemoveStep(ctx context.Context, chainID, stepID, userID uint) 
 		}
 	}
 
-	return s.chains.RemoveStep(ctx, target.ID)
+	if err := s.chains.RemoveStep(ctx, target.ID); err != nil {
+		return err
+	}
+	// Закрываем gaps в position после удаления.
+	return recomputePositions(ctx, s.chains, chainID)
 }
 
 // MoveStepUp меняет местами prompt-шаг и его prompt-предшественника в графе.
@@ -759,8 +764,127 @@ func (s *Service) MoveStepUp(ctx context.Context, chainID, stepID, userID uint) 
 		// Если ни prompt-предшественника, ни fork-ветки — prev был root цепочки;
 		// после swap target становится root (никто на него не указывает).
 
-		return nil
+		// Recompute position field по новому графу. Без этого editor UI
+		// отображает старый порядок (ORDER BY position), пока runtime идёт
+		// по next_step_id — UI lies о порядке исполнения.
+		return recomputePositions(ctx, txRepo, chainID)
 	})
+}
+
+// recomputePositions переустанавливает `position` каждого шага по обходу
+// графа через next_step_id и fork branches. Position — линейный порядок DFS
+// для backend ORDER BY position, чтобы UI editor отображал шаги в порядке
+// реального исполнения. До этого фикса MoveStepUp/MoveStepDown/RemoveStep
+// меняли только `next_step_id`, оставляя `position` нетронутым → UI lie:
+// editor показывал прежний порядок, runtime шёл по новому графу.
+//
+// Алгоритм (two-pass для обхода unique constraint):
+//  1. Pass 1: установить всем шагам position в негативное unique значение
+//     (-1000 - idx). Constraint `uq_prompt_chain_steps_position(chain_id, position)`
+//     задеклажен `DEFERRABLE INITIALLY DEFERRED`, но GORM Save() в session-mode
+//     даёт PG проверять unique immediate → DUPLICATE_KEY на промежуточных
+//     назначениях. Negative offset обходит проблему без зависимости от
+//     поведения constraint deferred flush.
+//  2. Pass 2: найти корни (шаги, на которые никто не указывает), DFS от
+//     каждого, назначить position = 1..N в порядке обхода.
+//  3. Если цикл (нет корней) — оставить временные негативные позиции, чтобы
+//     не упасть, и вернуть error для логирования. Cycle в графе — отдельная
+//     проблема (не должна возникать после корректного MoveStepUp); если
+//     возникла — defensive recover.
+func recomputePositions(ctx context.Context, r repo.ChainRepository, chainID uint) error {
+	steps, err := r.ListStepsByChain(ctx, chainID)
+	if err != nil {
+		return err
+	}
+	if len(steps) == 0 {
+		return nil
+	}
+
+	// Pass 1: temporary negative positions, unique by index.
+	// После этого constraint not violatable во time DFS pass.
+	for i := range steps {
+		steps[i].Position = -1000 - i
+		if uerr := r.UpdateStep(ctx, &steps[i]); uerr != nil {
+			return uerr
+		}
+	}
+
+	byID := make(map[uint]*models.PromptChainStep, len(steps))
+	referenced := make(map[uint]bool, len(steps))
+	for i := range steps {
+		byID[steps[i].ID] = &steps[i]
+	}
+	for i := range steps {
+		st := &steps[i]
+		if st.NextStepID != nil {
+			referenced[*st.NextStepID] = true
+		}
+		if st.StepType == models.StepTypeFork && len(st.Conditions) > 0 {
+			var conds models.Conditions
+			if jerr := json.Unmarshal(st.Conditions, &conds); jerr == nil {
+				for _, b := range conds.Branches {
+					if b.NextStepID != nil {
+						referenced[*b.NextStepID] = true
+					}
+				}
+			}
+		}
+	}
+
+	var roots []*models.PromptChainStep
+	for i := range steps {
+		if !referenced[steps[i].ID] {
+			roots = append(roots, &steps[i])
+		}
+	}
+	// Детерминированный порядок корней — по ID (negative positions
+	// уже неинформативны после Pass 1).
+	sort.Slice(roots, func(i, j int) bool { return roots[i].ID < roots[j].ID })
+
+	if len(roots) == 0 {
+		// Cycle detected. Leave temporary negative positions and return error
+		// — graph корректировка через next_step_id должна была предотвратить.
+		return fmt.Errorf("recomputePositions: cycle detected in chain %d", chainID)
+	}
+
+	visited := make(map[uint]bool, len(steps))
+	pos := 1
+	var walk func(st *models.PromptChainStep) error
+	walk = func(st *models.PromptChainStep) error {
+		if st == nil || visited[st.ID] {
+			return nil
+		}
+		visited[st.ID] = true
+		st.Position = pos
+		if uerr := r.UpdateStep(ctx, st); uerr != nil {
+			return uerr
+		}
+		pos++
+		if st.StepType == models.StepTypeFork && len(st.Conditions) > 0 {
+			var conds models.Conditions
+			if jerr := json.Unmarshal(st.Conditions, &conds); jerr == nil {
+				for _, b := range conds.Branches {
+					if b.NextStepID != nil {
+						if werr := walk(byID[*b.NextStepID]); werr != nil {
+							return werr
+						}
+					}
+				}
+			}
+		}
+		if st.NextStepID != nil {
+			if werr := walk(byID[*st.NextStepID]); werr != nil {
+				return werr
+			}
+		}
+		return nil
+	}
+	for _, root := range roots {
+		if werr := walk(root); werr != nil {
+			return werr
+		}
+	}
+	return nil
 }
 
 // MoveStepDown — двинуть шаг вниз, выраженный через MoveStepUp следующего.
