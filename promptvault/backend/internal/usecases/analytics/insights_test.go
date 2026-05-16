@@ -24,6 +24,10 @@ type trackingAnalyticsRepo struct {
 	// возвращают ошибку. Используется для resilience-теста errgroup'а
 	// (один failed user не должен блокировать остальные).
 	failOnUserID uint
+	// insightsAll — Task 6: возвращается из GetInsights. Используется тестами
+	// GetInsightsGated для проверки per-type filter'а (repo отдаёт все 7 типов,
+	// service фильтрует по plan'у).
+	insightsAll []models.SmartInsight
 }
 
 func newTrackingRepo() *trackingAnalyticsRepo {
@@ -123,7 +127,8 @@ func (r *trackingAnalyticsRepo) LogShareView(context.Context, *models.ShareView)
 	return nil
 }
 func (r *trackingAnalyticsRepo) GetInsights(context.Context, uint, *uint) ([]models.SmartInsight, error) {
-	return nil, nil
+	r.inc("GetInsights")
+	return r.insightsAll, nil
 }
 func (r *trackingAnalyticsRepo) DeleteShareViewsOlderThan(context.Context, time.Time) (int64, error) {
 	return 0, nil
@@ -384,5 +389,54 @@ func allInsightTypes() []string {
 		models.InsightPossibleDuplicates,
 		models.InsightOrphanTags,
 		models.InsightEmptyCollections,
+	}
+}
+
+// TestService_GetInsightsGated_PerTypeFilter — Pricing Iteration v3 Task 6:
+// GetInsightsGated больше не master-gate (Pro/Free → 402), а per-type filter:
+//   - Free → ErrProRequired (HTTP 402) — upgrade prompt.
+//   - Pro/pro_yearly → 2 типа (unused + duplicates) teaser.
+//   - Max/max_yearly → все 7 типов.
+//
+// Repo возвращает все 7 типов; service фильтрует по тарифу.
+func TestService_GetInsightsGated_PerTypeFilter(t *testing.T) {
+	ctx := context.Background()
+	allTypes := []models.SmartInsight{
+		{InsightType: models.InsightUnusedPrompts},
+		{InsightType: models.InsightTrending},
+		{InsightType: models.InsightDeclining},
+		{InsightType: models.InsightMostEdited},
+		{InsightType: models.InsightPossibleDuplicates},
+		{InsightType: models.InsightOrphanTags},
+		{InsightType: models.InsightEmptyCollections},
+	}
+	cases := []struct {
+		plan          string
+		wantErr       error
+		wantTypeCount int
+	}{
+		{"free", ErrProRequired, 0},
+		{"pro", nil, 2},
+		{"pro_yearly", nil, 2},
+		{"max", nil, 7},
+		{"max_yearly", nil, 7},
+	}
+	for _, tc := range cases {
+		t.Run(tc.plan, func(t *testing.T) {
+			repo := &trackingAnalyticsRepo{
+				calls:       make(map[string]int),
+				insightsAll: allTypes,
+			}
+			users := &fakeUsersForLookup{user: &models.User{ID: 1, PlanID: tc.plan}}
+			svc := NewService(repo, nil, nil, users, nil)
+			// Не выставляем planFromCtx — lookupPlanID идёт через users.GetByID.
+			insights, err := svc.GetInsightsGated(ctx, 1, nil)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, insights, tc.wantTypeCount)
+		})
 	}
 }

@@ -3,6 +3,7 @@ package analytics
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	repo "promptvault/internal/interface/repository"
@@ -106,17 +107,37 @@ func (s *Service) SetNotifier(n InsightsNotifier) {
 	s.notifier = n
 }
 
-// GetInsightsGated — проверка плана + чтение insights. Free/Pro получают
-// ErrMaxRequired. Логика плана вынесена из handler'а в service (H5).
+// GetInsightsGated — публичный endpoint /api/analytics/insights.
+// Pricing Iteration v3 Task 6: per-type filter вместо master-gate.
+//
+//   - Free → ErrProRequired (HTTP 402, upgrade prompt).
+//   - Pro/pro_yearly → 2 типа teaser (unused + duplicates).
+//   - Max/max_yearly → все 7 типов.
+//
+// Repo читает все типы юзера; service фильтрует in-memory по `insightsForPlan`.
+// Логика плана вынесена из handler'а в service (H5).
 func (s *Service) GetInsightsGated(ctx context.Context, userID uint, teamID *uint) ([]models.SmartInsight, error) {
 	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if !subscription.IsMax(planID) {
-		return nil, ErrMaxRequired
+	allowed := insightsForPlan(planID)
+	if len(allowed) == 0 {
+		// Free / unknown — 402 с подсказкой апгрейда на Pro (минимальный платный).
+		return nil, ErrProRequired
 	}
-	return s.analytics.GetInsights(ctx, userID, teamID)
+	all, err := s.analytics.GetInsights(ctx, userID, teamID)
+	if err != nil {
+		return nil, err
+	}
+	// Filter в памяти: repo отдаёт всё что есть, service режет по тарифу.
+	filtered := make([]models.SmartInsight, 0, len(all))
+	for _, ins := range all {
+		if slices.Contains(allowed, ins.InsightType) {
+			filtered = append(filtered, ins)
+		}
+	}
+	return filtered, nil
 }
 
 // RefreshInsightsGated — Max-only force-пересчёт. Обычно инсайты считаются
