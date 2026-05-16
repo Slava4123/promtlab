@@ -357,6 +357,68 @@ func TestHandleWebhook_Confirmed_Renewal_ExtendsPeriod(t *testing.T) {
 	if !extendCalled {
 		t.Error("expected ExtendPeriod called for renewal payment, got none")
 	}
+	// Defensive sync user.plan_id (фикс 16.05.2026): renewal-branch
+	// должна вызывать SetPlan с plan_id из subscription, иначе при drift
+	// между user.plan_id и sub.plan_id (например после expirationLoop)
+	// юзер останется на free несмотря на успешный charge.
+	if len(users.setPlanCalls) != 1 {
+		t.Fatalf("expected 1 SetPlan call on renewal, got %d", len(users.setPlanCalls))
+	}
+	if users.setPlanCalls[0].userID != 42 || users.setPlanCalls[0].planID != "pro" {
+		t.Errorf("SetPlan called with wrong args: %+v", users.setPlanCalls[0])
+	}
+}
+
+// TestHandleWebhook_Confirmed_Renewal_SyncsUserPlanWhenDrift — регрессия
+// инцидента 16.05.2026 sub_id=2: user.plan_id отставал от subscription.plan_id
+// после восстановления подписки из expired/past_due. ExtendPeriod продлевал
+// период, но не обновлял users.plan_id — юзер видел Free несмотря на
+// успешное списание.
+func TestHandleWebhook_Confirmed_Renewal_SyncsUserPlanWhenDrift(t *testing.T) {
+	prov := &mockProvider{verifyResult: true}
+	pays := &payRepoExt{
+		getByExtID: func(_, _ string) (*models.Payment, error) {
+			return &models.Payment{
+				ID:           2,
+				UserID:       42,
+				Status:       models.PaymentPending,
+				ProviderData: providerData("pro", true), // renewal=true
+			}, nil
+		},
+		transition: func(_ uint, _, _ models.PaymentStatus) (bool, error) { return true, nil },
+	}
+	// Подписка вернулась в active (с plan_id=pro), но user.plan_id ещё free
+	// (drift после expirationLoop). Webhook должен синхронизировать обратно.
+	existing := &models.Subscription{
+		ID: 99, UserID: 42, PlanID: "pro",
+		Status:           models.SubStatusActive,
+		CurrentPeriodEnd: time.Now().Add(12 * time.Hour),
+	}
+	subs := &mockSubsRepo{
+		getActive:    func(_ uint) (*models.Subscription, error) { return existing, nil },
+		extendPeriod: func(uint, time.Time) error { return nil },
+	}
+	// Стартовый plan_id=free (drift) — после webhook должно стать pro
+	// через SetPlan-call (атомарный UPDATE).
+	users := &mockUsersRepo{}
+	plans := &mockPlansRepo{
+		getByID: func(id string) (*models.SubscriptionPlan, error) {
+			return &models.SubscriptionPlan{ID: id, PeriodDays: 30}, nil
+		},
+	}
+	svc := newFullService(prov, pays, subs, users, plans)
+
+	err := svc.HandleWebhook(context.Background(), "tbank",
+		map[string]string{"Token": "x", "PaymentId": "p1", "Status": "CONFIRMED"})
+	if err != nil {
+		t.Fatalf("HandleWebhook: %v", err)
+	}
+	if len(users.setPlanCalls) != 1 {
+		t.Fatalf("expected SetPlan call to sync drift, got %d", len(users.setPlanCalls))
+	}
+	if users.setPlanCalls[0].planID != "pro" {
+		t.Errorf("SetPlan called with planID=%q, want %q", users.setPlanCalls[0].planID, "pro")
+	}
 }
 
 // --- REFUNDED with active subscription → ExpireAndDowngrade ---

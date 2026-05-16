@@ -456,6 +456,19 @@ func (s *Service) activateSubscription(ctx context.Context, pay *models.Payment,
 			slog.Error("subscription.renewal.extend_failed", "sub_id", existing.ID, "error", err)
 			return fmt.Errorf("subscription.renewal.extend: %w", err)
 		}
+		// Defensive sync user.plan_id с subscription.plan_id. В штатном flow
+		// они уже совпадают и SetPlan no-op'ит. Но если юзер был downgraded
+		// (expirationLoop вынес sub в expired → user.plan_id=free, потом sub
+		// руками/админом восстановили в active/past_due → renewal прошёл),
+		// ExtendPeriod не возвращает plan_id обратно — юзер видит Free
+		// несмотря на успешное списание. Инцидент 16.05.2026 sub_id=2.
+		// SetPlan атомарен (без mass-overwrite), безопасен идемпотентно.
+		if err := s.users.SetPlan(ctx, pay.UserID, plan.ID); err != nil {
+			slog.Error("subscription.renewal.set_plan_failed",
+				"user_id", pay.UserID, "plan_id", plan.ID, "error", err)
+			// Не возвращаем error: период уже продлён, fail'ить renewal нельзя.
+			// Sentry/alerts покажут drift, SRE починит руками (UPDATE users.plan_id).
+		}
 		slog.Info("subscription.renewal.extended",
 			"sub_id", existing.ID, "user_id", pay.UserID, "plan_id", plan.ID, "new_end", newEnd)
 		return nil
