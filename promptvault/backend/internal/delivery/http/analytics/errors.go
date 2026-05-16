@@ -21,14 +21,15 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 		httperr.Respond(w, httperr.NotFound("Не найдено"))
 	case errors.Is(err, analyticsuc.ErrMaxRequired):
 		// Refresh insights endpoint — Max-only (rate-limited 1/час).
-		respondTierRequired(w, "insights", "Max")
+		respondTierRequired(w, "insights", "max")
 	case errors.Is(err, analyticsuc.ErrProRequired):
 		// Pricing iteration v3 (Task 8): ErrProRequired поднимается из двух мест:
 		//   - GetInsightsGated (insights teaser — Free → 402, Pro/Max → данные),
 		//   - ExportGate (CSV/XLSX export — Free → 402, Pro/Max → данные).
 		// Generic "premium_feature" label корректно описывает оба контекста.
-		// plan="Pro" нужен фронту для upgrade prompt (CTA на /pricing).
-		respondTierRequired(w, "premium_feature", "Pro")
+		// plan="pro" нужен фронту для upgrade prompt (CTA на /pricing) —
+		// lowercase для match с frontend planConfig lookup (PlanBadge).
+		respondTierRequired(w, "premium_feature", "pro")
 	default:
 		httperr.RespondWithRequest(w, r, httperr.Internal(err))
 	}
