@@ -254,6 +254,53 @@ func TestCheckPromptQuota(t *testing.T) {
 	}
 }
 
+// Pack G (миграция 000072): Free max_prompts повышен 15 → 25.
+// Grandfather от Pack E (legacy_quotas.max_prompts=50) автоматически сохраняется
+// через effectiveLimit = max(legacy, plan). Проверяем три сценария:
+//   1. Новый юзер без legacy → limit = 25 (значение плана).
+//   2. Pack E grandfather (legacy=50) → limit = 50 (legacy > plan).
+//   3. Произвольный higher legacy (100) → limit = 100 (legacy сохраняет старый
+//      лимит даже если он выше 50 — например, юзер-партнёр с ручным бонусом).
+func TestService_CheckPromptQuota_Free25WithLegacyGrandfather(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name       string
+		legacyJSON string
+		wantLimit  int
+	}{
+		{"new user — no legacy", `{}`, 25},
+		{"Pack E grandfather", `{"max_prompts":50}`, 50},
+		{"higher legacy stays", `{"max_prompts":100}`, 100},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			user := &models.User{ID: 1, PlanID: "free", LegacyQuotas: json.RawMessage(tc.legacyJSON)}
+			plan := &models.SubscriptionPlan{ID: "free", MaxPrompts: 25}
+
+			// used = wantLimit-1 → должно пройти (под потолком).
+			q := &fakeQuotaRepo{prompts: int64(tc.wantLimit - 1)}
+			svc := newService(user, plan, q)
+			if err := svc.CheckPromptQuota(ctx, 1); err != nil {
+				t.Fatalf("used=%d limit=%d: unexpected error %v", tc.wantLimit-1, tc.wantLimit, err)
+			}
+
+			// used = wantLimit → upiraemsja v potolok (isWithinLimit strict <).
+			q.prompts = int64(tc.wantLimit)
+			var qe *QuotaExceededError
+			err := svc.CheckPromptQuota(ctx, 1)
+			if !errors.As(err, &qe) {
+				t.Fatalf("used=%d limit=%d: expected QuotaExceededError, got %v", tc.wantLimit, tc.wantLimit, err)
+			}
+			if qe.Limit != tc.wantLimit {
+				t.Fatalf("expected qe.Limit=%d, got %d", tc.wantLimit, qe.Limit)
+			}
+			if qe.Used != tc.wantLimit {
+				t.Fatalf("expected qe.Used=%d, got %d", tc.wantLimit, qe.Used)
+			}
+		})
+	}
+}
+
 // --- CheckExtensionQuota / CheckMCPQuota — единая логика, один smoke-test ---
 
 func TestCheckExtensionAndMCPQuota(t *testing.T) {
