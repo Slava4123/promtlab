@@ -5,6 +5,7 @@ import { ListSkeleton } from "../components/list-skeleton"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
+import { Textarea } from "../components/ui/textarea"
 import { ConfirmDialog } from "../components/ui/confirm-dialog"
 import { useToast } from "../components/ui/toaster"
 import {
@@ -111,7 +112,10 @@ export function CollectionsPage() {
     setForm({
       id: c.id,
       name: c.name,
-      description: "",
+      // CollectionDTO имеет description (api.ts:284). До правки тут было "" —
+      // edit-форма всегда показывала пустое описание, и save без явного ввода
+      // стирал бы description, если бы backend B4 fix не защищал от этого.
+      description: c.description ?? "",
       color: c.color ?? COLORS[0],
       icon: c.icon ?? COLLECTION_ICON_OPTIONS[0].value,
     })
@@ -208,6 +212,17 @@ export function CollectionsPage() {
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="Например: Рабочие промпты"
                   autoFocus
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="col-desc">Описание</Label>
+                <Textarea
+                  id="col-desc"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="(необязательно)"
+                  rows={2}
+                  maxLength={500}
                 />
               </div>
               <div className="space-y-1">

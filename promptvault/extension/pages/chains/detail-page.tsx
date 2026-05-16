@@ -16,6 +16,7 @@ import { ConfirmDialog } from "../../components/ui/confirm-dialog"
 import { useToast } from "../../components/ui/toaster"
 import { useChain } from "../../hooks/use-chains"
 import { sendBg } from "../../lib/bg-client"
+import { qk } from "../../lib/query-keys"
 
 export function ChainDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -29,9 +30,9 @@ export function ChainDetailPage() {
   const deleteMut = useMutation({
     mutationFn: () => sendBg({ type: "api.deleteChain", id: chainId! }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["chains"] })
+      void qc.invalidateQueries({ queryKey: qk.chains })
       // Chains count уменьшается.
-      void qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
+      void qc.invalidateQueries({ queryKey: qk.usage })
       toast({ title: "Цепочка удалена", variant: "info" })
       navigate("/chains", { replace: true })
     },
@@ -55,6 +56,8 @@ export function ChainDetailPage() {
       </div>
     )
   }
+  // Backend гарантирует steps:[], guard на случай stale-cache / nil-сериализации.
+  const steps = chain.steps ?? []
 
   return (
     <div className="flex h-full flex-col">
@@ -90,7 +93,7 @@ export function ChainDetailPage() {
         )}
 
         <div className="flex items-center gap-3 text-[10px] text-(--color-muted-foreground)">
-          <span>{chain.steps.length} шагов</span>
+          <span>{steps.length} шагов</span>
           <span>•</span>
           <span>{chain.team_id ? "командная" : "личная"}</span>
         </div>
@@ -99,13 +102,13 @@ export function ChainDetailPage() {
           <h3 className="text-[10px] font-medium uppercase tracking-wide text-(--color-muted-foreground)">
             Шаги
           </h3>
-          {chain.steps.length === 0 ? (
+          {steps.length === 0 ? (
             <p className="rounded-md border border-dashed border-(--color-border) p-4 text-center text-[10px] text-(--color-muted-foreground)">
               Шагов ещё нет. Откройте редактор, чтобы добавить.
             </p>
           ) : (
             <ol className="space-y-1.5">
-              {chain.steps.map((step, idx) => (
+              {steps.map((step, idx) => (
                 <li
                   key={step.id}
                   className="flex items-start gap-2 rounded-md border border-(--color-border) bg-(--color-card) p-2.5 text-xs"
@@ -157,7 +160,7 @@ export function ChainDetailPage() {
           type="button"
           size="sm"
           onClick={() => navigate(`/chains/${chain.id}/run`)}
-          disabled={chain.steps.length === 0}
+          disabled={steps.length === 0}
           className="flex-1 gap-1.5"
         >
           <Play className="h-3.5 w-3.5" />

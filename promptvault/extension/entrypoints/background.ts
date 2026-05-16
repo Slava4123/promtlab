@@ -157,8 +157,16 @@ export default defineBackground(() => {
           windowId: tab.windowId,
         });
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      // Side Panel не открылся — selection уже в session storage, но юзер не
+      // видит UI и может подумать, что context-menu ничего не сделал.
+      // Breadcrumb даёт хоть какой-то след для дебага.
+      addBreadcrumb(
+        'bg.contextmenu',
+        'sidePanel.open failed',
+        { err: String(err), windowId: tab?.windowId },
+        'warning',
+      );
     }
   });
 
@@ -173,8 +181,26 @@ export default defineBackground(() => {
         .then((data) => sendResponse({ ok: true, data }))
         .catch((err: unknown) => {
           const resp = toErrorResponse(err);
-          if (!resp.ok && resp.error === 'unknown') {
-            captureException(err, { msgType: msg.type });
+          if (!resp.ok) {
+            // Breadcrumb на каждый non-ok ответ — даёт контекст в следующем
+            // capture event (например, серия 401 перед quota_exceeded).
+            addBreadcrumb(
+              'bg.error',
+              `${msg.type} → ${resp.error}`,
+              { code: resp.error, message: resp.message },
+              resp.error === 'unknown' || resp.error === 'network' ? 'error' : 'warning',
+            );
+            // Capture: unknown (бэк-баги/RuntimeError), network (включая
+            // invalid_json/empty_response — оба часто маскируют 5xx или ошибки
+            // парсинга в SW), 5xx через client_error со статусом ≥500.
+            // 4xx — ожидаемые user-errors, в Sentry не флудим.
+            const shouldCapture =
+              resp.error === 'unknown' ||
+              resp.error === 'network' ||
+              (resp.error === 'client_error' && err instanceof ApiError && err.status >= 500);
+            if (shouldCapture) {
+              captureException(err, { msgType: msg.type, code: resp.error });
+            }
           }
           sendResponse(resp);
         });
@@ -590,6 +616,11 @@ const HOST_SCRIPTS: Array<{ pattern: string; file: string }> = [
 
 async function reinjectContentScripts(): Promise<void> {
   if (!chrome.scripting?.executeScript) return;
+  // Breadcrumbs ring-buffer = 20 слотов. При reload расширения с 10+ открытыми
+  // AI-вкладками успехи reinject вытесняют реально-важные события из бэклога.
+  // Поэтому пишем breadcrumb только для (а) первого успеха per session и
+  // (б) всех failures — там реальная отладочная ценность.
+  let successLogged = false;
   for (const { pattern, file } of HOST_SCRIPTS) {
     try {
       const tabs = await chrome.tabs.query({ url: pattern });
@@ -600,11 +631,13 @@ async function reinjectContentScripts(): Promise<void> {
             target: { tabId: tab.id },
             files: [file],
           });
-          addBreadcrumb('bg.reinject', 'reinjected content script', {
-            file,
-            tabId: tab.id,
-            url: tab.url,
-          });
+          if (!successLogged) {
+            addBreadcrumb('bg.reinject', 'first reinject ok', {
+              file,
+              tabId: tab.id,
+            });
+            successLogged = true;
+          }
         } catch (err) {
           // Игнорируем ошибки (например chrome-extension://, chrome://, etc.)
           addBreadcrumb(

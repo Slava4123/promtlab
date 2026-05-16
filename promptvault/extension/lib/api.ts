@@ -1,6 +1,7 @@
 // API-клиент для backend PromptVault. Работает только из background service worker.
 
 import { getSettings } from './storage';
+import { addBreadcrumb } from './sentry';
 import {
   ApiError,
   type CollectionDTO,
@@ -71,8 +72,11 @@ async function request<T>(
   let res: Response;
   try {
     res = await fetch(`${apiBase}${path}`, { ...init, headers });
-  } catch {
-    throw new ApiError('network error', 0, 'network');
+  } catch (e) {
+    // Сохраняем оригинальную причину (Failed to fetch / CORS / DNS / AbortError)
+    // в details, иначе все network-сбои выглядят одинаково и дебаг невозможен.
+    addBreadcrumb('api.network', path, { cause: String(e) }, 'error');
+    throw new ApiError('network error', 0, 'network', { cause: String(e) });
   }
 
   if (res.status === 204) {
@@ -113,8 +117,11 @@ async function request<T>(
 
   try {
     return (await res.json()) as T;
-  } catch {
-    throw new ApiError('invalid json response', 500, 'network');
+  } catch (e) {
+    // Битый JSON в 200-ответе = бэк-баг. category 'unknown' (не 'network'),
+    // чтобы background::handleRequest всё-таки отправил event в Sentry.
+    addBreadcrumb('api.invalid_json', path, { cause: String(e) }, 'error');
+    throw new ApiError('invalid json response', 500, 'unknown', { cause: String(e) });
   }
 }
 
@@ -149,10 +156,18 @@ export interface UpdateProfileBody {
   avatar_url?: string;
 }
 
+// Backend `UpdateProfileRequest.Name` (auth/request.go:46) — `required`.
+// Если caller передал partial без name (например, обновить только username),
+// подставляем текущий name из /api/auth/me, иначе backend вернёт 400.
 export async function updateProfile(body: UpdateProfileBody): Promise<MeResponse> {
+  let resolvedBody = body;
+  if (body.name === undefined || body.name === '') {
+    const me = await getMe();
+    resolvedBody = { ...body, name: me.name };
+  }
   return request<MeResponse>('/api/auth/profile', {
     method: 'PUT',
-    body: JSON.stringify(body),
+    body: JSON.stringify(resolvedBody),
   });
 }
 
@@ -182,11 +197,14 @@ export async function validateKey(
   let res: Response;
   try {
     res = await fetch(`${base}/api/auth/me`, { headers });
-  } catch {
-    throw new ApiError('network error', 0, 'network');
+  } catch (e) {
+    addBreadcrumb('api.network', '/api/auth/me (validateKey)', { cause: String(e) }, 'error');
+    throw new ApiError('network error', 0, 'network', { cause: String(e) });
   }
   if (res.status === 401) throw new ApiError('unauthorized', 401, 'unauthorized');
-  if (!res.ok) throw new ApiError(`http ${res.status}`, res.status, 'network');
+  // !res.ok здесь — 4xx/5xx; 'client_error' лучше чем 'network' для
+  // narrowing на стороне UI (UI-формы expect validation, не offline).
+  if (!res.ok) throw new ApiError(`http ${res.status}`, res.status, 'client_error');
   return (await res.json()) as MeResponse;
 }
 
@@ -568,9 +586,13 @@ export async function inviteTeamMember(
   slug: string,
   body: { email: string; role: 'editor' | 'viewer' },
 ): Promise<void> {
+  // Backend `AddMemberRequest.Query` (team/request.go:14) принимает email
+  // ИЛИ username через одно поле `query`. До этого фикса extension слал
+  // `{email,role}` → 400 «Query required», т.е. приглашения через
+  // расширение не работали (SPA frontend шлёт правильное `query`).
   await request<void>(`/api/teams/${slug}/invitations`, {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ query: body.email, role: body.role }),
   });
 }
 
@@ -578,10 +600,13 @@ export async function removeTeamMember(slug: string, memberId: number): Promise<
   await request<void>(`/api/teams/${slug}/members/${memberId}`, { method: 'DELETE' });
 }
 
+// Transfer ownership — отдельный flow (backend сейчас валидирует
+// `oneof=editor viewer`, 'owner' → 400). Если когда-нибудь нужен — отдельный
+// endpoint `/transfer-ownership` с подтверждением.
 export async function updateTeamMemberRole(
   slug: string,
   memberId: number,
-  role: 'owner' | 'editor' | 'viewer',
+  role: 'editor' | 'viewer',
 ): Promise<void> {
   await request<void>(`/api/teams/${slug}/members/${memberId}`, {
     method: 'PUT',
@@ -841,11 +866,19 @@ async function unauthFetch(
     'Content-Type': 'application/json',
     'X-Client': `chrome-extension/${EXTENSION_VERSION}`,
   });
-  return fetch(`${apiBase}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
+  // Раньше при offline / DNS failure unauthFetch бросал сырой TypeError →
+  // background switch отдавал generic 'unknown error'. Юзер на login-форме
+  // видел «Ошибка» вместо «Нет сети». Оборачиваем в ApiError 'network'.
+  try {
+    return await fetch(`${apiBase}${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    addBreadcrumb('api.network', path, { cause: String(e) }, 'error');
+    throw new ApiError('Нет сети', 0, 'network', { cause: String(e) });
+  }
 }
 
 async function createKeyWithAccessToken(
@@ -853,17 +886,23 @@ async function createKeyWithAccessToken(
   accessToken: string,
   name: string,
 ): Promise<string> {
-  const res = await fetch(`${apiBase}/api/api-keys`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Client': `chrome-extension/${EXTENSION_VERSION}`,
-      'Authorization': `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ name, read_only: false }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase}/api/api-keys`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client': `chrome-extension/${EXTENSION_VERSION}`,
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ name, read_only: false }),
+    });
+  } catch (e) {
+    addBreadcrumb('api.network', '/api/api-keys (createKey)', { cause: String(e) }, 'error');
+    throw new ApiError('Нет сети при создании API-ключа', 0, 'network', { cause: String(e) });
+  }
   if (!res.ok) {
-    throw new ApiError(`не удалось создать API-key: ${res.status}`, res.status, 'unknown');
+    throw new ApiError(`не удалось создать API-key: ${res.status}`, res.status, 'client_error');
   }
   const data = (await res.json()) as { key: string };
   return data.key;
@@ -1062,27 +1101,35 @@ export async function uploadTeamLogoDirect(
   if (!apiKey) throw new ApiError('missing api key', 401, 'unauthorized');
 
   const formData = new FormData();
-  formData.append('logo', file);
+  // Backend team/logo_handler.go:50 читает r.FormFile("file"). Имя поля —
+  // часть HTTP-контракта, расхождение даёт 400 «Файл не передан в поле 'file'».
+  formData.append('file', file);
 
   const headers = new Headers();
   headers.set('Authorization', `Bearer ${apiKey}`);
   headers.set('X-Client', `chrome-extension/${EXTENSION_VERSION}`);
 
-  const res = await fetch(`${apiBase}/api/teams/${slug}/branding/logo`, {
-    method: 'POST',
-    headers,
-    body: formData,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase}/api/teams/${slug}/branding/logo`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+  } catch (e) {
+    throw new ApiError('network error', 0, 'network', { cause: String(e) });
+  }
 
   if (!res.ok) {
-    if (res.status === 401) throw new ApiError('unauthorized', 401, 'unauthorized');
-    if (res.status === 402) {
-      const body = await safeJson(res);
-      throw new ApiError(pickErrMsg(body) ?? 'upgrade required', 402, 'quota_exceeded', body ?? undefined);
-    }
-    if (res.status === 413) throw new ApiError('file too large', 413, 'validation');
-    if (res.status === 415) throw new ApiError('unsupported format', 415, 'validation');
-    throw new ApiError(`upload failed: ${res.status}`, res.status, 'network');
+    const body = await safeJson(res);
+    const msg = pickErrMsg(body);
+    if (res.status === 401) throw new ApiError(msg ?? 'unauthorized', 401, 'unauthorized', body ?? undefined);
+    if (res.status === 402) throw new ApiError(msg ?? 'upgrade required', 402, 'quota_exceeded', body ?? undefined);
+    // 413/415 — те же коды, что и в основном request(): UI на странице
+    // branding различает «файл слишком большой» и «формат не поддерживается».
+    if (res.status === 413) throw new ApiError(msg ?? 'Файл больше 1 МБ', 413, 'payload_too_large', body ?? undefined);
+    if (res.status === 415) throw new ApiError(msg ?? 'Формат не поддерживается', 415, 'unsupported_media_type', body ?? undefined);
+    throw new ApiError(msg ?? `upload failed: ${res.status}`, res.status, 'client_error', body ?? undefined);
   }
 
   return (await res.json()) as TeamBranding;

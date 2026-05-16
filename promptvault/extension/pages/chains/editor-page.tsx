@@ -120,6 +120,10 @@ export function ChainEditorPage() {
       </div>
     )
   }
+  // Backend NewChainDetailResponse гарантирует steps:[], но guard защищает
+  // от мусорных кэшей (старый build из POST createChain без steps) и
+  // регрессий типа nil-сериализации при будущих миграциях.
+  const steps = chain.steps ?? []
 
   return (
     <div className="flex h-full flex-col">
@@ -130,6 +134,7 @@ export function ChainEditorPage() {
         <h2 className="flex-1 truncate text-sm font-semibold">Редактор</h2>
         <Button
           type="button"
+          variant="brand"
           size="sm"
           onClick={() => updateChainMut.mutate()}
           disabled={updateChainMut.isPending || !dirty || !name.trim()}
@@ -192,13 +197,13 @@ export function ChainEditorPage() {
             </Button>
           </div>
 
-          {chain.steps.length === 0 ? (
+          {steps.length === 0 ? (
             <p className="rounded-md border border-dashed border-(--color-border) p-4 text-center text-[10px] text-(--color-muted-foreground)">
               Нет шагов. Нажмите «Добавить», чтобы выбрать промпт.
             </p>
           ) : (
             <ul className="space-y-1.5">
-              {chain.steps.map((step, idx) => (
+              {steps.map((step, idx) => (
                 <li
                   key={step.id}
                   className="rounded-md border border-(--color-border) bg-(--color-card) p-2.5 text-xs"
@@ -217,7 +222,7 @@ export function ChainEditorPage() {
                       <button
                         type="button"
                         onClick={() => moveDownMut.mutate(step.id)}
-                        disabled={idx === chain.steps.length - 1 || moveDownMut.isPending}
+                        disabled={idx === steps.length - 1 || moveDownMut.isPending}
                         className="rounded p-0.5 text-(--color-muted-foreground) hover:bg-(--color-muted) disabled:opacity-30"
                         aria-label="Ниже"
                       >
@@ -479,6 +484,7 @@ function AddPromptDialog({
           </Button>
           <Button
             type="button"
+            variant="brand"
             size="sm"
             onClick={() => addMut.mutate()}
             disabled={selectedId === null || addMut.isPending}

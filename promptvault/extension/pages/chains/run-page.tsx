@@ -83,7 +83,7 @@ export function ChainRunPage() {
   useEffect(() => {
     if (execId || startedRef.current) return
     if (!chainId || !chain) return
-    if (chain.steps.length === 0) return // empty chain handled below
+    if ((chain.steps?.length ?? 0) === 0) return // empty chain handled below
     startedRef.current = true
     startMutateRef
       .current({ chainId, initialVars: {} })
@@ -118,7 +118,7 @@ export function ChainRunPage() {
   }
 
   // Empty chain — show empty state without trying to start.
-  if (chain.steps.length === 0) {
+  if ((chain.steps?.length ?? 0) === 0) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex items-center gap-2 border-b border-(--color-border) p-2">
@@ -210,13 +210,24 @@ export function ChainRunPage() {
         clearActiveExec()
         navigate(-1)
       }}
-      insertFn={async (text) =>
-        insert.insert(
-          { id: 0, title: chain.name, content: text } as Prompt,
+      insertFn={async (text) => {
+        // step.prompt_id — реальный ID промпта этого шага. До этого фикса
+        // использовался фейковый {id: 0}, и api.incrementUsage(0) давал 404
+        // (silently через .catch в useInsertPrompt) → счётчик «Вставки
+        // сегодня» не рос при прохождении цепочек, usage_count промпта
+        // не инкрементировался, прохождение цепочки не считалось
+        // использованием промпта.
+        const promptId = currentStep.prompt_id ?? 0
+        return insert.insert(
+          {
+            id: promptId,
+            title: currentStep.prompt?.title || chain.name,
+            content: text,
+          } as Prompt,
           text,
           { silent: false },
         )
-      }
+      }}
       advancing={advanceMut.isPending}
     />
   )

@@ -81,7 +81,7 @@ export function useUpdateTeamMemberRole(slug: string) {
   return useMutation<
     { ok: true },
     Error,
-    { memberId: number; role: "owner" | "editor" | "viewer" }
+    { memberId: number; role: "editor" | "viewer" }
   >({
     mutationFn: ({ memberId, role }) =>
       sendBg({ type: "api.updateTeamMemberRole", slug, memberId, role }),

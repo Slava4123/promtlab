@@ -110,11 +110,25 @@ export function TeamDetailPage() {
   }
 
   async function handleRoleChange(memberId: number, role: TeamRole) {
+    // Backend валидатор UpdateMemberRoleRequest принимает только editor|viewer
+    // (transfer ownership — отдельный flow, недоступный в extension UI).
+    if (role !== "editor" && role !== "viewer") {
+      toast({
+        title: "Передача владения недоступна в расширении",
+        description: "Откройте веб-приложение",
+        variant: "info",
+      })
+      return
+    }
     try {
       await updateRoleMut.mutateAsync({ memberId, role })
       toast({ title: "Роль обновлена", variant: "success" })
-    } catch {
-      toast({ title: "Не удалось обновить роль", variant: "error" })
+    } catch (err) {
+      toast({
+        title: "Не удалось обновить роль",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "error",
+      })
     }
   }
 

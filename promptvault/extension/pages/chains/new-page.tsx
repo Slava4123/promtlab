@@ -8,6 +8,7 @@ import { Label } from "../../components/ui/label"
 import { Textarea } from "../../components/ui/textarea"
 import { useToast } from "../../components/ui/toaster"
 import { sendBg } from "../../lib/bg-client"
+import { qk } from "../../lib/query-keys"
 import { useWorkspace } from "../../hooks/use-workspace"
 
 export function ChainNewPage() {
@@ -25,9 +26,9 @@ export function ChainNewPage() {
         body: { name: name.trim(), description: description.trim(), team_id: teamId },
       }),
     onSuccess: (chain) => {
-      void qc.invalidateQueries({ queryKey: ["chains"] })
+      void qc.invalidateQueries({ queryKey: qk.chains })
       // Chains count в Подписке/quota-indicator растёт.
-      void qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
+      void qc.invalidateQueries({ queryKey: qk.usage })
       toast({ title: "Цепочка создана", variant: "success" })
       navigate(`/chains/${chain.id}/edit`, { replace: true })
     },

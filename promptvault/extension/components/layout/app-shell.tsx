@@ -22,7 +22,7 @@ export function AppShell() {
   // 2. H3: переводим focus на <main> — Tab-навигация продолжается с верха
   //    нового контента, screen-reader перечитывает page-context.
   // 3. Объявляем смену route в live-region. Берём pathname как fallback;
-  //    отдельные страницы могут override через document.title (TODO).
+  //    отдельные страницы могут override через document.title.
   // drawer/palette НЕ в deps — иначе закрытие drawer внутри эффекта
   // вызовет бесконечный цикл. setPageAnnouncement в effect правомерен:
   // ARIA-live announcement — это side-effect синхронизации с DOM.

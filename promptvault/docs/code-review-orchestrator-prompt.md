@@ -494,6 +494,7 @@
   Это даст возможность continue после compaction без потери контекста.
 </compaction_survival_hints>
 
+
 <heuristics_over_rules>
   Всё выше — это эвристики, не догмы. Когда context требует — отклоняйся осознанно и фиксируй причину в финальном отчёте (section "Process notes"). Например:
   - micro-проект с одним файлом: можно слить Phase 1+2+4 в один subagent.

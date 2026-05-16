@@ -127,7 +127,7 @@ export type BgRequest =
       type: 'api.updateTeamMemberRole'
       slug: string
       memberId: number
-      role: 'owner' | 'editor' | 'viewer'
+      role: 'editor' | 'viewer'
     }
   // --- Invitations ---
   | { type: 'api.listMyInvitations' }
@@ -440,3 +440,15 @@ export function isSupportedHost(host: string | null): boolean {
   if (!host) return false;
   return host in HOST_LABELS;
 }
+
+// Compile-time гарантия что BgResultMap покрывает все BgRequest['type'] и не
+// содержит лишних ключей. Без этого добавление в BgRequest нового типа без
+// записи в BgResultMap молча даёт `unknown` через `Extract` в `sendBg`.
+type _AssertResultMapExhaustive = BgRequest['type'] extends keyof BgResultMap
+  ? keyof BgResultMap extends BgRequest['type']
+    ? true
+    : never
+  : never;
+const _assertExhaustive: _AssertResultMapExhaustive = true;
+// `void` — TS allowUnusedLabels не покрывает const, поэтому явный no-op.
+void _assertExhaustive;
