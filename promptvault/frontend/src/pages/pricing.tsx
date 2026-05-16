@@ -166,6 +166,19 @@ function yearlyAnchor(plan: Plan, plans: Plan[]): { wasKop: number; savedPct: nu
   return { wasKop, savedPct }
 }
 
+// yearlyDiscountPct — вычисляет % скидки годовой подписки относительно monthly×12.
+// Берёт цены из массива plans, чтобы badge динамически отражал реальную
+// конфигурацию (миграция 000073 повысила скидку с 10% до 20%).
+// Возвращает 0 если pro или pro_yearly отсутствуют в plans.
+function yearlyDiscountPct(plans: Plan[]): number {
+  const pro = plans.find((p) => p.id === "pro")
+  const proYearly = plans.find((p) => p.id === "pro_yearly")
+  if (!pro || !proYearly) return 0
+  const expected = pro.price_kop * 12
+  if (expected <= 0) return 0
+  return Math.round(((expected - proYearly.price_kop) / expected) * 100)
+}
+
 export default function Pricing() {
   const { data: plans, isLoading, error } = usePlans()
   const checkout = useCheckout()
@@ -228,6 +241,11 @@ export default function Pricing() {
     })
   }, [plans, billing])
 
+  // Динамический процент скидки для yearly-badge. Берётся из реальных цен
+  // (миграция 000073 повысила скидку с 10% до 20%) — хардкод "−10%" в JSX
+  // бы рассинхронизировался с annual-планами в БД.
+  const yearlyPct = plans ? yearlyDiscountPct(plans) : 0
+
   return (
     <PageLayout
       title="Тарифы"
@@ -265,7 +283,7 @@ export default function Pricing() {
             </div>
           )}
 
-          {/* Billing toggle: Monthly | Yearly −10% */}
+          {/* Billing toggle: Monthly | Yearly −{yearlyPct}% (динамика, не хардкод). */}
           <div className="mb-6 flex justify-center">
             <div
               role="tablist"
@@ -296,7 +314,7 @@ export default function Pricing() {
               >
                 Ежегодно
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] font-semibold text-emerald-600 dark:text-emerald-400">
-                  −10%
+                  −{yearlyPct}%
                 </span>
               </button>
             </div>
