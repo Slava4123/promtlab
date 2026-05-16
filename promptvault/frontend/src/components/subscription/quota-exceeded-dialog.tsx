@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { AlertTriangle, ArrowRight, Loader2, LifeBuoy, Trash2, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
@@ -14,6 +15,7 @@ import { useQuotaStore } from "@/stores/quota-store"
 import { useAuthStore } from "@/stores/auth-store"
 import { useCheckout, usePlans } from "@/hooks/use-subscription"
 import { PlanBadge } from "./plan-badge"
+import { RecurrentConsent } from "./recurrent-consent"
 import type { Plan } from "@/api/types"
 
 // Человеко-читаемое название ресурса для заголовка диалога.
@@ -188,8 +190,25 @@ export function QuotaExceededDialog() {
   const hasUsage = typeof used === "number" && typeof limit === "number" && limit > 0
   const isMaxUser = target === null
 
+  // Phase 16-Z: согласие на recurrent списания. Нужно только в direct-checkout
+  // flow (Free юзер → Pro/Max), где из диалога уходит в T-Bank без редиректа
+  // на /pricing. В Pro → Max ведём на /pricing — согласие проставит там.
+  const targetPlan: Plan | undefined = target === "pro" ? proPlan : target === "max" ? maxPlan : undefined
+  const needsConsent = !!targetPlan && (planId === "free" || !planId)
+  // Consent сбрасывается при закрытии диалога через onOpenChange ниже,
+  // чтобы при следующем открытии юзер заново подтвердил.
+  const [consent, setConsent] = useState(false)
+
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && dismiss()}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) {
+          setConsent(false)
+          dismiss()
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
@@ -225,17 +244,25 @@ export function QuotaExceededDialog() {
         )}
 
         <DialogFooter className="flex-col gap-2 sm:flex-col">
+          {needsConsent && targetPlan && (
+            <RecurrentConsent
+              plan={targetPlan}
+              checked={consent}
+              onChange={setConsent}
+              idSuffix="quota"
+            />
+          )}
           {target ? (
             <Button
               className="w-full gap-1.5"
-              disabled={checkout.isPending}
+              disabled={checkout.isPending || (needsConsent && !consent)}
               onClick={() => {
                 dismiss()
                 // Free юзер — direct checkout (меньше кликов до оплаты).
                 // Pro юзер апгрейдится на Max → ведём на /pricing где он
                 // увидит сравнение Pro/Max и сделает осознанный выбор.
                 if (planId === "free" || !planId) {
-                  checkout.mutate(target)
+                  checkout.mutate({ planId: target, consent })
                   return
                 }
                 navigate("/pricing")
