@@ -12,6 +12,9 @@ type PromptResponse struct {
 	ID             uint                 `json:"id"`
 	Title          string               `json:"title"`
 	Content        string               `json:"content"`
+	// Description — короткое описание промпта. Phase 16-Y: добавлено после
+	// обнаружения silent data loss (UI editor имел поле, backend терял).
+	Description    string               `json:"description,omitempty"`
 	Model          string               `json:"model,omitempty"`
 	Favorite       bool                 `json:"favorite"`
 	PinnedPersonal bool                 `json:"pinned_personal"`
@@ -66,6 +69,7 @@ func NewPromptResponse(p models.Prompt, pinStatus ...repo.PinStatus) PromptRespo
 		ID:          p.ID,
 		Title:       p.Title,
 		Content:     p.Content,
+		Description: p.Description,
 		Model:       p.Model,
 		Favorite:    p.Favorite,
 		UsageCount:  p.UsageCount,

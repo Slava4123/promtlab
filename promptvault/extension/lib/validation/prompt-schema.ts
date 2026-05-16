@@ -14,7 +14,8 @@ export const promptSchema = z.object({
     .string()
     .min(1, "Заполните содержимое")
     .max(MAX_PROMPT_CONTENT_LENGTH, `Максимум ${MAX_PROMPT_CONTENT_LENGTH} символов`),
-  description: z.string().max(500, "Максимум 500 символов").optional(),
+  // Backend max=2000 (CreatePromptRequest validation после миграции 000071).
+  description: z.string().max(2000, "Максимум 2000 символов").optional(),
   model: z.string().optional(),
   collection_ids: z.array(z.number()).optional(),
   tag_ids: z.array(z.number()).optional(),

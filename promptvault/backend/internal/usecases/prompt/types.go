@@ -5,6 +5,7 @@ type CreateInput struct {
 	TeamID        *uint
 	Title         string
 	Content       string
+	Description   string
 	Model         string
 	CollectionIDs []uint
 	TagIDs        []uint
@@ -16,6 +17,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	Title         *string
 	Content       *string
+	Description   *string
 	Model         *string
 	ChangeNote    string
 	CollectionIDs []uint

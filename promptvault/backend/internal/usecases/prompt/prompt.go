@@ -68,12 +68,13 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Prompt, [
 	}
 
 	p := &models.Prompt{
-		UserID:   in.UserID,
-		TeamID:   in.TeamID,
-		Title:    in.Title,
-		Content:  in.Content,
-		Model:    in.Model,
-		IsPublic: in.IsPublic,
+		UserID:      in.UserID,
+		TeamID:      in.TeamID,
+		Title:       in.Title,
+		Content:     in.Content,
+		Description: in.Description,
+		Model:       in.Model,
+		IsPublic:    in.IsPublic,
 	}
 
 	if len(in.TagIDs) > 0 {
@@ -233,6 +234,9 @@ func (s *Service) Update(ctx context.Context, id, userID uint, in UpdateInput) (
 	}
 	if in.Content != nil {
 		p.Content = *in.Content
+	}
+	if in.Description != nil {
+		p.Description = *in.Description
 	}
 	if in.Model != nil {
 		p.Model = *in.Model

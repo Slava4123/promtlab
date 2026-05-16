@@ -137,6 +137,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		TeamID:        req.TeamID,
 		Title:         strings.TrimSpace(req.Title),
 		Content:       strings.TrimSpace(req.Content),
+		Description:   strings.TrimSpace(req.Description),
 		Model:         req.Model,
 		CollectionIDs: req.CollectionIDs,
 		TagIDs:        req.TagIDs,
@@ -186,6 +187,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	p, newBadges, err := h.svc.Update(r.Context(), id, userID, promptuc.UpdateInput{
 		Title:         trimSpacePtr(req.Title),
 		Content:       trimSpacePtr(req.Content),
+		Description:   trimSpacePtr(req.Description),
 		Model:         req.Model,
 		ChangeNote:    strings.TrimSpace(req.ChangeNote),
 		CollectionIDs: req.CollectionIDs,

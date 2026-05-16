@@ -42,6 +42,7 @@ export interface Prompt {
   id: number
   title: string
   content: string
+  description?: string
   model?: string
   favorite: boolean
   pinned_personal: boolean
@@ -541,6 +542,31 @@ export function quotaByKey(usage: UsageSummary, key: QuotaKey): QuotaInfo {
   return usage[key]
 }
 
+// QUOTA_ERROR_TYPES — quota_type значения, которые backend кладёт в 402-ответ.
+// Источник истины: backend/internal/usecases/quota/quota.go::newQuotaExceeded() +
+// team/branding_handler.go, team/logo_handler.go ("branding") +
+// delivery/http/analytics/errors.go ("insights", "export").
+// Это отдельный namespace от QUOTA_KEYS (последний — поля UsageSummary):
+// например, "ext_daily" (error) ↔ "ext_uses_today" (usage); семантически
+// один ресурс «Вставки сегодня», но имена в API намеренно разные.
+export const QUOTA_ERROR_TYPES = [
+  "prompts",
+  "team_prompts",
+  "collections",
+  "team_collections",
+  "teams",
+  "team_members",
+  "ext_daily",
+  "mcp_daily",
+  "chains",
+  "team_chains",
+  "chain_steps",
+  "branding",
+  "insights",
+  "export",
+] as const
+export type QuotaErrorType = (typeof QUOTA_ERROR_TYPES)[number]
+
 export interface TeamUsageSummary {
   team_id: number
   team_name: string
@@ -673,9 +699,9 @@ export interface ChainExecution {
 // даже когда backend явно слал "quota_type": "prompts".
 
 export class ApiError extends Error {
-  status: number
-  code?: string
-  details?: Record<string, unknown>
+  readonly status: number
+  readonly code?: string
+  readonly details?: Record<string, unknown>
 
   constructor(message: string, status: number, code?: string, details?: Record<string, unknown>) {
     super(message)
@@ -691,6 +717,10 @@ export class ApiError extends Error {
 export type TagDTO = Tag
 export type CollectionDTO = Pick<Collection, "id" | "name" | "color" | "icon"> & {
   prompts_count?: number
+  // description optional — list endpoint backend сейчас возвращает
+  // `description,omitempty` (опускает если пусто). Optional поле обеспечивает
+  // backward-compat: extension UI читает `c.description ?? ""`.
+  description?: string
 }
 export type TeamDTO = Pick<Team, "id" | "slug" | "name" | "description"> & {
   role?: string

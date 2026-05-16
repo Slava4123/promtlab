@@ -12,6 +12,9 @@ type Prompt struct {
 	TeamID      *uint          `gorm:"index" json:"team_id,omitempty"`
 	Title       string         `gorm:"size:300;not null" json:"title"`
 	Content     string         `gorm:"type:text;not null" json:"content"`
+	// Description — короткое описание промпта (max 2000 chars). Phase 16-Y:
+	// до миграции 000071 поле в БД отсутствовало, UI editor шёл silently lost.
+	Description string         `gorm:"size:2000;not null;default:''" json:"description"`
 	Model       string         `gorm:"size:100" json:"model,omitempty"`
 	Favorite    bool           `gorm:"default:false" json:"favorite"`
 	UsageCount  int            `gorm:"default:0" json:"usage_count"`
