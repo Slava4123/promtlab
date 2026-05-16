@@ -163,7 +163,7 @@ func TestComputeInsights_AllSevenTypesWhenTrgmAvailable(t *testing.T) {
 	r := newTrackingRepo()
 	s := newServiceForTest(r, true, true)
 
-	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil))
+	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil, maxAllInsights))
 
 	// 3 базовых типа
 	assert.Equal(t, 1, r.calls["UnusedPrompts"])
@@ -187,7 +187,7 @@ func TestComputeInsights_SkipsDuplicatesWhenTrgmUnavailable(t *testing.T) {
 	r := newTrackingRepo()
 	s := newServiceForTest(r, true, false) // experimental=true, trgm=false
 
-	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil))
+	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil, maxAllInsights))
 
 	// PossibleDuplicates НЕ вызван
 	assert.Equal(t, 0, r.calls["PossibleDuplicates"])
@@ -202,7 +202,7 @@ func TestComputeInsights_KillSwitchOff_OnlyThreeBaseTypes(t *testing.T) {
 	r := newTrackingRepo()
 	s := newServiceForTest(r, false, true) // kill-switch on
 
-	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil))
+	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil, maxAllInsights))
 
 	// Только 3 базовых типа
 	assert.Equal(t, 1, r.calls["UnusedPrompts"])
@@ -285,6 +285,70 @@ func (f *fakeUsersForLookup) MarkReferralRewarded(context.Context, uint) (bool, 
 func (f *fakeUsersForLookup) ListMaxUsers(context.Context) ([]uint, error) { panic("unused") }
 func (f *fakeUsersForLookup) SetInsightEmailsEnabled(context.Context, uint, bool) error {
 	panic("unused")
+}
+
+// upsertedTypes возвращает список insight-типов, для которых был
+// UpsertInsight (используется в Task 5 для проверки allowed-фильтра).
+func (r *trackingAnalyticsRepo) upsertedTypes() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, 0, len(r.calls))
+	const prefix = "UpsertInsight:"
+	for k, v := range r.calls {
+		if v > 0 && len(k) > len(prefix) && k[:len(prefix)] == prefix {
+			out = append(out, k[len(prefix):])
+		}
+	}
+	return out
+}
+
+// TestComputeInsights_FiltersByAllowed — Pricing Iteration v3 Task 5:
+// ComputeInsights должен считать и upsert'ить только те типы, что переданы
+// в allowed []string. Остальные skip'аются без SQL-запроса.
+//
+// Сценарий: allowed = Pro набор (unused + duplicates). Trending/declining/
+// most_edited/orphan_tags/empty_collections — НЕ должны попасть в upsert.
+func TestComputeInsights_FiltersByAllowed(t *testing.T) {
+	r := newTrackingRepo()
+	s := newServiceForTest(r, true, true) // experimental=true, trgm=true
+	s.SetNowFn(func() time.Time { return time.Date(2026, 5, 17, 0, 0, 0, 0, time.UTC) })
+
+	// Allowed только unused + duplicates (Pro набор).
+	err := s.ComputeInsights(context.Background(), 42, nil, []string{
+		models.InsightUnusedPrompts,
+		models.InsightPossibleDuplicates,
+	})
+	require.NoError(t, err)
+
+	upserted := r.upsertedTypes()
+	require.ElementsMatch(t, []string{
+		models.InsightUnusedPrompts,
+		models.InsightPossibleDuplicates,
+	}, upserted, "trending/declining/most_edited/orphan_tags/empty_collections должны быть skip'нуты — не в allowed list")
+
+	// Дополнительно: репо-методы НЕ должны быть вызваны для не-allowed типов.
+	assert.Equal(t, 0, r.calls["GetTrendingPrompts"], "trending/declining не вызваны — не в allowed")
+	assert.Equal(t, 0, r.calls["MostEditedPrompts"], "most_edited не вызван — не в allowed")
+	assert.Equal(t, 0, r.calls["OrphanTags"], "orphan_tags не вызван — не в allowed")
+	assert.Equal(t, 0, r.calls["EmptyCollections"], "empty_collections не вызван — не в allowed")
+}
+
+// TestComputeInsights_EmptyAllowedNoOp — пустой allowed list → no-op (нет
+// SQL-запросов, нет upsert'ов). Используется loop'ом для Free юзеров
+// (хотя Task 7 заменит на ListPaidUsers, чтобы Free не доходили сюда).
+func TestComputeInsights_EmptyAllowedNoOp(t *testing.T) {
+	r := newTrackingRepo()
+	s := newServiceForTest(r, true, true)
+
+	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil, nil))
+
+	assert.Empty(t, r.upsertedTypes(), "пустой allowed → ни одного upsert'а")
+	assert.Equal(t, 0, r.calls["UnusedPrompts"])
+	assert.Equal(t, 0, r.calls["GetTrendingPrompts"])
+	assert.Equal(t, 0, r.calls["MostEditedPrompts"])
+	assert.Equal(t, 0, r.calls["PossibleDuplicates"])
+	assert.Equal(t, 0, r.calls["OrphanTags"])
+	assert.Equal(t, 0, r.calls["EmptyCollections"])
 }
 
 // TestInsightsForPlan — Pricing Iteration v3 Task 4: helper для маппинга

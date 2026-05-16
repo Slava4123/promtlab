@@ -130,7 +130,7 @@ func (s *Service) RefreshInsightsGated(ctx context.Context, userID uint, teamID 
 	if !subscription.IsMax(planID) {
 		return nil, ErrMaxRequired
 	}
-	if err := s.ComputeInsights(ctx, userID, teamID); err != nil {
+	if err := s.ComputeInsights(ctx, userID, teamID, maxAllInsights); err != nil {
 		return nil, err
 	}
 	return s.analytics.GetInsights(ctx, userID, teamID)

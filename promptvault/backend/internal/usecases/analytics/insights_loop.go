@@ -96,7 +96,11 @@ func (l *InsightsComputeLoop) compute() {
 		uid := uid
 		g.Go(func() error {
 			// 1. Personal scope.
-			if cerr := l.svc.ComputeInsights(gctx, uid, nil); cerr != nil {
+			// Task 5 (Pricing Iteration v3): loop пока что передаёт maxAllInsights
+			// (все 7 типов) — это сохраняет текущее поведение (loop фильтрует
+			// Max-юзеров через ListMaxUsers). Task 7 заменит ListMaxUsers на
+			// ListPaidUsers + per-plan dispatch (Pro → proAllowedInsights).
+			if cerr := l.svc.ComputeInsights(gctx, uid, nil, maxAllInsights); cerr != nil {
 				failCount.Add(1)
 				metrics.InsightsRefresh.WithLabelValues("error").Inc()
 			} else {
@@ -116,7 +120,7 @@ func (l *InsightsComputeLoop) compute() {
 			}
 			for _, team := range teams {
 				tid := team.ID
-				if cerr := l.svc.ComputeInsights(gctx, uid, &tid); cerr != nil {
+				if cerr := l.svc.ComputeInsights(gctx, uid, &tid, maxAllInsights); cerr != nil {
 					mu.Lock()
 					slog.WarnContext(gctx, "analytics.insights_loop.team_compute_failed",
 						"user_id", uid, "team_id", tid, "error", cerr)
