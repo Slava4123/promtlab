@@ -3,6 +3,7 @@ import { Check, Sparkles, Zap, Crown, Loader2, type LucideIcon } from "lucide-re
 import { PageLayout } from "@/components/layout/page-layout"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DowngradePreviewDialog } from "@/components/subscription/downgrade-preview-dialog"
+import { RecurrentConsent } from "@/components/subscription/recurrent-consent"
 import {
   useCheckout,
   useDowngrade,
@@ -184,6 +185,12 @@ export default function Pricing() {
   // конкретные warnings до того, как юзер подтвердит.
   const [downgradeOpen, setDowngradeOpen] = useState(false)
   const downgradePreview = useDowngradePreview("free")
+
+  // Phase 16-Z: согласие на recurrent — per-plan (юзер выбирает Pro или Max),
+  // обнуляется при перезагрузке страницы (сброс state). Без него кнопка
+  // checkout каждого платного тарифа disabled. Требование T-Bank для
+  // активации Charge — без явной отметки списания не пропускают.
+  const [consents, setConsents] = useState<Record<string, boolean>>({})
 
   // Фильтруем планы под выбранный цикл: free всегда, остальные — по суффиксу
   // `_yearly` в ID. Раньше различали по period_days >= 300, но это ломалось
@@ -372,8 +379,22 @@ export default function Pricing() {
                     ))}
                   </ul>
 
+                  {plan.price_kop > 0 && !isCurrent && (
+                    <RecurrentConsent
+                      plan={plan}
+                      checked={consents[plan.id] ?? false}
+                      onChange={(c) => setConsents((prev) => ({ ...prev, [plan.id]: c }))}
+                      idSuffix="pricing"
+                    />
+                  )}
+
                   <button
-                    disabled={isCurrent || checkout.isPending || downgrade.isPending}
+                    disabled={
+                      isCurrent ||
+                      checkout.isPending ||
+                      downgrade.isPending ||
+                      (plan.price_kop > 0 && !consents[plan.id])
+                    }
                     onClick={() => {
                       if (isCurrent) return
                       if (plan.id === "free") {
@@ -383,7 +404,7 @@ export default function Pricing() {
                         setDowngradeOpen(true)
                         downgradePreview.refetch()
                       } else {
-                        checkout.mutate(plan.id)
+                        checkout.mutate({ planId: plan.id, consent: consents[plan.id] ?? false })
                       }
                     }}
                     className={`flex h-11 w-full items-center justify-center rounded-lg text-[0.85rem] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${

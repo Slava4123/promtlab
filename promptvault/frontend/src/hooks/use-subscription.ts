@@ -19,17 +19,38 @@ import {
 // CHECKOUT_INTENT_KEY — пометка что юзер хотел upgrade но не был залогинен.
 // После успешного login/register → sign-in.tsx вызывает popCheckoutIntent и
 // сразу начинает checkout, не теряя upsell momentum (M-14).
+//
+// Phase 16-Z (16.05.2026): храним JSON {planId, consent}. consent — отметил
+// ли юзер чек-бокс согласия на recurrent списания на pricing/quota-dialog.
+// Без consent=true sign-in.tsx НЕ запускает checkout автоматически — иначе
+// мы продадим подписку без явного согласия и нарушим требование T-Bank
+// (acq_help@tbank.ru) для активации метода Charge.
 const CHECKOUT_INTENT_KEY = "pv_checkout_intent"
 
-export function saveCheckoutIntent(planId: string) {
-  try { sessionStorage.setItem(CHECKOUT_INTENT_KEY, planId) } catch { /* disabled storage */ }
+export interface CheckoutIntent {
+  planId: string
+  consent: boolean
 }
 
-export function popCheckoutIntent(): string | null {
+export function saveCheckoutIntent(intent: CheckoutIntent) {
   try {
-    const v = sessionStorage.getItem(CHECKOUT_INTENT_KEY)
+    sessionStorage.setItem(CHECKOUT_INTENT_KEY, JSON.stringify(intent))
+  } catch { /* disabled storage */ }
+}
+
+export function popCheckoutIntent(): CheckoutIntent | null {
+  try {
+    const raw = sessionStorage.getItem(CHECKOUT_INTENT_KEY)
     sessionStorage.removeItem(CHECKOUT_INTENT_KEY)
-    return v
+    if (!raw) return null
+    // Backward-compat: легаси-формат — просто planId-строка без обёртки.
+    // Тогда consent=false → sign-in потребует подтверждения через UI.
+    if (!raw.startsWith("{")) {
+      return { planId: raw, consent: false }
+    }
+    const parsed = JSON.parse(raw) as Partial<CheckoutIntent>
+    if (typeof parsed.planId !== "string") return null
+    return { planId: parsed.planId, consent: parsed.consent === true }
   } catch {
     return null
   }
@@ -91,9 +112,17 @@ export function useDowngradePreview(targetPlanId = "free") {
   })
 }
 
+export interface CheckoutArgs {
+  planId: string
+  // consent — пользователь явно отметил чек-бокс согласия на recurrent
+  // списания на pricing/quota-dialog. Phase 16-Z: при auth-fail сохраняем
+  // вместе с planId, чтобы sign-in.tsx не запускал checkout без согласия.
+  consent: boolean
+}
+
 export function useCheckout() {
   return useMutation({
-    mutationFn: (planId: string) => postCheckout(planId),
+    mutationFn: ({ planId }: CheckoutArgs) => postCheckout(planId),
     onSuccess: (data) => {
       // Сохраняем метку что был checkout — при возврате в приложение
       // (даже если T-Bank redirect идёт на лендинг, а не на localhost)
@@ -101,11 +130,12 @@ export function useCheckout() {
       sessionStorage.setItem("pending_checkout", "true")
       window.location.href = data.payment_url
     },
-    onError: (err: Error, planId) => {
-      // Если юзер не залогинен — сохраняем intent и ведём на sign-in,
-      // чтобы после login сразу продолжить checkout (M-14).
+    onError: (err: Error, { planId, consent }) => {
+      // Если юзер не залогинен — сохраняем intent (с consent) и ведём на
+      // sign-in, чтобы после login продолжить checkout без повторной
+      // проставки галочки (M-14 + T-Bank consent flow).
       if (isAuthError(err)) {
-        saveCheckoutIntent(planId)
+        saveCheckoutIntent({ planId, consent })
         toast.info("Войдите, чтобы оформить подписку")
         // Используем полный redirect (а не navigate): гарантированно сбрасывает
         // React Query cache и перехватывает из pricing-page state.

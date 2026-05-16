@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -83,13 +84,19 @@ export default function SignIn() {
   })
 
   // После успешного login — если был saved checkout intent, запускаем checkout сразу (M-14).
+  // Phase 16-Z: если consent НЕ проставлен (legacy intent или юзер ушёл логиниться
+  // не отметив чек-бокс) — ведём на /pricing, чтобы он явно подтвердил согласие
+  // на регулярные списания. Без consent T-Bank не активирует Charge.
   const resumeAfterLogin = () => {
     const pending = popCheckoutIntent()
-    if (pending) {
+    if (!pending) return false
+    if (pending.consent) {
       checkout.mutate(pending)
       return true
     }
-    return false
+    toast.info("Подтвердите согласие на автопродление, чтобы продолжить оплату")
+    navigate("/pricing")
+    return true
   }
 
   const onSubmit = async (data: LoginForm) => {
