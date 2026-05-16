@@ -20,18 +20,24 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, analyticsuc.ErrNotFound):
 		httperr.Respond(w, httperr.NotFound("Не найдено"))
 	case errors.Is(err, analyticsuc.ErrMaxRequired):
+		// Refresh insights endpoint — Max-only (rate-limited 1/час).
 		respondTierRequired(w, "insights", "Max")
 	case errors.Is(err, analyticsuc.ErrProRequired):
-		respondTierRequired(w, "export", "Pro")
+		// Pricing iteration v3 (Task 8): ErrProRequired поднимается из двух мест:
+		//   - GetInsightsGated (insights teaser — Free → 402, Pro/Max → данные),
+		//   - ExportGate (CSV/XLSX export — Free → 402, Pro/Max → данные).
+		// Generic "premium_feature" label корректно описывает оба контекста.
+		// plan="Pro" нужен фронту для upgrade prompt (CTA на /pricing).
+		respondTierRequired(w, "premium_feature", "Pro")
 	default:
 		httperr.RespondWithRequest(w, r, httperr.Internal(err))
 	}
 }
 
-// respondTierRequired — 402 Payment Required для фич выше текущего тарифа
-// (Smart Insights = Max only, Export CSV = Pro+). План юзера проверяется
-// в service — handler не знает current plan, передаём только required.
+// respondTierRequired — 402 Payment Required для фич выше текущего тарифа.
+// План юзера проверяется в service — handler не знает current plan,
+// передаёт только required plan для UI upgrade prompt.
 func respondTierRequired(w http.ResponseWriter, feature, requiredPlan string) {
-	httperr.RespondQuotaError(w, feature, 0, 0, "",
+	httperr.RespondQuotaError(w, feature, 0, 0, requiredPlan,
 		"Фича доступна на тарифе "+requiredPlan+". Обновите план на /pricing.")
 }
