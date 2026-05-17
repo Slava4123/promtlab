@@ -107,3 +107,56 @@ func TestInsightsHandlerDuplicates200(t *testing.T) {
 	require.Len(t, body.Items, 1)
 	require.Equal(t, 0.9, body.Items[0].Similarity)
 }
+
+func TestInsightsHandlerMergeHappy(t *testing.T) {
+	svc := &fakeInsightsService{} // mergeErr nil by default
+	h := prompt.NewInsightsHandler(svc)
+	r := chi.NewRouter()
+	r.With(injectUserID(42)).Post("/api/prompts/{id}/merge-with/{other_id}", h.Merge)
+
+	req := httptest.NewRequest("POST", "/api/prompts/1/merge-with/2", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var body struct {
+		KeptID   uint `json:"kept_id"`
+		MergedID uint `json:"merged_id"`
+	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	require.Equal(t, uint(1), body.KeptID)
+	require.Equal(t, uint(2), body.MergedID)
+}
+
+func TestInsightsHandlerMergeNotOwned404(t *testing.T) {
+	svc := &fakeInsightsService{mergeErr: prompt_insights.ErrPromptsNotOwned}
+	h := prompt.NewInsightsHandler(svc)
+	r := chi.NewRouter()
+	r.With(injectUserID(42)).Post("/api/prompts/{id}/merge-with/{other_id}", h.Merge)
+	req := httptest.NewRequest("POST", "/api/prompts/1/merge-with/2", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestInsightsHandlerMergeSameID400(t *testing.T) {
+	svc := &fakeInsightsService{mergeErr: prompt_insights.ErrSamePrompt}
+	h := prompt.NewInsightsHandler(svc)
+	r := chi.NewRouter()
+	r.With(injectUserID(42)).Post("/api/prompts/{id}/merge-with/{other_id}", h.Merge)
+	req := httptest.NewRequest("POST", "/api/prompts/5/merge-with/5", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestInsightsHandlerMergeBadID(t *testing.T) {
+	svc := &fakeInsightsService{}
+	h := prompt.NewInsightsHandler(svc)
+	r := chi.NewRouter()
+	r.With(injectUserID(42)).Post("/api/prompts/{id}/merge-with/{other_id}", h.Merge)
+	req := httptest.NewRequest("POST", "/api/prompts/abc/merge-with/2", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
+
 	httperr "promptvault/internal/delivery/http/errors"
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/usecases/prompt_insights"
@@ -104,6 +106,40 @@ func (h *InsightsHandler) MostEdited(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.Info("prompt_insights.requested", "type", "most_edited", "user_id", userID, "items_count", len(rows))
 	writeItems(w, rows)
+}
+
+// Merge — POST /api/prompts/{id}/merge-with/{other_id}.
+// id остаётся, other_id soft-удаляется. Возвращает {kept_id, merged_id}.
+func (h *InsightsHandler) Merge(w http.ResponseWriter, r *http.Request) {
+	userID := authmw.GetUserID(r.Context())
+	keepID, err := parsePathUint(r, "id")
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest("Неверный id"))
+		return
+	}
+	mergeID, err := parsePathUint(r, "other_id")
+	if err != nil {
+		httperr.Respond(w, httperr.BadRequest("Неверный other_id"))
+		return
+	}
+	if err := h.svc.MergePrompts(r.Context(), userID, keepID, mergeID); err != nil {
+		respondInsightsError(w, r, err)
+		return
+	}
+	slog.Info("prompt_insights.merge", "user_id", userID, "kept_id", keepID, "merged_id", mergeID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]uint{"kept_id": keepID, "merged_id": mergeID})
+}
+
+// parsePathUint — парсит chi URL-param как uint32.
+func parsePathUint(r *http.Request, name string) (uint, error) {
+	s := chi.URLParam(r, name)
+	v, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint(v), nil
 }
 
 // parseTeamID — парсит ?team_id= в *uint, nil на ошибку/пусто (personal scope).
