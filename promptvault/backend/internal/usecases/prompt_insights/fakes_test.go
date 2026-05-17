@@ -97,10 +97,6 @@ func (f *fakeAnalyticsRepo) MostEditedPrompts(ctx context.Context, userID uint, 
 	return nil, nil
 }
 
-func (f *fakeAnalyticsRepo) PossibleDuplicates(ctx context.Context, userID uint, teamID *uint, threshold float32, limit int) ([]repo.DuplicatePair, error) {
-	return nil, nil
-}
-
 func (f *fakeAnalyticsRepo) OrphanTags(ctx context.Context, userID uint, teamID *uint, limit int) ([]repo.TagRow, error) {
 	return nil, nil
 }

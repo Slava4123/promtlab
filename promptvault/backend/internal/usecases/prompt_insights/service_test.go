@@ -10,11 +10,16 @@ import (
 )
 
 type fakeAnalyticsRepo struct {
-	unused []repo.PromptUsageRow
+	unused     []repo.PromptUsageRow
+	duplicates []repo.DuplicatePair
 }
 
 func (f *fakeAnalyticsRepo) UnusedPrompts(ctx context.Context, userID uint, teamID *uint, before time.Time, limit int) ([]repo.PromptUsageRow, error) {
 	return f.unused, nil
+}
+
+func (f *fakeAnalyticsRepo) PossibleDuplicates(ctx context.Context, userID uint, teamID *uint, threshold float32, limit int) ([]repo.DuplicatePair, error) {
+	return f.duplicates, nil
 }
 
 type fakePlanLookup struct{ plan string }
@@ -59,5 +64,27 @@ func TestListUnusedFreePlanBlocked(t *testing.T) {
 	_, err := svc.ListUnused(context.Background(), 100, nil, 50)
 	if !errors.Is(err, ErrProRequired) {
 		t.Fatalf("expected ErrProRequired, got %v", err)
+	}
+}
+
+func TestListDuplicatesProTeaser(t *testing.T) {
+	ar := &fakeAnalyticsRepo{
+		duplicates: []repo.DuplicatePair{
+			{PromptAID: 1, PromptATitle: "A1", PromptBID: 2, PromptBTitle: "A2", Similarity: 0.91},
+		},
+	}
+	svc := NewService(ar, nil, &fakePlanLookup{plan: "pro"}, time.Now)
+	pairs, err := svc.ListDuplicates(context.Background(), 100, nil, 20)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	if len(pairs) != 1 {
+		t.Fatalf("expected 1 pair, got %d", len(pairs))
+	}
+	if pairs[0].PromptA.PromptID != 1 || pairs[0].PromptB.PromptID != 2 {
+		t.Fatalf("pair mismatch: %+v", pairs[0])
+	}
+	if pairs[0].Similarity < 0.9 || pairs[0].Similarity > 0.95 {
+		t.Fatalf("similarity mismatch: %v", pairs[0].Similarity)
 	}
 }

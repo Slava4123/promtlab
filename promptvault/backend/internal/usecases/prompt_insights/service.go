@@ -71,6 +71,30 @@ func (s *Service) ListUnused(ctx context.Context, userID uint, teamID *uint, lim
 	return out, nil
 }
 
+const duplicateSimilarityThreshold = 0.85
+
+// ListDuplicates — пары похожих по pg_trgm промптов. threshold = 0.85 (consistent
+// с InsightsCompute из analytics service).
+func (s *Service) ListDuplicates(ctx context.Context, userID uint, teamID *uint, limit int) ([]DuplicatePair, error) {
+	if err := s.checkAllowed(ctx, userID, insightTypeDuplicates); err != nil {
+		return nil, err
+	}
+	limit = clampLimit(limit, 20, 50)
+	raws, err := s.analytics.PossibleDuplicates(ctx, userID, teamID, duplicateSimilarityThreshold, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DuplicatePair, 0, len(raws))
+	for _, r := range raws {
+		out = append(out, DuplicatePair{
+			PromptA:    PromptInsightRow{PromptID: r.PromptAID, Title: r.PromptATitle},
+			PromptB:    PromptInsightRow{PromptID: r.PromptBID, Title: r.PromptBTitle},
+			Similarity: float64(r.Similarity),
+		})
+	}
+	return out, nil
+}
+
 func clampLimit(v, def, max int) int {
 	if v <= 0 {
 		return def
