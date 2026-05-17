@@ -129,7 +129,7 @@ describe("Analytics insights — three states", () => {
     expect(screen.getByText("Растёт")).toBeInTheDocument()
     expect(screen.getByText("Падает")).toBeInTheDocument()
     expect(screen.getByText("Часто правят")).toBeInTheDocument()
-    expect(screen.getByText("Orphan-теги")).toBeInTheDocument()
+    expect(screen.getByText("Теги без промптов")).toBeInTheDocument()
     expect(screen.getByText("Пустые коллекции")).toBeInTheDocument()
   })
 

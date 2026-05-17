@@ -176,7 +176,7 @@ export default function AnalyticsPage() {
                   <InsightsLockedCard title="Растёт" description="Промпты, использование которых выросло за 7 дней." />
                   <InsightsLockedCard title="Падает" description="Промпты, которые перестали активно использоваться." />
                   <InsightsLockedCard title="Часто правят" description="Топ промптов по количеству версий." />
-                  <InsightsLockedCard title="Orphan-теги" description="Теги без промптов для уборки." />
+                  <InsightsLockedCard title="Теги без промптов" description="Теги без активных промптов — стоит почистить." />
                   <InsightsLockedCard title="Пустые коллекции" description="Коллекции без промптов." />
                 </div>
               )}

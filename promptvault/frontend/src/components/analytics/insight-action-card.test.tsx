@@ -18,7 +18,7 @@ describe("InsightActionCard", () => {
         icon={AlertCircle}
         title="Забытые"
         description="5 промптов не использовались 30+ дней"
-        href="/prompts?filter=unused"
+        href="/prompts/insights/unused"
         count={5}
         ctaLabel="Посмотреть"
       />,
@@ -27,7 +27,7 @@ describe("InsightActionCard", () => {
     expect(screen.getByText(/30\+ дней/)).toBeInTheDocument()
     expect(screen.getByText("5")).toBeInTheDocument()
     const link = screen.getByRole("link", { name: /Посмотреть/ })
-    expect(link).toHaveAttribute("href", "/prompts?filter=unused")
+    expect(link).toHaveAttribute("href", "/prompts/insights/unused")
   })
 
   it("applies warning tone (amber color)", () => {
