@@ -100,6 +100,7 @@ func (m *mockSubsRepo) ExtendPeriod(_ context.Context, subID uint, newEnd time.T
 	}
 	return m.extendPeriod(subID, newEnd)
 }
+func (m *mockSubsRepo) UpdatePeriodEnd(context.Context, uint, time.Time) error { panic("unused") }
 func (m *mockSubsRepo) RecordRenewalFailure(context.Context, uint) error { panic("unused") }
 func (m *mockSubsRepo) ListPreExpiring(context.Context, time.Time, time.Time, int16) ([]models.Subscription, error) {
 	panic("unused")
@@ -242,6 +243,7 @@ func (m *payRepoExt) LinkSubscription(_ context.Context, paymentID, subscription
 	}
 	return m.linkSubscription(paymentID, subscriptionID)
 }
+func (m *payRepoExt) GetByID(context.Context, uint) (*models.Payment, error) { panic("unused") }
 
 // newFullService собирает Service со всеми моками.
 func newFullService(prov *mockProvider, pays *payRepoExt, subs *mockSubsRepo, users *mockUsersRepo, plans *mockPlansRepo) *Service {

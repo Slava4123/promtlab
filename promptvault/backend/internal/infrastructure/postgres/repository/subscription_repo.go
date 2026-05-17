@@ -183,6 +183,20 @@ func (r *subscriptionRepo) ExtendPeriod(ctx context.Context, subID uint, newPeri
 		}).Error
 }
 
+// UpdatePeriodEnd сдвигает current_period_end без побочных эффектов (status,
+// renewal_attempts, pre_expire_stage не меняем). Используется referral grant'ом
+// — бонус за приглашение не должен «лечить» past_due подписку или сбрасывать
+// retry-счётчики.
+func (r *subscriptionRepo) UpdatePeriodEnd(ctx context.Context, subID uint, newPeriodEnd time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.Subscription{}).
+		Where("id = ?", subID).
+		Updates(map[string]any{
+			"current_period_end": newPeriodEnd,
+			"updated_at":         time.Now(),
+		}).Error
+}
+
 func (r *subscriptionRepo) RecordRenewalFailure(ctx context.Context, subID uint) error {
 	now := time.Now()
 	return r.db.WithContext(ctx).
