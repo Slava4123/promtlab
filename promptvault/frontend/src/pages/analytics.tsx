@@ -14,6 +14,7 @@ import { QuotaProgress } from "@/components/analytics/quota-progress"
 import { RangePicker } from "@/components/analytics/range-picker"
 import { UpgradeGate } from "@/components/analytics/upgrade-gate"
 import { InsightsPanel } from "@/components/analytics/insights-panel"
+import { InsightsLockedCard } from "@/components/analytics/insights-locked-card"
 import { ModelSegmentationChart } from "@/components/analytics/model-segmentation-chart"
 import { toast } from "sonner"
 
@@ -36,7 +37,11 @@ export default function AnalyticsPage() {
   const [range, setRange] = useState<AnalyticsRange>("7d")
 
   const { data, isLoading, isError } = usePersonalAnalytics(range)
-  const insightsQuery = useInsights(isMax)
+  // Pricing iteration v3: Smart Insights теперь доступны и Pro (2 типа:
+  // unused_prompts + possible_duplicates), и Max (полные 7 типов). Free
+  // получает UpgradeGate. Backend гейтит per-type — фронт показывает
+  // locked-карточки для Pro как teaser к Max.
+  const insightsQuery = useInsights(isPaid)
 
   const totalUses = useMemo(
     () => data?.usage_per_day?.reduce((s, p) => s + p.count, 0) ?? 0,
@@ -165,24 +170,57 @@ export default function AnalyticsPage() {
             </div>
           ) : null}
 
-          {/* Smart Insights — Max only */}
-          {isMax ? (
-            insightsQuery.isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : insightsQuery.data ? (
-              <InsightsPanel insights={insightsQuery.data.items} />
-            ) : null
-          ) : (
+          {/* Smart Insights — three-state (Free/Pro/Max).
+              Free: UpgradeGate → Pro (минимальный teaser).
+              Pro: 2 типа (unused + duplicates) от backend + 5 locked-карточек как teaser к Max.
+              Max: 7 типов от backend, без locked-карточек. */}
+          {!isPaid && (
             <UpgradeGate
-              title="Умные инсайты — на тарифе Max"
-              description="Автоматически находим забытые, популярные и похожие промпты. Обновляется раз в сутки."
-              targetPlan="Max"
+              title="Подсказки — на тарифе Pro"
+              description="Забытые промпты и дубликаты помогут навести порядок. Полный набор — в Max."
+              targetPlan="Pro"
             />
           )}
 
-          {/* Upgrade gate для Free */}
+          {isPaid && insightsQuery.isLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {isPaid && insightsQuery.data && (
+            <div className="space-y-4">
+              <InsightsPanel insights={insightsQuery.data.items} />
+
+              {/* Pro юзер видит locked-карточки для 5 Max-only типов */}
+              {!isMax && (
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  <InsightsLockedCard
+                    title="Растущая популярность"
+                    description="Промпты, использование которых выросло за 7 дней."
+                  />
+                  <InsightsLockedCard
+                    title="Падающая популярность"
+                    description="Промпты, которые перестали активно использоваться."
+                  />
+                  <InsightsLockedCard
+                    title="Самые редактируемые"
+                    description="Топ промптов по количеству версий."
+                  />
+                  <InsightsLockedCard
+                    title="Теги без промптов"
+                    description="Orphan-теги для уборки."
+                  />
+                  <InsightsLockedCard
+                    title="Пустые коллекции"
+                    description="Коллекции без промптов."
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Upgrade gate для Free — расширенная история / CSV */}
           {!isPaid && (
             <UpgradeGate
               title="Больше истории на Pro"

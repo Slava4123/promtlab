@@ -35,11 +35,16 @@ export function usePromptAnalytics(promptId: number) {
   })
 }
 
-export function useInsights(enabled = true) {
+// Pricing iteration v3 (Task 10): параметр переименован `enabled` → `isPaid`
+// после расширения insights teaser на Pro-тариф. Семантически: эндпоинт
+// `/analytics/insights` теперь возвращает 2 типа для Pro и 7 для Max
+// (backend сам гейтит по plan_id), а Free получает 402 — поэтому fetch
+// нужен только для Pro+. Логика идентична прежней.
+export function useInsights(isPaid: boolean) {
   return useQuery({
     queryKey: ["analytics", "insights"],
     queryFn: () => fetchInsights(),
-    enabled,
+    enabled: isPaid,
   })
 }
 
