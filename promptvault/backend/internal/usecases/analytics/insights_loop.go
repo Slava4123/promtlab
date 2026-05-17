@@ -26,7 +26,7 @@ const insightsParallelism = 4
 // pro_yearly, max, max_yearly), status='active') и вызывает
 // Service.ComputeInsights для каждого (personal scope + по каждой команде,
 // которой он владеет). Per-plan dispatch (Pro → 2 teaser типа, Max → все 7)
-// делается через GetByID + insightsForPlan на каждой итерации.
+// делается через GetByID + InsightsForPlan на каждой итерации.
 //
 // Для MVP: итерация в один batch. При росте users'ов — пагинация и
 // распределение по окну (чтобы не долбить БД в одну секунду).
@@ -109,7 +109,7 @@ func (l *InsightsComputeLoop) compute() {
 			//
 			// Race window: между ListPaidUsers (snapshot) и GetByID (current)
 			// юзер мог downgrade'нуть на Free / переключиться на yearly.
-			// insightsForPlan вернёт nil для Free → allowed пуст → skip без
+			// InsightsForPlan вернёт nil для Free → allowed пуст → skip без
 			// compute. Для других paid plan'ов отработает корректно.
 			user, gerr := l.users.GetByID(gctx, uid)
 			if gerr != nil {
@@ -126,7 +126,7 @@ func (l *InsightsComputeLoop) compute() {
 				metrics.InsightsRefresh.WithLabelValues("error").Inc()
 				return nil
 			}
-			allowed := l.svc.insightsForPlan(user.PlanID)
+			allowed := l.svc.InsightsForPlan(user.PlanID)
 			if len(allowed) == 0 {
 				// Race: юзер на Free/unknown plan (downgrade между ListPaidUsers
 				// и GetByID), либо Pro при выключенном PRO_INSIGHTS_TEASER_ENABLED.

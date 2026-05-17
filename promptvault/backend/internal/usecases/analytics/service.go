@@ -45,7 +45,7 @@ type Service struct {
 	// Если nil — всегда fallback (legacy-behaviour до M9).
 	planFromCtx func(ctx context.Context) (string, bool)
 	// proInsightsTeaserEnabled — Pricing iteration v3 (ADR-0008) kill-switch.
-	// При false Pro обрабатывается как Free в insightsForPlan (legacy Max-only
+	// При false Pro обрабатывается как Free в InsightsForPlan (legacy Max-only
 	// поведение). При true Pro получает teaser из 2 типов (unused + duplicates).
 	// Max не зависит от флага — всегда 7 типов. Default false; включается из
 	// app.go через SetProInsightsTeaserEnabled на основе cfg.Analytics.
@@ -91,7 +91,7 @@ func (s *Service) SetPlanFromCtx(fn func(ctx context.Context) (string, bool)) {
 }
 
 // SetProInsightsTeaserEnabled — Pricing iteration v3 (ADR-0008) kill-switch.
-// При выключенном flag Pro обрабатывается как Free в insightsForPlan
+// При выключенном flag Pro обрабатывается как Free в InsightsForPlan
 // (ErrProRequired через GetInsightsGated, skip в InsightsComputeLoop).
 // При включённом — Pro получает 2 типа teaser (unused + duplicates).
 // Max не зависит от флага. Вызывается из app.go на основе config.
@@ -131,14 +131,14 @@ func (s *Service) SetNotifier(n InsightsNotifier) {
 //   - Pro/pro_yearly → 2 типа teaser (unused + duplicates).
 //   - Max/max_yearly → все 7 типов.
 //
-// Repo читает все типы юзера; service фильтрует in-memory по `insightsForPlan`.
+// Repo читает все типы юзера; service фильтрует in-memory по `InsightsForPlan`.
 // Логика плана вынесена из handler'а в service (H5).
 func (s *Service) GetInsightsGated(ctx context.Context, userID uint, teamID *uint) ([]models.SmartInsight, error) {
 	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	allowed := s.insightsForPlan(planID)
+	allowed := s.InsightsForPlan(planID)
 	planLabel := referral.NormalizePlanLabel(planID)
 	if len(allowed) == 0 {
 		// Free / unknown — 402 с подсказкой апгрейда на Pro (минимальный платный).

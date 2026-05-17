@@ -265,7 +265,7 @@ func TestListOwnedTeams_InterfaceContract(t *testing.T) {
 
 // Task 7: per-plan dispatch — Pro юзер получает 2 типа (unused +
 // duplicates), Max юзер получает все 7. Loop читает plan через GetByID и
-// передаёт insightsForPlan(plan) в ComputeInsights. Free (race-window
+// передаёт InsightsForPlan(plan) в ComputeInsights. Free (race-window
 // после ListPaidUsers) — skip без compute.
 func TestInsightsComputeLoop_PerPlanDispatch(t *testing.T) {
 	r := newTrackingRepo()

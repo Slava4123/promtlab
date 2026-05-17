@@ -32,16 +32,17 @@ var maxAllInsights = []string{
 	models.InsightEmptyCollections,
 }
 
-// insightsForPlan возвращает список разрешённых insight типов для plan'а.
+// InsightsForPlan возвращает разрешённые SmartInsight типы для тарифа.
 // nil — план не имеет доступа (Free / unknown / Pro при выключенном teaser).
 // Pro имеет 2 типа (только при включённом teaser-flag), Max — все 7.
-// Используется в GetInsightsGated и InsightsComputeLoop.
+// Используется в GetInsightsGated, InsightsComputeLoop и в prompt_insights
+// usecase для per-type gating.
 //
 // Pricing iteration v3 (ADR-0008): feature flag PRO_INSIGHTS_TEASER_ENABLED
 // (s.proInsightsTeaserEnabled) — kill-switch для Pro teaser'а. При выключенном
 // flag'е Pro/pro_yearly обрабатываются как Free (nil) → legacy Max-only поведение.
 // Max не зависит от флага — всегда 7 типов.
-func (s *Service) insightsForPlan(planID string) []string {
+func (s *Service) InsightsForPlan(planID string) []string {
 	switch planID {
 	case "pro", "pro_yearly":
 		if !s.proInsightsTeaserEnabled {
@@ -56,7 +57,7 @@ func (s *Service) insightsForPlan(planID string) []string {
 }
 
 // ComputeInsights — пересчёт детерминистических инсайтов для юзера.
-// allowed — список разрешённых типов (см. insightsForPlan); если содержит
+// allowed — список разрешённых типов (см. InsightsForPlan); если содержит
 // тип — он считается и upsert'ится, иначе skip без SQL-запроса.
 //
 // Pro: allowed = proAllowedInsights (2 типа — unused + duplicates).

@@ -165,7 +165,7 @@ func newServiceForTest(repo *trackingAnalyticsRepo, experimental, trgm bool) *Se
 	// Pricing iteration v3 (Task 9): тесты, использующие этот helper, написаны
 	// до feature flag'а и ожидают что Pro получает teaser. Включаем flag
 	// по умолчанию, чтобы избежать каскадных правок. Тесты, специально
-	// проверяющие выключенный flag (TestService_insightsForPlan), создают
+	// проверяющие выключенный flag (TestService_InsightsForPlan), создают
 	// Service вручную без этого helper'а.
 	s.SetProInsightsTeaserEnabled(true)
 	return s
@@ -363,8 +363,8 @@ func TestComputeInsights_EmptyAllowedNoOp(t *testing.T) {
 	assert.Equal(t, 0, r.calls["EmptyCollections"])
 }
 
-// TestService_insightsForPlan — Pricing Iteration v3 Task 4 + Task 9:
-// метод Service.insightsForPlan маппит plan_id на разрешённые insight типы
+// TestService_InsightsForPlan — Pricing Iteration v3 Task 4 + Task 9:
+// метод Service.InsightsForPlan маппит plan_id на разрешённые insight типы
 // под guard'ом feature flag PRO_INSIGHTS_TEASER_ENABLED.
 //
 //   - Free/unknown → nil (всегда, независимо от flag'а).
@@ -372,7 +372,7 @@ func TestComputeInsights_EmptyAllowedNoOp(t *testing.T) {
 //   - Max / max_yearly → все 7 типов всегда (Max не зависит от flag'а).
 //
 // Решение зафиксировано в ADR-0008.
-func TestService_insightsForPlan(t *testing.T) {
+func TestService_InsightsForPlan(t *testing.T) {
 	proTeaser := []string{models.InsightUnusedPrompts, models.InsightPossibleDuplicates}
 	cases := []struct {
 		plan          string
@@ -395,7 +395,7 @@ func TestService_insightsForPlan(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%s/teaser=%v", tc.plan, tc.teaserEnabled), func(t *testing.T) {
 			svc := &Service{proInsightsTeaserEnabled: tc.teaserEnabled}
-			got := svc.insightsForPlan(tc.plan)
+			got := svc.InsightsForPlan(tc.plan)
 			require.ElementsMatch(t, tc.want, got)
 		})
 	}
