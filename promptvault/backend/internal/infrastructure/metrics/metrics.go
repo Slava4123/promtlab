@@ -134,6 +134,52 @@ var (
 		Name: "quota_cleanup_rows_deleted_total",
 		Help: "Rows deleted from daily_feature_usage by retention cleanup loop.",
 	})
+
+	// Pricing iteration v3 metrics (ADR-0008, ADR-0009).
+
+	// ReferralRewardsPendingTotal — попытки записи pending row на webhook
+	// payment.succeeded. Label result: recorded | skipped_already_rewarded |
+	// skipped_no_referrer. recorded — нормальный happy-path; skipped_* — фильтры
+	// в tryRecordReferralPending (юзер пришёл не по рефералке, либо referrer
+	// уже награждён ранее). Используется для funnel-аналитики реферальной
+	// программы (pending → granted conversion).
+	ReferralRewardsPendingTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "referral_rewards_pending_total",
+		Help: "Сколько pending'ов создаётся на webhook payment.succeeded, labelled by result.",
+	}, []string{"result"})
+
+	// ReferralRewardsGrantedTotal — успешные grant'ы реферальных наград.
+	// Label referrer_plan: free | pro | max — план референта на момент grant'а.
+	// free → создан trial Pro; pro/max → продлён существующий период.
+	// Используется для измерения экономической ценности реферальной программы.
+	ReferralRewardsGrantedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "referral_rewards_granted_total",
+		Help: "Успешные grant'ы реферальных наград, labelled by referrer plan.",
+	}, []string{"referrer_plan"})
+
+	// ReferralRewardsSkippedTotal — pending'и, которые не дали reward'а.
+	// Label reason: refunded | already_rewarded | referrer_deleted.
+	// refunded — реферри сделал возврат до eligibility-окна;
+	// already_rewarded — race с параллельным webhook'ом;
+	// referrer_deleted — referrer удалил аккаунт за 14 дней ожидания.
+	// Все три — terminal в reward_loop (pending удаляется без retry).
+	ReferralRewardsSkippedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "referral_rewards_skipped_total",
+		Help: "Pending'и которые не дали reward'а, labelled by skip reason.",
+	}, []string{"reason"})
+
+	// AnalyticsInsightsGatedTotal — эффективность teaser'а на /api/analytics/insights.
+	// Labels:
+	//   plan: free | pro | max — план юзера на момент запроса.
+	//   result: full | partial | blocked.
+	//     full — все 7 типов (Max);
+	//     partial — 2 типа teaser (Pro при включённом флаге);
+	//     blocked — 0 типов (Free всегда, Pro при выключенном PRO_INSIGHTS_TEASER_ENABLED).
+	// Используется для измерения конверсии Pro→Max после показа teaser'а.
+	AnalyticsInsightsGatedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "analytics_insights_gated_total",
+		Help: "Эффективность teaser'а на /api/analytics/insights, labelled by plan and result.",
+	}, []string{"plan", "result"})
 )
 
 // init zero-инициализирует все ожидаемые label combinations CounterVec'ов.
@@ -185,5 +231,23 @@ func init() {
 		"quota_cleanup",
 	} {
 		LoopPanicsTotal.WithLabelValues(name).Add(0)
+	}
+
+	// Pricing iteration v3 (ADR-0008, ADR-0009) — zero-init для всех ожидаемых
+	// label combinations. Без этого absent_over_time в alerts даёт false-positive
+	// на тихом проде (нет ни одного реферри — нормальный bootstrap-период).
+	for _, r := range []string{"recorded", "skipped_already_rewarded", "skipped_no_referrer"} {
+		ReferralRewardsPendingTotal.WithLabelValues(r).Add(0)
+	}
+	for _, p := range []string{"free", "pro", "max"} {
+		ReferralRewardsGrantedTotal.WithLabelValues(p).Add(0)
+	}
+	for _, r := range []string{"refunded", "already_rewarded", "referrer_deleted"} {
+		ReferralRewardsSkippedTotal.WithLabelValues(r).Add(0)
+	}
+	for _, p := range []string{"free", "pro", "max"} {
+		for _, r := range []string{"full", "partial", "blocked"} {
+			AnalyticsInsightsGatedTotal.WithLabelValues(p, r).Add(0)
+		}
 	}
 }

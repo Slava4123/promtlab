@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 )
@@ -129,6 +130,8 @@ func (s *Service) GrantReward(ctx context.Context, referrerID, refereeID, paymen
 		return ErrAlreadyRewarded
 	}
 
+	metrics.ReferralRewardsGrantedTotal.WithLabelValues(NormalizePlanLabel(referrer.PlanID)).Inc()
+
 	slog.InfoContext(ctx, "referral.reward.granted",
 		"referrer_id", referrerID,
 		"referee_id", refereeID,
@@ -139,6 +142,23 @@ func (s *Service) GrantReward(ctx context.Context, referrerID, refereeID, paymen
 	)
 
 	return nil
+}
+
+// NormalizePlanLabel маппит plan_id (pro_yearly/max_yearly) на metric label (pro/max).
+// Free и неизвестные значения → "free". Используется в Prometheus label'ах для
+// `referral_rewards_granted_total{referrer_plan}` и `analytics_insights_gated_total{plan}`,
+// чтобы yearly/monthly не давали отдельные series (cardinality contained).
+//
+// Экспортирован, чтобы analytics package мог переиспользовать без дублирования.
+func NormalizePlanLabel(planID string) string {
+	switch planID {
+	case "pro", "pro_yearly":
+		return "pro"
+	case "max", "max_yearly":
+		return "max"
+	default:
+		return "free"
+	}
 }
 
 // extendActiveSubscription продлевает текущую active/past_due подписку на duration.

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/pkg/safeloop"
 )
@@ -106,14 +107,17 @@ func (l *RewardLoop) tickOnce(ctx context.Context) RewardSummary {
 			summary.Granted++
 		case errors.Is(grantErr, ErrAlreadyRewarded):
 			summary.SkippedActive++
+			metrics.ReferralRewardsSkippedTotal.WithLabelValues("already_rewarded").Inc()
 			slog.InfoContext(ctx, "referral.reward.skipped_already_rewarded",
 				"referrer_id", p.ReferrerID, "referee_id", p.RefereeID)
 		case errors.Is(grantErr, ErrPaymentRefunded):
 			summary.SkippedRefund++
+			metrics.ReferralRewardsSkippedTotal.WithLabelValues("refunded").Inc()
 			slog.InfoContext(ctx, "referral.reward.skipped_refunded",
 				"referrer_id", p.ReferrerID, "referee_id", p.RefereeID, "payment_id", p.PaymentID)
 		case errors.Is(grantErr, ErrReferrerMissing):
 			summary.SkippedDeleted++
+			metrics.ReferralRewardsSkippedTotal.WithLabelValues("referrer_deleted").Inc()
 			slog.InfoContext(ctx, "referral.reward.skipped_referrer_missing",
 				"referrer_id", p.ReferrerID, "referee_id", p.RefereeID)
 		default:

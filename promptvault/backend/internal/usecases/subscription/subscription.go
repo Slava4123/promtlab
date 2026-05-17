@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"promptvault/internal/infrastructure/config"
+	"promptvault/internal/infrastructure/metrics"
 	"promptvault/internal/infrastructure/payment"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
@@ -643,12 +644,15 @@ func (s *Service) tryRecordReferralPending(ctx context.Context, pay *models.Paym
 		return
 	}
 	if referee.ReferredBy == "" {
+		metrics.ReferralRewardsPendingTotal.WithLabelValues("skipped_no_referrer").Inc()
 		return
 	}
 	referrer, err := s.users.GetByReferralCode(ctx, referee.ReferredBy)
 	if err != nil || referrer == nil {
 		// Битый referred_by (код referrer'а удалён или typo). Лог чтобы знать,
-		// если paranoid — но не блокируем активацию.
+		// если paranoid — но не блокируем активацию. Считаем как
+		// skipped_no_referrer (с точки зрения метрик невалидный код ≈ нет referrer'а).
+		metrics.ReferralRewardsPendingTotal.WithLabelValues("skipped_no_referrer").Inc()
 		slog.WarnContext(ctx, "referral.pending.referrer_missing",
 			"referee_id", referee.ID, "referred_by", referee.ReferredBy, "err", err)
 		return
@@ -657,6 +661,7 @@ func (s *Service) tryRecordReferralPending(ctx context.Context, pay *models.Paym
 		// Один referrer = один reward за всю жизнь. Если уже награждён (другим
 		// реферри ранее) — этот первый платёж нового реферри не даёт повторной
 		// награды. Skip silently.
+		metrics.ReferralRewardsPendingTotal.WithLabelValues("skipped_already_rewarded").Inc()
 		return
 	}
 	existing, err := s.referralPending.FindByReferee(ctx, referee.ID)
@@ -687,6 +692,7 @@ func (s *Service) tryRecordReferralPending(ctx context.Context, pay *models.Paym
 		)
 		return
 	}
+	metrics.ReferralRewardsPendingTotal.WithLabelValues("recorded").Inc()
 	slog.InfoContext(ctx, "referral.pending.inserted",
 		"referrer_id", referrer.ID,
 		"referee_id", referee.ID,

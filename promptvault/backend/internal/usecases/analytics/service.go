@@ -6,9 +6,11 @@ import (
 	"slices"
 	"time"
 
+	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 	quotauc "promptvault/internal/usecases/quota"
+	"promptvault/internal/usecases/referral"
 	"promptvault/internal/usecases/subscription"
 	"promptvault/internal/usecases/teamcheck"
 )
@@ -137,9 +139,11 @@ func (s *Service) GetInsightsGated(ctx context.Context, userID uint, teamID *uin
 		return nil, err
 	}
 	allowed := s.insightsForPlan(planID)
+	planLabel := referral.NormalizePlanLabel(planID)
 	if len(allowed) == 0 {
 		// Free / unknown — 402 с подсказкой апгрейда на Pro (минимальный платный).
 		// При выключенном PRO_INSIGHTS_TEASER_ENABLED сюда также попадают Pro.
+		metrics.AnalyticsInsightsGatedTotal.WithLabelValues(planLabel, "blocked").Inc()
 		return nil, ErrProRequired
 	}
 	all, err := s.analytics.GetInsights(ctx, userID, teamID)
@@ -153,6 +157,15 @@ func (s *Service) GetInsightsGated(ctx context.Context, userID uint, teamID *uin
 			filtered = append(filtered, ins)
 		}
 	}
+	// full — все 7 типов (Max); partial — 2 типа teaser (Pro при включённом флаге).
+	// Длина allowed (а не filtered) определяет category: пустой результат при
+	// allowed=[unused,duplicates] всё ещё считается partial, потому что
+	// эндпоинт обработал запрос как Pro-teaser, а не Max.
+	result := "full"
+	if len(allowed) < len(maxAllInsights) {
+		result = "partial"
+	}
+	metrics.AnalyticsInsightsGatedTotal.WithLabelValues(planLabel, result).Inc()
 	return filtered, nil
 }
 
