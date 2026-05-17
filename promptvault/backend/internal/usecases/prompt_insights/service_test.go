@@ -7,6 +7,8 @@ import (
 	"time"
 
 	repo "promptvault/internal/interface/repository"
+
+	"gorm.io/gorm"
 )
 
 type fakeAnalyticsRepo struct {
@@ -148,5 +150,50 @@ func TestListDuplicatesProTeaser(t *testing.T) {
 	}
 	if pairs[0].Similarity < 0.9 || pairs[0].Similarity > 0.95 {
 		t.Fatalf("similarity mismatch: %v", pairs[0].Similarity)
+	}
+}
+
+type fakePromptMerger struct {
+	called  bool
+	keepID  uint
+	mergeID uint
+	userID  uint
+	returns error
+}
+
+func (f *fakePromptMerger) MergeWith(ctx context.Context, keepID, mergeID, userID uint) error {
+	f.called = true
+	f.keepID = keepID
+	f.mergeID = mergeID
+	f.userID = userID
+	return f.returns
+}
+
+func TestMergePromptsHappy(t *testing.T) {
+	m := &fakePromptMerger{}
+	svc := NewService(&fakeAnalyticsRepo{}, m, &fakePlanLookup{plan: "max"}, time.Now)
+	err := svc.MergePrompts(context.Background(), 100, 1, 2)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	if !m.called || m.keepID != 1 || m.mergeID != 2 || m.userID != 100 {
+		t.Fatalf("merger not called correctly: %+v", m)
+	}
+}
+
+func TestMergePromptsSameID(t *testing.T) {
+	svc := NewService(&fakeAnalyticsRepo{}, &fakePromptMerger{}, &fakePlanLookup{plan: "max"}, time.Now)
+	err := svc.MergePrompts(context.Background(), 100, 5, 5)
+	if !errors.Is(err, ErrSamePrompt) {
+		t.Fatalf("expected ErrSamePrompt, got %v", err)
+	}
+}
+
+func TestMergePromptsNotOwned(t *testing.T) {
+	m := &fakePromptMerger{returns: gorm.ErrRecordNotFound}
+	svc := NewService(&fakeAnalyticsRepo{}, m, &fakePlanLookup{plan: "max"}, time.Now)
+	err := svc.MergePrompts(context.Background(), 100, 1, 2)
+	if !errors.Is(err, ErrPromptsNotOwned) {
+		t.Fatalf("expected ErrPromptsNotOwned, got %v", err)
 	}
 }

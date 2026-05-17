@@ -2,10 +2,13 @@ package prompt_insights
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"time"
 
 	repo "promptvault/internal/interface/repository"
+
+	"gorm.io/gorm"
 )
 
 const (
@@ -136,6 +139,20 @@ func (s *Service) ListMostEdited(ctx context.Context, userID uint, teamID *uint,
 		out = append(out, PromptInsightRow{PromptID: r.PromptID, Title: r.Title, Uses: int(r.Uses)})
 	}
 	return out, nil
+}
+
+// MergePrompts soft-delete'ит mergeID, сохраняя keepID. Проверка ownership
+// и same-id case: handler не нуждается в gorm-knowledge — мы транслируем
+// gorm.ErrRecordNotFound в ErrPromptsNotOwned.
+func (s *Service) MergePrompts(ctx context.Context, userID, keepID, mergeID uint) error {
+	if keepID == mergeID {
+		return ErrSamePrompt
+	}
+	err := s.prompts.MergeWith(ctx, keepID, mergeID, userID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrPromptsNotOwned
+	}
+	return err
 }
 
 func clampLimit(v, def, max int) int {
