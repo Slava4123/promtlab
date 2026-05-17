@@ -28,4 +28,27 @@ describe("Sparkline", () => {
     const polyline = container.querySelector("polyline")
     expect(polyline?.getAttribute("stroke")).toMatch(/rose|#ef4444/i)
   })
+
+  it("renders single dot when all points are equal (constant data)", () => {
+    const { container } = render(<Sparkline points={[5, 5, 5, 5]} />)
+    // Must render a <circle> dot
+    expect(container.querySelector("circle")).not.toBeNull()
+    // Must NOT render a stroke polyline / path
+    expect(
+      container.querySelector("polyline[stroke-width], path[stroke-width]"),
+    ).toBeNull()
+  })
+
+  it("renders single dot for all-zero array", () => {
+    const { container } = render(<Sparkline points={[0, 0, 0, 0]} />)
+    expect(container.querySelector("circle")).not.toBeNull()
+  })
+
+  it("renders trendline (no circle-only) for non-constant data", () => {
+    const { container } = render(<Sparkline points={[1, 3, 2, 5]} />)
+    // Has the stroke line (polyline or path)
+    expect(
+      container.querySelector("polyline[stroke-width], path[stroke-width]"),
+    ).not.toBeNull()
+  })
 })

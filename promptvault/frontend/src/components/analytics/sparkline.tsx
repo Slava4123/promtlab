@@ -25,6 +25,23 @@ export function Sparkline({
         ? "rgba(239,68,68,0.15)"
         : "rgba(148,163,184,0.15)"
 
+  // Если все точки равны — плоская линия выглядит как бессмысленное тире.
+  // Рисуем одиночную точку на правом краю как индикатор «нет тренда».
+  const rawMax = Math.max(...points)
+  const rawMin = Math.min(...points)
+  if (rawMax === rawMin) {
+    return (
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        aria-label="нет тренда"
+      >
+        <circle cx={width - 4} cy={height / 2} r={2.5} fill={stroke} />
+      </svg>
+    )
+  }
+
   const max = Math.max(...points, 1)
   const min = Math.min(...points, 0)
   const range = max - min || 1
