@@ -2,6 +2,7 @@ package prompt_insights
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	repo "promptvault/internal/interface/repository"
@@ -46,10 +47,8 @@ func (s *Service) checkAllowed(ctx context.Context, userID uint, insightType str
 	if err != nil {
 		return err
 	}
-	for _, t := range s.plans.InsightsForPlan(planID) {
-		if t == insightType {
-			return nil
-		}
+	if slices.Contains(s.plans.InsightsForPlan(planID), insightType) {
+		return nil
 	}
 	return ErrProRequired
 }
