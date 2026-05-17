@@ -61,6 +61,7 @@ import (
 	feedbackuc "promptvault/internal/usecases/feedback"
 	promptuc "promptvault/internal/usecases/prompt"
 	quotauc "promptvault/internal/usecases/quota"
+	referraluc "promptvault/internal/usecases/referral"
 	searchuc "promptvault/internal/usecases/search"
 	streakuc "promptvault/internal/usecases/streak"
 	shareuc "promptvault/internal/usecases/share"
@@ -126,6 +127,10 @@ type App struct {
 	reminderLoop      *subscriptionuc.ReminderLoop
 	reengagementLoop  *engagementuc.ReengagementLoop
 	streakReminderLoop *engagementuc.StreakReminderLoop
+	// Pricing iteration v3 (ADR-0009): обработчик отложенных реферальных
+	// наград. Создаётся всегда, но Start/Stop вызываются только при
+	// cfg.Referral.RewardEnabled (см. lifecycle.go).
+	referralRewardLoop *referraluc.RewardLoop
 	// Phase 14: audit + analytics фоновые воркеры.
 	activityCleanupLoop *analyticsuc.CleanupLoop
 	insightsLoop        *analyticsuc.InsightsComputeLoop
@@ -378,6 +383,24 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		paymentProvider, &cfg.Payment,
 	)
 
+	// Pricing iteration v3 (ADR-0009): реферальная награда +30 дней Pro
+	// пригласившему. Repo создаётся всегда (нужен и subscription.Service для
+	// записи pending'ов, и RewardLoop для обработки). Feature gate работает
+	// двумя путями:
+	//   1) subscriptionSvc.SetReferralRewardEnabled(false) → webhook не пишет
+	//      pending'и (no-op в activateSubscription).
+	//   2) lifecycle.StartBackground() не запускает loop при flag=false.
+	// Двойной gate — defence-in-depth: даже если в БД остались legacy pending'и
+	// от прошлого включения, при выключенном flag'е они не обработаются.
+	referralPendingRepo := pgrepo.NewReferralRewardRepository(db)
+	subscriptionSvc.SetReferralPendingRepo(referralPendingRepo)
+	subscriptionSvc.SetReferralRewardEnabled(cfg.Referral.RewardEnabled)
+	referralRewardSvc := referraluc.NewService(subscriptionRepo, userRepo, paymentRepo, referralPendingRepo)
+	// Interval: 1h prod / 1m dev. Batch 100 — лимит одного тика, чтобы
+	// bootstrap-всплеск (много pending'ов одновременно eligible) не блокировал
+	// DB надолго. Pending'ы обрабатываются в нескольких тиках.
+	referralRewardLoop := referraluc.NewRewardLoop(referralRewardSvc, referralPendingRepo, pick(1*time.Hour, 1*time.Minute), 100)
+
 	purgeLoop := trashuc.NewPurgeLoop(trashRepo, pick(1*time.Hour, 1*time.Minute), 30)
 
 	// Email-уведомления для subscription loops. Если SMTP не сконфигурирован
@@ -509,6 +532,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		activityCleanupLoop:  activityCleanupLoop,
 		insightsLoop:         insightsLoop,
 		quotaCleanupLoop:     quotaCleanupLoop,
+		referralRewardLoop:   referralRewardLoop,
 		purgeLoop:         purgeLoop,
 		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour, ratelimit.UintHash),
 		insightsRL:        ratelimit.NewLimiterWithWindow[uint](1, time.Hour, ratelimit.UintHash),

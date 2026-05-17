@@ -17,6 +17,12 @@ func (a *App) StartBackground() {
 	a.activityCleanupLoop.Start()
 	a.insightsLoop.Start()
 	a.quotaCleanupLoop.Start()
+	// Pricing iteration v3 (ADR-0009): реферальная награда стартует только
+	// при включённом флаге. Парный gate с subscriptionSvc.SetReferralRewardEnabled
+	// в app.go — без записи в БД и без обработки.
+	if a.cfg.Referral.RewardEnabled {
+		a.referralRewardLoop.Start()
+	}
 }
 
 // Shutdown останавливает все loops и ждёт фоновых задач auth Service
@@ -31,6 +37,9 @@ func (a *App) Shutdown(timeout time.Duration) {
 	a.activityCleanupLoop.Stop()
 	a.insightsLoop.Stop()
 	a.quotaCleanupLoop.Stop()
+	if a.cfg.Referral.RewardEnabled {
+		a.referralRewardLoop.Stop()
+	}
 	a.feedbackRL.Close()
 	a.authSvc.WaitBackground(timeout)
 }

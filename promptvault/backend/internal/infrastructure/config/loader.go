@@ -196,6 +196,13 @@ func defaults() map[string]any {
 			// Phase 16: feature flag. Установить CHAINS_ENABLED=true в .env после QA.
 			"enabled": false,
 		},
+		"referral": map[string]any{
+			// Pricing iteration v3 (ADR-0009): реферальная награда +30 дней Pro
+			// пригласившему. Default false — webhook не пишет pending'и,
+			// ReferralRewardLoop не стартует. Включается после 1 недели QA
+			// после deploy.
+			"reward_enabled": false,
+		},
 	}
 }
 

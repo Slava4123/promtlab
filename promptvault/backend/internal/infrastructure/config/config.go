@@ -12,4 +12,5 @@ type Config struct {
 	Analytics AnalyticsConfig `koanf:"analytics"`
 	Telemetry TelemetryConfig `koanf:"telemetry"`
 	Chains    ChainsConfig    `koanf:"chains"`
+	Referral  ReferralConfig  `koanf:"referral"`
 }
