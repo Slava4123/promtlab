@@ -60,6 +60,7 @@ import (
 	colluc "promptvault/internal/usecases/collection"
 	feedbackuc "promptvault/internal/usecases/feedback"
 	promptuc "promptvault/internal/usecases/prompt"
+	promptinsightsuc "promptvault/internal/usecases/prompt_insights"
 	quotauc "promptvault/internal/usecases/quota"
 	referraluc "promptvault/internal/usecases/referral"
 	searchuc "promptvault/internal/usecases/search"
@@ -85,9 +86,16 @@ type App struct {
 	authHandler      *authhttp.Handler
 	oauthHandler     *authhttp.OAuthHandler
 	promptHandler     *prompthttp.Handler
+	// Pricing iteration v3 (Wave 1 deep linking): 5 GET'ов + 1 merge POST
+	// под /api/prompts/insights/*. Использует analytics_repo SQL, без новых таблиц.
+	promptInsightsHandler  *prompthttp.InsightsHandler
 	collectionHandler *collhttp.Handler
+	// Wave 1: GET /api/collections/empty — фильтр-overlay над списком коллекций.
+	collectionEmptyHandler *collhttp.EmptyHandler
 	chainHandler      *chainhttp.Handler
 	tagHandler        *taghttp.Handler
+	// Wave 1: GET /api/tags/orphan — фильтр-overlay над списком тегов.
+	tagOrphanHandler  *taghttp.OrphanHandler
 	searchHandler     *searchhttp.Handler
 	teamHandler       *teamhttp.Handler
 	teamUsageHandler  *teamhttp.UsageHandler
@@ -449,6 +457,19 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		panic(fmt.Sprintf("starter catalog load failed: %v", err))
 	}
 
+	// Prompt insights (Pricing iteration v3, Wave 1 deep linking).
+	// Использует существующие analytics_repo SQL-запросы; нет новых таблиц.
+	// Plan-gating ходит через analytics.Service.InsightsForPlan (ADR-0008)
+	// через адаптер promptInsightsPlanGate — изолируем prompt_insights от
+	// прямой зависимости на analytics service (избегаем usecases→usecases цикла).
+	// nowFn=nil → default time.Now (см. prompt_insights.NewService).
+	promptInsightsSvc := promptinsightsuc.NewService(
+		analyticsRepo,
+		promptRepo,
+		promptInsightsPlanGate{analytics: analyticsSvc, users: userRepo},
+		nil,
+	)
+
 	return &App{
 		cfg:               cfg,
 		authSvc:           authSvc,
@@ -466,14 +487,17 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			h.SetHistoryDeps(activitySvc, userRepo)
 			return h
 		}(),
-		collectionHandler: collhttp.NewHandler(collectionSvc),
+		promptInsightsHandler:  prompthttp.NewInsightsHandler(promptInsightsSvc),
+		collectionHandler:      collhttp.NewHandler(collectionSvc),
+		collectionEmptyHandler: collhttp.NewEmptyHandler(analyticsRepo),
 		chainHandler: func() *chainhttp.Handler {
 			if chainSvc == nil {
 				return nil
 			}
 			return chainhttp.NewHandler(chainSvc)
 		}(),
-		tagHandler: taghttp.NewHandler(tagSvc),
+		tagHandler:        taghttp.NewHandler(tagSvc),
+		tagOrphanHandler:  taghttp.NewOrphanHandler(analyticsRepo),
 		searchHandler:     searchhttp.NewHandler(searchSvc),
 		teamHandler:       teamhttp.NewHandler(teamSvc),
 		teamUsageHandler:  teamhttp.NewUsageHandler(teamSvc, quotaSvc),

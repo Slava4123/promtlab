@@ -258,6 +258,9 @@ func (a *App) MountRoutes(r chi.Router) {
 			r.Route("/collections", func(r chi.Router) {
 				r.Get("/", a.collectionHandler.List)
 				r.Post("/", a.collectionHandler.Create)
+				// Wave 1 deep linking: empty-коллекции (без активных промптов).
+				// Статический сегмент ДО wildcard /{id} — chi-routing safe.
+				r.Get("/empty", a.collectionEmptyHandler.List)
 				r.Get("/{id}", a.collectionHandler.GetByID)
 				r.Put("/{id}", a.collectionHandler.Update)
 				r.Delete("/{id}", a.collectionHandler.Delete)
@@ -291,6 +294,9 @@ func (a *App) MountRoutes(r chi.Router) {
 			r.Route("/tags", func(r chi.Router) {
 				r.Get("/", a.tagHandler.List)
 				r.Post("/", a.tagHandler.Create)
+				// Wave 1 deep linking: orphan-теги (без активных промптов).
+				// Статический сегмент до wildcard /{id} — chi-routing safe.
+				r.Get("/orphan", a.tagOrphanHandler.List)
 				r.Delete("/{id}", a.tagHandler.Delete)
 			})
 
@@ -344,6 +350,15 @@ func (a *App) MountRoutes(r chi.Router) {
 				r.Get("/pinned", a.promptHandler.ListPinned)
 				r.Get("/recent", a.promptHandler.ListRecent)
 				r.Get("/history", a.promptHandler.ListHistory)
+				// Wave 1 deep linking: prompt insights под /insights — статичные
+				// сегменты до wildcard /{id} (иначе chi роутит "insights" в id-handler).
+				r.Route("/insights", func(r chi.Router) {
+					r.Get("/unused", a.promptInsightsHandler.Unused)
+					r.Get("/duplicates", a.promptInsightsHandler.Duplicates)
+					r.Get("/trending", a.promptInsightsHandler.Trending)
+					r.Get("/declining", a.promptInsightsHandler.Declining)
+					r.Get("/most-edited", a.promptInsightsHandler.MostEdited)
+				})
 				r.Get("/{id}", a.promptHandler.GetByID)
 				r.Put("/{id}", a.promptHandler.Update)
 				r.Delete("/{id}", a.promptHandler.Delete)
@@ -356,6 +371,8 @@ func (a *App) MountRoutes(r chi.Router) {
 				r.Get("/{id}/share", a.shareHandler.Get)
 				r.Post("/{id}/share", a.shareHandler.Create)
 				r.Delete("/{id}/share", a.shareHandler.Delete)
+				// Wave 1: merge two prompts (kept_id остаётся, merged_id уходит в soft-delete).
+				r.Post("/{id}/merge-with/{other_id}", a.promptInsightsHandler.Merge)
 			})
 
 			// Phase 14 B.4: Analytics
