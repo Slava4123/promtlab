@@ -236,20 +236,62 @@ func (f *fakePayRepo) TransitionStatus(context.Context, uint, models.PaymentStat
 }
 func (f *fakePayRepo) LinkSubscription(context.Context, uint, uint) error { panic("unused") }
 
-// ===== fakePendingRepo (не используется в GrantReward, но нужен для конструктора) =====
+// ===== fakePendingRepo =====
+//
+// Раньше panic'ил на всё (для GrantReward тестов pending не дёргался). Теперь
+// — функциональный fake, потому что reward_loop_test.go вызывает ListEligible
+// и Delete. Поведение прозрачно для существующих тестов: они не трогают rows.
 
-type fakePendingRepo struct{}
+type fakePendingRepo struct {
+	rows           []models.ReferralPendingReward
+	listEligibleErr error
+	deleteErr      error
+	deletedIDs     []uint
+}
+
+func newFakePendingRepo() *fakePendingRepo {
+	return &fakePendingRepo{}
+}
 
 func (f *fakePendingRepo) Create(context.Context, *models.ReferralPendingReward) error {
 	panic("unused")
 }
-func (f *fakePendingRepo) ListEligible(context.Context, time.Time, int) ([]models.ReferralPendingReward, error) {
-	panic("unused")
+
+func (f *fakePendingRepo) ListEligible(_ context.Context, ts time.Time, limit int) ([]models.ReferralPendingReward, error) {
+	if f.listEligibleErr != nil {
+		return nil, f.listEligibleErr
+	}
+	out := make([]models.ReferralPendingReward, 0, len(f.rows))
+	for _, r := range f.rows {
+		if !r.EligibleAt.After(ts) { // r.EligibleAt <= ts
+			out = append(out, r)
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
 }
+
 func (f *fakePendingRepo) FindByReferee(context.Context, uint) (*models.ReferralPendingReward, error) {
 	panic("unused")
 }
-func (f *fakePendingRepo) Delete(context.Context, uint) error { panic("unused") }
+
+func (f *fakePendingRepo) Delete(_ context.Context, id uint) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	f.deletedIDs = append(f.deletedIDs, id)
+	// Также вычищаем row из rows, чтобы повторный ListEligible его не вернул.
+	kept := f.rows[:0]
+	for _, r := range f.rows {
+		if r.ID != id {
+			kept = append(kept, r)
+		}
+	}
+	f.rows = kept
+	return nil
+}
 
 // ===== Helpers =====
 
