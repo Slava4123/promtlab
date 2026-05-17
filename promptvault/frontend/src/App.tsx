@@ -80,6 +80,7 @@ const Changelog = lazy(() => import("@/pages/changelog"))
 const Badges = lazy(() => import("@/pages/badges"))
 const Help = lazy(() => import("@/pages/help"))
 const HelpMCP = lazy(() => import("@/pages/help/mcp"))
+const TagsPage = lazy(() => import("@/pages/tags-page"))
 
 // Admin pages
 const AdminLayout = lazy(() => import("@/pages/admin/layout"))
@@ -151,6 +152,7 @@ function AppRoutes() {
           <Route path="/prompts/:id/analytics" element={<Suspense fallback={<PageFallback />}><PromptAnalytics /></Suspense>} />
           <Route path="/collections" element={<Suspense fallback={<PageFallback />}><Collections /></Suspense>} />
           <Route path="/collections/:id" element={<Suspense fallback={<PageFallback />}><CollectionView /></Suspense>} />
+          <Route path="/tags" element={<Suspense fallback={<PageFallback />}><TagsPage /></Suspense>} />
           {/* Phase 16: routes только при VITE_CHAINS_ENABLED=true. */}
           {import.meta.env.VITE_CHAINS_ENABLED === "true" && (
             <>
