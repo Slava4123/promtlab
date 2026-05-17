@@ -1,15 +1,14 @@
-import { Sparkles, ArrowRight } from "lucide-react"
+import { Sparkles } from "lucide-react"
 import type { NarrativeSegments } from "@/lib/analytics-narrative"
 
 interface NarrativeBannerProps {
   segments: NarrativeSegments
-  href?: string
 }
 
 // NarrativeBanner — top-of-page AI-style summary без LLM-вызова.
 // Сегменты собираются в buildNarrative() из existing data.
-// Визуально: violet gradient + Sparkles icon + ArrowRight на CTA если есть actionHint.
-export function NarrativeBanner({ segments, href = "/analytics" }: NarrativeBannerProps) {
+// Визуально: violet gradient + Sparkles icon. Static informational div (no link).
+export function NarrativeBanner({ segments }: NarrativeBannerProps) {
   const hasAction = segments.actionHint !== null
 
   return (
@@ -33,15 +32,6 @@ export function NarrativeBanner({ segments, href = "/analytics" }: NarrativeBann
           <div className="mt-0.5 text-xs text-muted-foreground">{segments.actionHint}</div>
         )}
       </div>
-      {hasAction && (
-        <a
-          href={href}
-          className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-          aria-label="Подробнее об инсайтах"
-        >
-          <ArrowRight className="size-4" />
-        </a>
-      )}
     </div>
   )
 }

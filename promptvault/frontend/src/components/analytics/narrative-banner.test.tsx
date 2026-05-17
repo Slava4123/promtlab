@@ -41,4 +41,40 @@ describe("NarrativeBanner", () => {
     expect(screen.getByText(/тихо/)).toBeInTheDocument()
     expect(screen.queryByText(/streak/)).toBeNull()
   })
+
+  it("does not render anchor/link wrapper", () => {
+    const segments: NarrativeSegments = {
+      summary: "За неделю +12% использований",
+      topModel: null,
+      streak: null,
+      actionHint: "3 забытых промпта",
+    }
+    const { container } = render(<NarrativeBanner segments={segments} />)
+    expect(container.querySelectorAll("a")).toHaveLength(0)
+  })
+
+  it("does not render ArrowRight icon (no CTA affordance)", () => {
+    const segments: NarrativeSegments = {
+      summary: "За неделю +12% использований",
+      topModel: null,
+      streak: null,
+      actionHint: "3 забытых промпта",
+    }
+    const { container } = render(<NarrativeBanner segments={segments} />)
+    // ArrowRight from lucide-react renders as <svg class="lucide lucide-arrow-right …">
+    expect(container.querySelector("svg.lucide-arrow-right")).toBeNull()
+    expect(container.querySelector("[aria-label='Подробнее об инсайтах']")).toBeNull()
+  })
+
+  it("displays summary and actionHint together", () => {
+    const segments: NarrativeSegments = {
+      summary: "За неделю +12% использований",
+      topModel: null,
+      streak: null,
+      actionHint: "3 забытых промпта",
+    }
+    render(<NarrativeBanner segments={segments} />)
+    expect(screen.getByText(/12%/)).toBeInTheDocument()
+    expect(screen.getByText(/забытых/)).toBeInTheDocument()
+  })
 })
