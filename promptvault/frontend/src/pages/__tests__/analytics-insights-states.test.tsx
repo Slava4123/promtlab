@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom"
 import AnalyticsPage from "../analytics"
 import type { PersonalDashboard, InsightsResponse } from "@/api/analytics"
 
-// Pricing iteration v3, Task 10: three-state Smart Insights UI.
+// Pricing iteration v3 + Bento redesign (Task A14): three-state Smart Insights UI.
 // Free → UpgradeGate Pro; Pro → InsightsPanel + 5 locked-карточек;
 // Max → 7 insights без locked'ов.
 //
@@ -77,6 +77,12 @@ vi.mock("@/hooks/use-analytics", () => {
   }
 })
 
+// Task A13 добавил useStreak в analytics.tsx — мокаем, иначе TanStack Query
+// уйдёт за реальным /streaks fetch и зависнет.
+vi.mock("@/hooks/use-streaks", () => ({
+  useStreak: () => ({ data: undefined, isLoading: false, isError: false }),
+}))
+
 vi.mock("@/stores/auth-store", () => ({
   useAuthStore: (selector: (s: { user: { plan_id: string } }) => unknown) =>
     selector({ user: { plan_id: mockPlanId } }),
@@ -102,29 +108,28 @@ describe("Analytics insights — three states", () => {
     mockPlanId = "free"
     renderAnalytics()
     // UpgradeGate с правильным заголовком — это invariant Free-state.
-    expect(screen.getByText("Подсказки — на тарифе Pro")).toBeInTheDocument()
-    // Locked-карточки НЕ показываются Free-юзеру.
-    expect(screen.queryByText("Растущая популярность")).not.toBeInTheDocument()
-    expect(screen.queryByText("Падающая популярность")).not.toBeInTheDocument()
-    // Сам InsightsPanel (с заголовком «Умные инсайты») — тоже не показывается.
-    expect(screen.queryByText("Умные инсайты")).not.toBeInTheDocument()
+    expect(screen.getByText(/Подсказки — на тарифе Pro/i)).toBeInTheDocument()
+    // Locked-карточки НЕ показываются Free-юзеру (новые названия после A11/A12).
+    expect(screen.queryByText("Растёт")).not.toBeInTheDocument()
+    expect(screen.queryByText("Падает")).not.toBeInTheDocument()
+    // «Доступно в Max» CTA из locked-card не должно быть на Free.
+    expect(screen.queryByText(/Доступно в Max/i)).not.toBeInTheDocument()
   })
 
   it("Pro → InsightsPanel + 5 locked-карточек (нет UpgradeGate Pro)", () => {
     mockPlanId = "pro"
     renderAnalytics()
     // Нет Pro-teaser'а — Pro-юзер уже залогинен.
-    expect(screen.queryByText("Подсказки — на тарифе Pro")).not.toBeInTheDocument()
-    // InsightsPanel показан.
-    expect(screen.getByText("Умные инсайты")).toBeInTheDocument()
-    // 5 locked-карточек для Max-only типов.
-    const lockedLinks = screen.getAllByText("Доступно в Max →")
+    expect(screen.queryByText(/Подсказки — на тарифе Pro/i)).not.toBeInTheDocument()
+    // 5 locked-карточек для Max-only типов. Стрелка теперь icon (ArrowRight),
+    // поэтому regex проверяет только текстовое начало «Доступно в Max».
+    const lockedLinks = screen.getAllByText(/Доступно в Max/i)
     expect(lockedLinks).toHaveLength(5)
-    // Заголовки 5 Max-only типов.
-    expect(screen.getByText("Растущая популярность")).toBeInTheDocument()
-    expect(screen.getByText("Падающая популярность")).toBeInTheDocument()
-    expect(screen.getByText("Самые редактируемые")).toBeInTheDocument()
-    expect(screen.getByText("Теги без промптов")).toBeInTheDocument()
+    // Заголовки 5 Max-only типов (новый набор после refactor insights-locked-card).
+    expect(screen.getByText("Растёт")).toBeInTheDocument()
+    expect(screen.getByText("Падает")).toBeInTheDocument()
+    expect(screen.getByText("Часто правят")).toBeInTheDocument()
+    expect(screen.getByText("Orphan-теги")).toBeInTheDocument()
     expect(screen.getByText("Пустые коллекции")).toBeInTheDocument()
   })
 
@@ -132,10 +137,8 @@ describe("Analytics insights — three states", () => {
     mockPlanId = "max"
     renderAnalytics()
     // Нет Pro-teaser'а.
-    expect(screen.queryByText("Подсказки — на тарифе Pro")).not.toBeInTheDocument()
-    // InsightsPanel показан.
-    expect(screen.getByText("Умные инсайты")).toBeInTheDocument()
+    expect(screen.queryByText(/Подсказки — на тарифе Pro/i)).not.toBeInTheDocument()
     // НЕТ locked-карточек — Max видит все 7 типов в полном объёме.
-    expect(screen.queryByText("Доступно в Max →")).not.toBeInTheDocument()
+    expect(screen.queryByText(/Доступно в Max/i)).not.toBeInTheDocument()
   })
 })
