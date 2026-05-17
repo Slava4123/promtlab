@@ -64,7 +64,7 @@ export default function TagsPage() {
       {!isLoading && items && items.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {isOrphan
-            ? "Нет «orphan»-тегов — все теги используются."
+            ? "Нет неиспользуемых тегов — все теги используются."
             : "Тегов пока нет. Создайте теги через редактор промпта."}
         </p>
       )}

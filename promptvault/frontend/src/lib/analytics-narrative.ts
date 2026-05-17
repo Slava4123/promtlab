@@ -78,7 +78,7 @@ function buildActionHint(insights: Insight[] | null): string | null {
     if (count === 0) continue
     if (ins.type === "unused_prompts") parts.push(`${count} забытых`)
     else if (ins.type === "possible_duplicates") parts.push(`${count} дубликата`)
-    else if (ins.type === "orphan_tags") parts.push(`${count} orphan-тегов`)
+    else if (ins.type === "orphan_tags") parts.push(`${count} неиспользуемых тегов`)
     else if (ins.type === "empty_collections") parts.push(`${count} пустых коллекций`)
   }
   if (parts.length === 0) return null
