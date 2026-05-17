@@ -56,3 +56,4 @@ infra/alertmanager/secrets/
 # изображения и т.д.). .review/ — JSON-выгрузки code-review tools.
 tmp-test/
 .review/
+.superpowers/
