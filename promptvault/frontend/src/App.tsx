@@ -49,6 +49,11 @@ const ChainRuns = lazy(() => import("@/pages/chains/runs"))
 const ChainCanvas = lazy(() => import("@/pages/chains/canvas"))
 const Versions = lazy(() => import("@/pages/versions"))
 const PromptAnalytics = lazy(() => import("@/pages/prompt-analytics"))
+const InsightsUnused = lazy(() => import("@/pages/prompts/insights/unused"))
+const InsightsDuplicates = lazy(() => import("@/pages/prompts/insights/duplicates"))
+const InsightsTrending = lazy(() => import("@/pages/prompts/insights/trending"))
+const InsightsDeclining = lazy(() => import("@/pages/prompts/insights/declining"))
+const InsightsMostEdited = lazy(() => import("@/pages/prompts/insights/most-edited"))
 // /settings/* — nested routes. Layout — lazy (грузится один раз при заходе),
 // sub-страницы — eager: формы лёгкие, per-section split дал бы 8 микро-чанков
 // и мерцание Suspense fallback при каждом переключении nav.
@@ -135,6 +140,11 @@ function AppRoutes() {
 
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Suspense fallback={<PageFallback />}><Dashboard /></Suspense>} />
+          <Route path="/prompts/insights/unused" element={<Suspense fallback={<PageFallback />}><InsightsUnused /></Suspense>} />
+          <Route path="/prompts/insights/duplicates" element={<Suspense fallback={<PageFallback />}><InsightsDuplicates /></Suspense>} />
+          <Route path="/prompts/insights/trending" element={<Suspense fallback={<PageFallback />}><InsightsTrending /></Suspense>} />
+          <Route path="/prompts/insights/declining" element={<Suspense fallback={<PageFallback />}><InsightsDeclining /></Suspense>} />
+          <Route path="/prompts/insights/most-edited" element={<Suspense fallback={<PageFallback />}><InsightsMostEdited /></Suspense>} />
           <Route path="/prompts/new" element={<Suspense fallback={<PageFallback />}><PromptEditor /></Suspense>} />
           <Route path="/prompts/:id" element={<Suspense fallback={<PageFallback />}><PromptEditor /></Suspense>} />
           <Route path="/prompts/:id/versions" element={<Suspense fallback={<PageFallback />}><Versions /></Suspense>} />
