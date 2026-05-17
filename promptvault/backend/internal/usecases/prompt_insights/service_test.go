@@ -12,6 +12,9 @@ import (
 type fakeAnalyticsRepo struct {
 	unused     []repo.PromptUsageRow
 	duplicates []repo.DuplicatePair
+	trending   []repo.TrendRow
+	declining  []repo.TrendRow
+	mostEdited []repo.PromptUsageRow
 }
 
 func (f *fakeAnalyticsRepo) UnusedPrompts(ctx context.Context, userID uint, teamID *uint, before time.Time, limit int) ([]repo.PromptUsageRow, error) {
@@ -20,6 +23,17 @@ func (f *fakeAnalyticsRepo) UnusedPrompts(ctx context.Context, userID uint, team
 
 func (f *fakeAnalyticsRepo) PossibleDuplicates(ctx context.Context, userID uint, teamID *uint, threshold float32, limit int) ([]repo.DuplicatePair, error) {
 	return f.duplicates, nil
+}
+
+func (f *fakeAnalyticsRepo) GetTrendingPrompts(ctx context.Context, userID uint, teamID *uint, factor float64, growing bool, limit int) ([]repo.TrendRow, error) {
+	if growing {
+		return f.trending, nil
+	}
+	return f.declining, nil
+}
+
+func (f *fakeAnalyticsRepo) MostEditedPrompts(ctx context.Context, userID uint, teamID *uint, limit int) ([]repo.PromptUsageRow, error) {
+	return f.mostEdited, nil
 }
 
 type fakePlanLookup struct{ plan string }
@@ -64,6 +78,54 @@ func TestListUnusedFreePlanBlocked(t *testing.T) {
 	_, err := svc.ListUnused(context.Background(), 100, nil, 50)
 	if !errors.Is(err, ErrProRequired) {
 		t.Fatalf("expected ErrProRequired, got %v", err)
+	}
+}
+
+func TestListTrending(t *testing.T) {
+	ar := &fakeAnalyticsRepo{
+		trending: []repo.TrendRow{
+			{PromptID: 5, Title: "Hot", UsesLast: 20, UsesPrevious: 5},
+		},
+	}
+	svc := NewService(ar, nil, &fakePlanLookup{plan: "max"}, time.Now)
+	rows, err := svc.ListTrending(context.Background(), 100, nil, 10)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Uses != 20 {
+		t.Fatalf("expected 1 row with uses=20 (UsesLast), got %+v", rows)
+	}
+}
+
+func TestListDeclining(t *testing.T) {
+	ar := &fakeAnalyticsRepo{
+		declining: []repo.TrendRow{
+			{PromptID: 7, Title: "Falling", UsesLast: 2, UsesPrevious: 18},
+		},
+	}
+	svc := NewService(ar, nil, &fakePlanLookup{plan: "max"}, time.Now)
+	rows, err := svc.ListDeclining(context.Background(), 100, nil, 10)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Uses != 2 {
+		t.Fatalf("expected 1 row with uses=2, got %+v", rows)
+	}
+}
+
+func TestListMostEdited(t *testing.T) {
+	ar := &fakeAnalyticsRepo{
+		mostEdited: []repo.PromptUsageRow{
+			{PromptID: 8, Title: "Churn", Uses: 15},
+		},
+	}
+	svc := NewService(ar, nil, &fakePlanLookup{plan: "max"}, time.Now)
+	rows, err := svc.ListMostEdited(context.Background(), 100, nil, 10)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Uses != 15 {
+		t.Fatalf("expected 1 row, got %+v", rows)
 	}
 }
 

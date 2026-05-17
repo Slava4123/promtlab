@@ -23,10 +23,6 @@ func (f *fakeAnalyticsRepo) TopPrompts(ctx context.Context, userID uint, teamID 
 	return nil, nil
 }
 
-func (f *fakeAnalyticsRepo) GetTrendingPrompts(ctx context.Context, userID uint, teamID *uint, factor float64, growing bool, limit int) ([]repo.TrendRow, error) {
-	return nil, nil
-}
-
 func (f *fakeAnalyticsRepo) PromptUsageTimeline(ctx context.Context, promptID uint, r repo.DateRange) ([]repo.UsagePoint, error) {
 	return nil, nil
 }
@@ -92,10 +88,6 @@ func (f *fakeAnalyticsRepo) CleanupPromptUsageByRetention(ctx context.Context) (
 }
 
 // --- SMART INSIGHTS M8 ---
-
-func (f *fakeAnalyticsRepo) MostEditedPrompts(ctx context.Context, userID uint, teamID *uint, limit int) ([]repo.PromptUsageRow, error) {
-	return nil, nil
-}
 
 func (f *fakeAnalyticsRepo) OrphanTags(ctx context.Context, userID uint, teamID *uint, limit int) ([]repo.TagRow, error) {
 	return nil, nil

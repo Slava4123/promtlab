@@ -95,6 +95,49 @@ func (s *Service) ListDuplicates(ctx context.Context, userID uint, teamID *uint,
 	return out, nil
 }
 
+// ListTrending — промпты с ростом использования >2× за неделю (factor=2.0, growing=true).
+func (s *Service) ListTrending(ctx context.Context, userID uint, teamID *uint, limit int) ([]PromptInsightRow, error) {
+	return s.listTrendDirection(ctx, userID, teamID, insightTypeTrending, 2.0, true, limit)
+}
+
+// ListDeclining — промпты с падением >2× (factor=0.5 = «текущее ≤ половины предыдущего»).
+func (s *Service) ListDeclining(ctx context.Context, userID uint, teamID *uint, limit int) ([]PromptInsightRow, error) {
+	return s.listTrendDirection(ctx, userID, teamID, insightTypeDeclining, 0.5, false, limit)
+}
+
+func (s *Service) listTrendDirection(ctx context.Context, userID uint, teamID *uint, kind string, factor float64, growing bool, limit int) ([]PromptInsightRow, error) {
+	if err := s.checkAllowed(ctx, userID, kind); err != nil {
+		return nil, err
+	}
+	limit = clampLimit(limit, 10, 50)
+	raws, err := s.analytics.GetTrendingPrompts(ctx, userID, teamID, factor, growing, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PromptInsightRow, 0, len(raws))
+	for _, r := range raws {
+		out = append(out, PromptInsightRow{PromptID: r.PromptID, Title: r.Title, Uses: int(r.UsesLast)})
+	}
+	return out, nil
+}
+
+// ListMostEdited — промпты с >=2 версиями (HAVING COUNT > 1 в SQL).
+func (s *Service) ListMostEdited(ctx context.Context, userID uint, teamID *uint, limit int) ([]PromptInsightRow, error) {
+	if err := s.checkAllowed(ctx, userID, insightTypeMostEdited); err != nil {
+		return nil, err
+	}
+	limit = clampLimit(limit, 10, 50)
+	raws, err := s.analytics.MostEditedPrompts(ctx, userID, teamID, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PromptInsightRow, 0, len(raws))
+	for _, r := range raws {
+		out = append(out, PromptInsightRow{PromptID: r.PromptID, Title: r.Title, Uses: int(r.Uses)})
+	}
+	return out, nil
+}
+
 func clampLimit(v, def, max int) int {
 	if v <= 0 {
 		return def
