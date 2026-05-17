@@ -132,9 +132,10 @@ func (m *mockSubsRepo) RecordCancellation(_ context.Context, c *models.Subscript
 
 // mockUsersRepo — для users.SetPlan в handleRefund (без активной подписки).
 type mockUsersRepo struct {
-	setPlanCalls []setPlanCall
-	setPlanErr   error
-	getByID      func(id uint) (*models.User, error)
+	setPlanCalls       []setPlanCall
+	setPlanErr         error
+	getByID            func(id uint) (*models.User, error)
+	getByReferralCode  func(code string) (*models.User, error)
 }
 
 type setPlanCall struct {
@@ -174,8 +175,11 @@ func (m *mockUsersRepo) MarkReengagementSent(context.Context, uint) error { pani
 func (m *mockUsersRepo) CountReferredBy(context.Context, string) (int64, error) {
 	panic("unused")
 }
-func (m *mockUsersRepo) GetByReferralCode(context.Context, string) (*models.User, error) {
-	panic("unused")
+func (m *mockUsersRepo) GetByReferralCode(_ context.Context, code string) (*models.User, error) {
+	if m.getByReferralCode == nil {
+		return nil, repo.ErrNotFound
+	}
+	return m.getByReferralCode(code)
 }
 func (m *mockUsersRepo) MarkReferralRewarded(context.Context, uint) (bool, error) {
 	panic("unused")
@@ -763,11 +767,255 @@ func TestHandleWebhook_PaymentNotConfigured_ProviderNotCalled(t *testing.T) {
 	}
 }
 
+// --- Referral pending mock + tests (M-7 Pricing v3 Task 16) ---
+
+// mockReferralPendingRepo — реализует repo.ReferralRewardRepository.
+// activateSubscription использует FindByReferee + Create. ListEligible/Delete
+// в этом scope не вызываются (это ReferralRewardLoop'а work).
+type mockReferralPendingRepo struct {
+	findByReferee func(refereeID uint) (*models.ReferralPendingReward, error)
+	createErr     error
+	created       *models.ReferralPendingReward // последний созданный для assert'ов
+	createCalls   int
+}
+
+func (m *mockReferralPendingRepo) Create(_ context.Context, p *models.ReferralPendingReward) error {
+	m.createCalls++
+	if m.createErr != nil {
+		return m.createErr
+	}
+	m.created = p
+	return nil
+}
+func (m *mockReferralPendingRepo) ListEligible(context.Context, time.Time, int) ([]models.ReferralPendingReward, error) {
+	panic("unused")
+}
+func (m *mockReferralPendingRepo) FindByReferee(_ context.Context, refereeID uint) (*models.ReferralPendingReward, error) {
+	if m.findByReferee == nil {
+		return nil, nil // default: не найдено
+	}
+	return m.findByReferee(refereeID)
+}
+func (m *mockReferralPendingRepo) Delete(context.Context, uint) error { panic("unused") }
+
+// newServiceWithReferral собирает Service с включённой реферальной фичей,
+// инжектированными pending repo и nowFn (deterministic для assert eligibleAt).
+func newServiceWithReferral(prov *mockProvider, pays *payRepoExt, subs *mockSubsRepo, users *mockUsersRepo, plans *mockPlansRepo, pending *mockReferralPendingRepo, enabled bool, now time.Time) *Service {
+	svc := newFullService(prov, pays, subs, users, plans)
+	svc.SetReferralPendingRepo(pending)
+	svc.SetReferralRewardEnabled(enabled)
+	svc.SetNowFn(func() time.Time { return now })
+	return svc
+}
+
+// 1. CONFIRMED первый платёж → INSERT pending row с правильными полями.
+func TestHandleWebhook_FirstPayment_InsertsReferralPending(t *testing.T) {
+	prov := &mockProvider{verifyResult: true}
+	now := time.Date(2026, 5, 17, 12, 0, 0, 0, time.UTC)
+	expectedEligible := now.Add(14 * 24 * time.Hour)
+
+	pays := &payRepoExt{
+		getByExtID: func(_, _ string) (*models.Payment, error) {
+			return &models.Payment{
+				ID:           777,
+				UserID:       42,
+				Status:       models.PaymentPending,
+				ProviderData: providerData("pro", false),
+			}, nil
+		},
+		transition: func(_ uint, _, _ models.PaymentStatus) (bool, error) { return true, nil },
+	}
+	subs := &mockSubsRepo{
+		getActive: func(_ uint) (*models.Subscription, error) { return nil, repo.ErrNotFound },
+	}
+	users := &mockUsersRepo{
+		getByID: func(id uint) (*models.User, error) {
+			// referee — приглашённый юзер с кодом referrer'а в ReferredBy.
+			return &models.User{ID: id, ReferredBy: "REFREF01"}, nil
+		},
+		getByReferralCode: func(code string) (*models.User, error) {
+			if code != "REFREF01" {
+				t.Errorf("expected GetByReferralCode(REFREF01), got %q", code)
+			}
+			// referrer — без выставленного ReferralRewardedAt (ещё не награждён).
+			return &models.User{ID: 7, ReferralCode: code}, nil
+		},
+	}
+	plans := &mockPlansRepo{
+		getByID: func(id string) (*models.SubscriptionPlan, error) {
+			return &models.SubscriptionPlan{ID: id, Name: "Pro", PeriodDays: 30, PriceKop: 59900}, nil
+		},
+	}
+	pending := &mockReferralPendingRepo{}
+	svc := newServiceWithReferral(prov, pays, subs, users, plans, pending, true, now)
+
+	err := svc.HandleWebhook(context.Background(), "tbank",
+		map[string]string{"Token": "x", "PaymentId": "p1", "Status": "CONFIRMED", "RebillId": "rb-1"})
+	if err != nil {
+		t.Fatalf("HandleWebhook: %v", err)
+	}
+	if pending.createCalls != 1 {
+		t.Fatalf("expected 1 Create call, got %d", pending.createCalls)
+	}
+	if pending.created == nil {
+		t.Fatal("expected pending row created")
+	}
+	if pending.created.ReferrerID != 7 {
+		t.Errorf("ReferrerID: want 7, got %d", pending.created.ReferrerID)
+	}
+	if pending.created.RefereeID != 42 {
+		t.Errorf("RefereeID: want 42, got %d", pending.created.RefereeID)
+	}
+	if pending.created.PaymentID != 777 {
+		t.Errorf("PaymentID: want 777, got %d", pending.created.PaymentID)
+	}
+	if !pending.created.EligibleAt.Equal(expectedEligible) {
+		t.Errorf("EligibleAt: want %v, got %v", expectedEligible, pending.created.EligibleAt)
+	}
+}
+
+// 2. Юзер пришёл не по рефералке (referee.ReferredBy="") → skip.
+func TestHandleWebhook_NoReferredBy_NoPending(t *testing.T) {
+	prov := &mockProvider{verifyResult: true}
+	pays := &payRepoExt{
+		getByExtID: func(_, _ string) (*models.Payment, error) {
+			return &models.Payment{
+				ID:           1,
+				UserID:       42,
+				Status:       models.PaymentPending,
+				ProviderData: providerData("pro", false),
+			}, nil
+		},
+		transition: func(_ uint, _, _ models.PaymentStatus) (bool, error) { return true, nil },
+	}
+	subs := &mockSubsRepo{
+		getActive: func(_ uint) (*models.Subscription, error) { return nil, repo.ErrNotFound },
+	}
+	users := &mockUsersRepo{
+		getByID: func(id uint) (*models.User, error) {
+			return &models.User{ID: id, ReferredBy: ""}, nil // не реферал
+		},
+		// getByReferralCode НЕ должен вызваться — если вызовется, default panic
+		// заменили на ErrNotFound в Edit выше, но всё равно тест поймает через
+		// pending.createCalls == 0.
+	}
+	plans := &mockPlansRepo{
+		getByID: func(id string) (*models.SubscriptionPlan, error) {
+			return &models.SubscriptionPlan{ID: id, PeriodDays: 30}, nil
+		},
+	}
+	pending := &mockReferralPendingRepo{}
+	svc := newServiceWithReferral(prov, pays, subs, users, plans, pending, true, time.Now())
+
+	err := svc.HandleWebhook(context.Background(), "tbank",
+		map[string]string{"Token": "x", "PaymentId": "p1", "Status": "CONFIRMED"})
+	if err != nil {
+		t.Fatalf("HandleWebhook: %v", err)
+	}
+	if pending.createCalls != 0 {
+		t.Errorf("expected 0 Create calls for non-referee, got %d", pending.createCalls)
+	}
+	if pending.created != nil {
+		t.Errorf("expected no pending row, got %+v", pending.created)
+	}
+}
+
+// 3. referrer.ReferralRewardedAt != nil → skip (уже наградили).
+func TestHandleWebhook_ReferrerAlreadyRewarded_NoPending(t *testing.T) {
+	prov := &mockProvider{verifyResult: true}
+	pays := &payRepoExt{
+		getByExtID: func(_, _ string) (*models.Payment, error) {
+			return &models.Payment{
+				ID:           1,
+				UserID:       42,
+				Status:       models.PaymentPending,
+				ProviderData: providerData("pro", false),
+			}, nil
+		},
+		transition: func(_ uint, _, _ models.PaymentStatus) (bool, error) { return true, nil },
+	}
+	subs := &mockSubsRepo{
+		getActive: func(_ uint) (*models.Subscription, error) { return nil, repo.ErrNotFound },
+	}
+	rewardedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	users := &mockUsersRepo{
+		getByID: func(id uint) (*models.User, error) {
+			return &models.User{ID: id, ReferredBy: "REFREF01"}, nil
+		},
+		getByReferralCode: func(_ string) (*models.User, error) {
+			// referrer уже награждён ранее (другим реферри).
+			return &models.User{ID: 7, ReferralRewardedAt: &rewardedAt}, nil
+		},
+	}
+	plans := &mockPlansRepo{
+		getByID: func(id string) (*models.SubscriptionPlan, error) {
+			return &models.SubscriptionPlan{ID: id, PeriodDays: 30}, nil
+		},
+	}
+	pending := &mockReferralPendingRepo{}
+	svc := newServiceWithReferral(prov, pays, subs, users, plans, pending, true, time.Now())
+
+	err := svc.HandleWebhook(context.Background(), "tbank",
+		map[string]string{"Token": "x", "PaymentId": "p1", "Status": "CONFIRMED"})
+	if err != nil {
+		t.Fatalf("HandleWebhook: %v", err)
+	}
+	if pending.createCalls != 0 {
+		t.Errorf("expected 0 Create calls when referrer already rewarded, got %d", pending.createCalls)
+	}
+}
+
+// 4. Feature flag REFERRAL_REWARD_ENABLED=false → skip независимо от данных.
+func TestHandleWebhook_FlagDisabled_NoPending(t *testing.T) {
+	prov := &mockProvider{verifyResult: true}
+	pays := &payRepoExt{
+		getByExtID: func(_, _ string) (*models.Payment, error) {
+			return &models.Payment{
+				ID:           1,
+				UserID:       42,
+				Status:       models.PaymentPending,
+				ProviderData: providerData("pro", false),
+			}, nil
+		},
+		transition: func(_ uint, _, _ models.PaymentStatus) (bool, error) { return true, nil },
+	}
+	subs := &mockSubsRepo{
+		getActive: func(_ uint) (*models.Subscription, error) { return nil, repo.ErrNotFound },
+	}
+	// Даже c полностью валидным реферрером — flag=false должен полностью отрубить.
+	users := &mockUsersRepo{
+		getByID: func(id uint) (*models.User, error) {
+			return &models.User{ID: id, ReferredBy: "REFREF01"}, nil
+		},
+		getByReferralCode: func(_ string) (*models.User, error) {
+			return &models.User{ID: 7}, nil
+		},
+	}
+	plans := &mockPlansRepo{
+		getByID: func(id string) (*models.SubscriptionPlan, error) {
+			return &models.SubscriptionPlan{ID: id, PeriodDays: 30}, nil
+		},
+	}
+	pending := &mockReferralPendingRepo{}
+	// enabled=false — pending должен быть skipped даже с конфигом инжектированным.
+	svc := newServiceWithReferral(prov, pays, subs, users, plans, pending, false, time.Now())
+
+	err := svc.HandleWebhook(context.Background(), "tbank",
+		map[string]string{"Token": "x", "PaymentId": "p1", "Status": "CONFIRMED"})
+	if err != nil {
+		t.Fatalf("HandleWebhook: %v", err)
+	}
+	if pending.createCalls != 0 {
+		t.Errorf("expected 0 Create calls when flag disabled, got %d", pending.createCalls)
+	}
+}
+
 // Compile-time interface satisfaction checks.
 var (
-	_ repo.PaymentRepository      = (*payRepoExt)(nil)
-	_ repo.SubscriptionRepository = (*mockSubsRepo)(nil)
-	_ repo.UserRepository         = (*mockUsersRepo)(nil)
-	_ repo.PlanRepository         = (*mockPlansRepo)(nil)
-	_ payment.PaymentProvider     = (*mockProvider)(nil)
+	_ repo.PaymentRepository        = (*payRepoExt)(nil)
+	_ repo.SubscriptionRepository   = (*mockSubsRepo)(nil)
+	_ repo.UserRepository           = (*mockUsersRepo)(nil)
+	_ repo.PlanRepository           = (*mockPlansRepo)(nil)
+	_ repo.ReferralRewardRepository = (*mockReferralPendingRepo)(nil)
+	_ payment.PaymentProvider       = (*mockProvider)(nil)
 )
