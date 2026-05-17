@@ -1,4 +1,4 @@
-import { Lock } from "lucide-react"
+import { Lock, ArrowRight } from "lucide-react"
 import { Link } from "react-router-dom"
 
 interface InsightsLockedCardProps {
@@ -6,23 +6,25 @@ interface InsightsLockedCardProps {
   description: string
 }
 
-// InsightsLockedCard — teaser-карточка для инсайтов, доступных только на Max.
-// Показывается Pro-юзерам рядом с уже доступными типами (unused/duplicates),
-// чтобы дать наглядное представление о ценности апгрейда. Стиль — border-dashed
-// + muted (как UpgradeGate), чтобы визуально отличался от «живых» карточек.
+// InsightsLockedCard — Pro teaser locked card (для Max-only insight types).
+// Визуально соответствует InsightActionCard, но dashed border и lock icon.
+// CTA — ссылка на /pricing.
 export function InsightsLockedCard({ title, description }: InsightsLockedCardProps) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-muted/20 p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <Lock className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+    <div className="rounded-lg border border-dashed border-border bg-foreground/2 p-4">
+      <div className="mb-1.5 flex items-center gap-2">
+        <Lock className="size-4 text-muted-foreground" aria-hidden="true" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </span>
       </div>
-      <p className="mb-3 text-xs text-muted-foreground">{description}</p>
+      <p className="mb-2 text-sm text-foreground/70">{description}</p>
       <Link
         to="/pricing"
-        className="text-xs font-medium text-violet-600 hover:underline dark:text-violet-400"
+        className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 dark:text-violet-400"
       >
-        Доступно в Max →
+        Доступно в Max
+        <ArrowRight className="size-3" aria-hidden="true" />
       </Link>
     </div>
   )
