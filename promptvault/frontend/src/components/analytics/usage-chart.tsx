@@ -2,6 +2,7 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DEFAULT_USAGE_CHART_CONFIG } from "@/components/analytics/usage-chart-config"
+import { formatDayShort } from "@/lib/date-format"
 import type { UsagePoint } from "@/api/analytics"
 
 interface UsageChartProps {
@@ -42,7 +43,7 @@ export function UsageChart({
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
-                tickFormatter={(v) => v.slice(5)} // "04-14"
+                tickFormatter={formatDayShort}
               />
               <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
               <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
