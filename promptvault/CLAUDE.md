@@ -257,6 +257,13 @@ backend/internal/
   - **Fork tier-gate (справедливая модель):** для personal-цепочки проверяется `userID.plan_id ∈ {max, max_yearly}`; для team-цепочки — план **любого owner** команды (`isMaxTierForChain` в `chain.go`). Если хотя бы один owner на Max → все editor'ы команды могут добавлять fork (даже Pro/Free). Это поощряет owner'а апгрейдиться (его tier «дарит» команде feature). Frontend в team-mode оптимистично показывает кнопку «+ Развилка» enabled (бэк проверит и вернёт `ErrForkRequiresMax` если нужно).
   - **Activity feed events** (Phase 14 wire-up): `chain.created`, `chain.updated`, `chain.deleted`, `chain.execution_started`, `chain.execution_completed` (`models.ActivityChain*` в `team_activity.go`). Записываются только для team-цепочек через `s.activity.LogSafe`. Step-level events намеренно НЕ трекаются (noisy для длинных цепочек).
   - **Phase C (отложено):** 3 starter chains (PRD/Code Review/Контент) — отдельный мини-PR, требует расширения starter catalog. Task #17 (unit-тесты chain.Service) и task #18 (Playwright E2E) — тех.долг. MCP multi-step loop эксперимент с Cursor/Claude Code — обязателен ДО включения CHAINS_ENABLED=true в prod.
+- **Pricing iteration v3 (2026-05-17):**
+  - Free max_prompts 15→25 (миграция 000072); grandfather от Pack E через `effectiveLimit = max(legacy, plan)` сохраняется автоматически.
+  - Annual −20% (миграция 000073); существующие подписки продолжают платить старую цену до renewal, T-Bank Charge берёт цену из `plans.GetByID()` на renewal.
+  - Pro Smart Insights teaser: `proAllowedInsights = [unused, duplicates]` константа в `usecases/analytics`, per-type filter в `GetInsightsGated`/`ComputeInsights`. Master-gate `IsMax` заменён на `s.insightsForPlan(planID)`. См. ADR-0008.
+  - Referral reward: +30 дней Pro пригласившему через `ReferralRewardLoop` (паттерн `RenewalLoop`). Pending row создаётся на webhook payment.succeeded с `eligible_at = now() + 14d` (UNIQUE на referee_id для idempotency), grant через час после eligibility. Free-referrer получает trial `Subscription{auto_renew:false, rebill_id:""}`. См. ADR-0009.
+  - Feature flags: `PRO_INSIGHTS_TEASER_ENABLED`, `REFERRAL_REWARD_ENABLED` (оба default false, включаются после observability недели).
+  - Метрики: `referral_rewards_{pending,granted,skipped}_total`, `analytics_insights_gated_total{plan,result}`. Cardinality ≤18 series.
 
 ## Phase 15 dev-workflow gotchas (от QA findings)
 
