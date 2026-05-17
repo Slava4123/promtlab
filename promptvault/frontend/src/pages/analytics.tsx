@@ -18,7 +18,7 @@ import { ActivityHeatmap } from "@/components/analytics/activity-heatmap"
 import { ModelsDonut } from "@/components/analytics/models-donut"
 import { StreakTracker } from "@/components/analytics/streak-tracker"
 import { CompactQuotas } from "@/components/analytics/compact-quotas"
-import { buildNarrative } from "@/lib/analytics-narrative"
+import { buildNarrative, buildStreakSegment } from "@/lib/analytics-narrative"
 import { toast } from "sonner"
 
 // Phase 14 C.2 + analytics redesign 2026-05-17: /analytics — личный dashboard
@@ -55,7 +55,7 @@ export default function AnalyticsPage() {
     [data, insightsQuery.data],
   )
   const streakSegment = streakQuery.data
-    ? `streak ${streakQuery.data.current_streak} ${pluralStreak(streakQuery.data.current_streak)}`
+    ? buildStreakSegment(streakQuery.data.current_streak)
     : null
   const narrativeFinal = narrative ? { ...narrative, streak: streakSegment } : null
 
@@ -214,12 +214,4 @@ export default function AnalyticsPage() {
       )}
     </div>
   )
-}
-
-function pluralStreak(n: number): string {
-  const mod10 = n % 10
-  const mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return "день"
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "дня"
-  return "дней"
 }

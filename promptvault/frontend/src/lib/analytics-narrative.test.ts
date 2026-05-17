@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildNarrative } from "./analytics-narrative"
+import { buildNarrative, buildStreakSegment } from "./analytics-narrative"
 import type { PersonalDashboard, Insight } from "@/api/analytics"
 
 const baseDashboard: PersonalDashboard = {
@@ -61,5 +61,100 @@ describe("buildNarrative", () => {
   it("returns null actionHint for empty insights", () => {
     const result = buildNarrative(baseDashboard, [])
     expect(result.actionHint).toBeNull()
+  })
+
+  it("skips topModel segment when model name is empty string", () => {
+    const result = buildNarrative(
+      {
+        ...baseDashboard,
+        usage_by_model: [{ model: "", uses: 10 }],
+      },
+      [],
+    )
+    expect(result.topModel).toBeNull()
+    expect(result.summary).not.toMatch(/без модели/i)
+  })
+
+  it("skips topModel segment when only one model with 100%", () => {
+    const result = buildNarrative(
+      {
+        ...baseDashboard,
+        usage_by_model: [{ model: "claude-sonnet-4", uses: 10 }],
+      },
+      [],
+    )
+    // 100% single model is not informative — topModel should be null
+    expect(result.topModel).toBeNull()
+  })
+
+  it("keeps topModel segment when pct < 100 (two models)", () => {
+    const result = buildNarrative(
+      {
+        ...baseDashboard,
+        usage_by_model: [
+          { model: "claude-sonnet-4", uses: 6 },
+          { model: "gpt-4", uses: 4 },
+        ],
+      },
+      [],
+    )
+    expect(result.topModel).toMatch(/claude-sonnet-4/i)
+    expect(result.topModel).toMatch(/60%/)
+  })
+
+  it("skips streak segment when current is 0", () => {
+    const result = buildNarrative(
+      {
+        ...baseDashboard,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        streak: { current: 0, longest: 5 },
+      } as any,
+      [],
+    )
+    expect(result.streak).toBeNull()
+  })
+
+  it("keeps streak segment when current >= 1", () => {
+    const result = buildNarrative(
+      {
+        ...baseDashboard,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        streak: { current: 3, longest: 5 },
+      } as any,
+      [],
+    )
+    expect(result.streak).toMatch(/3/)
+  })
+})
+
+describe("buildStreakSegment", () => {
+  it("returns null for 0", () => {
+    expect(buildStreakSegment(0)).toBeNull()
+  })
+
+  it("returns null for undefined", () => {
+    expect(buildStreakSegment(undefined)).toBeNull()
+  })
+
+  it("returns null for null", () => {
+    expect(buildStreakSegment(null)).toBeNull()
+  })
+
+  it("returns segment string for 1 day (singular)", () => {
+    const out = buildStreakSegment(1)
+    expect(out).toMatch(/1/)
+    expect(out).toMatch(/день/)
+  })
+
+  it("returns segment string for 3 days", () => {
+    const out = buildStreakSegment(3)
+    expect(out).toMatch(/3/)
+    expect(out).toMatch(/дня/)
+  })
+
+  it("returns segment string for 7 days", () => {
+    const out = buildStreakSegment(7)
+    expect(out).toMatch(/7/)
+    expect(out).toMatch(/дней/)
   })
 })
