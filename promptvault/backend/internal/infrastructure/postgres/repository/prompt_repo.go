@@ -70,6 +70,31 @@ func (r *promptRepo) SoftDelete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Prompt{}).Error
 }
 
+// MergeWith soft-deletes mergeID после проверки что оба промпта принадлежат
+// userID. Ownership-check и delete атомарны в одной транзакции (TOCTOU защита).
+// COUNT(id IN [keep, merge] AND user_id = userID AND deleted_at IS NULL) — если
+// результат != 2, значит хотя бы один из промптов не существует, soft-deleted
+// или принадлежит другому юзеру → возвращаем gorm.ErrRecordNotFound. Если
+// keepID == mergeID — отдельная sanity-check ошибка (без обращения к БД).
+// Soft-delete merge через GORM-встроенный gorm.DeletedAt колонки models.Prompt.
+func (r *promptRepo) MergeWith(ctx context.Context, keepID, mergeID, userID uint) error {
+	if keepID == mergeID {
+		return errors.New("cannot merge prompt with itself")
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Model(&models.Prompt{}).
+			Where("id IN ? AND user_id = ? AND deleted_at IS NULL", []uint{keepID, mergeID}, userID).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 2 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Delete(&models.Prompt{}, mergeID).Error
+	})
+}
+
 func (r *promptRepo) List(ctx context.Context, filter repo.PromptListFilter) ([]models.Prompt, int64, error) {
 	q := r.db.WithContext(ctx).Model(&models.Prompt{})
 

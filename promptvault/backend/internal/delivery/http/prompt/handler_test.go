@@ -91,6 +91,9 @@ func (m *mPromptRepo) ListPublic(ctx context.Context, limit int) ([]models.Promp
 	}
 	return args.Get(0).([]models.Prompt), args.Error(1)
 }
+func (m *mPromptRepo) MergeWith(ctx context.Context, keepID, mergeID, userID uint) error {
+	return m.Called(ctx, keepID, mergeID, userID).Error(0)
+}
 
 type mPinRepo struct{ mock.Mock }
 
