@@ -69,6 +69,12 @@ updates:
         update-types:
           - minor
           - patch
+        # eslint-plugin-react-hooks 7.0 → 7.1 добавил новые правила
+        # (react-hooks/refs, set-state-in-effect, immutability) — минор по
+        # semver, но новые errors на существующем коде. Хотим отдельный PR
+        # с review/рефактором, не bulk-merge. См. closed PR #34.
+        exclude-patterns:
+          - "eslint-plugin-react-hooks"
 
   # npm extension (отдельный package.json).
   - package-ecosystem: npm
@@ -89,3 +95,11 @@ updates:
         update-types:
           - minor
           - patch
+        # @types/chrome 0.0.287 → 0.1.42 шёл как minor, но фактически
+        # breaking rewrite типов: chrome.tabs.TabChangeInfo выпилен,
+        # chrome.storage.local.get() возвращает {}|null. Требует
+        # рефактора lib/storage.ts + hooks/use-active-tab.ts. См. closed PR #31.
+        # Также react-hooks 7.1 — те же проблемы что и во frontend group.
+        exclude-patterns:
+          - "@types/chrome"
+          - "eslint-plugin-react-hooks"
