@@ -114,6 +114,11 @@ export function useDeletePrompt() {
       // Prompts count уменьшается (soft-delete).
       qc.invalidateQueries({ queryKey: ["subscription", "usage"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["activity"], refetchType: "active" })
+      // Backend пересчитывает 7 affected типов inline после soft-delete —
+      // обновляем analytics insights + prompt-insights (unused/duplicates/
+      // trending/declining/most-edited) сразу.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
+      qc.invalidateQueries({ queryKey: ["prompt-insights"] })
     },
   })
 }

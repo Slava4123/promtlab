@@ -12,6 +12,7 @@ import (
 
 	httperr "promptvault/internal/delivery/http/errors"
 	authmw "promptvault/internal/middleware/auth"
+	analyticsuc "promptvault/internal/usecases/analytics"
 	"promptvault/internal/usecases/prompt_insights"
 )
 
@@ -32,10 +33,20 @@ type InsightsService interface {
 // errors в HTTP-коды.
 type InsightsHandler struct {
 	svc InsightsService
+	// insights — опциональный hot-refresh кэша Smart Insights после Merge.
+	// nil-safe.
+	insights analyticsuc.InsightsRecomputer
 }
 
 func NewInsightsHandler(svc InsightsService) *InsightsHandler {
 	return &InsightsHandler{svc: svc}
+}
+
+// SetInsightsRecomputer подключает hot-refresh кэша Smart Insights.
+// После POST /api/prompts/{id}/merge-with/{other_id} пересчитываются
+// все 7 affected типов в personal scope (teamID=nil). Вызывается из app.go.
+func (h *InsightsHandler) SetInsightsRecomputer(r analyticsuc.InsightsRecomputer) {
+	h.insights = r
 }
 
 // Unused — GET /api/prompts/insights/unused?team_id=&limit=
@@ -127,6 +138,19 @@ func (h *InsightsHandler) Merge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("prompt_insights.merge", "user_id", userID, "kept_id", keepID, "merged_id", mergeID)
+
+	// Hot-refresh Smart Insights кэша: merge удаляет mergeID promtу (soft-delete)
+	// + uses-stat'ики переносятся на keepID — аффектит все 7 типов
+	// (см. allInsightsAffectedByPromptMutation в handler.go). teamID=nil —
+	// personal scope (team-scoped пересчитается на nightly cron). Ошибки
+	// swallow — recompute fail не должен ломать merge.
+	if h.insights != nil {
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, allInsightsAffectedByPromptMutation); rerr != nil {
+			slog.WarnContext(r.Context(), "prompt_insights.merge.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "kept_id", keepID, "merged_id", mergeID)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]uint{"kept_id": keepID, "merged_id": mergeID})

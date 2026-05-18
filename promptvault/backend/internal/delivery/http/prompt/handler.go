@@ -19,10 +19,31 @@ import (
 	authmw "promptvault/internal/middleware/auth"
 	"promptvault/internal/models"
 	activityuc "promptvault/internal/usecases/activity"
+	analyticsuc "promptvault/internal/usecases/analytics"
 	badgeuc "promptvault/internal/usecases/badge"
 	promptuc "promptvault/internal/usecases/prompt"
 	quotauc "promptvault/internal/usecases/quota"
 )
+
+// allInsightsAffectedByPromptMutation — типы Smart Insights, которые могут
+// измениться после soft-delete или merge промпта. Используется в Delete и
+// InsightsHandler.Merge для hot-refresh кэша. После удаления промпта:
+//   - unused_prompts / possible_duplicates: запись просто исчезает
+//   - trending / declining / most_edited: ранжирование меняется
+//   - orphan_tags: теги промпта могут стать orphan
+//   - empty_collections: коллекция промпта может стать пустой
+//
+// Все 7 типов перечислены явно (не maxAllInsights), чтобы изменение
+// тиерной политики Pro/Max в analytics не молча затронуло prompt mutations.
+var allInsightsAffectedByPromptMutation = []string{
+	models.InsightUnusedPrompts,
+	models.InsightPossibleDuplicates,
+	models.InsightTrending,
+	models.InsightDeclining,
+	models.InsightMostEdited,
+	models.InsightOrphanTags,
+	models.InsightEmptyCollections,
+}
 
 type Handler struct {
 	svc      *promptuc.Service
@@ -33,6 +54,9 @@ type Handler struct {
 	activity *activityuc.Service
 	// users — lookup для ChangedByEmail/ChangedByName в VersionResponse.
 	users repo.UserRepository
+	// insights — опциональный hot-refresh кэша Smart Insights после Delete.
+	// nil-safe.
+	insights analyticsuc.InsightsRecomputer
 }
 
 func NewHandler(svc *promptuc.Service, quotas *quotauc.Service) *Handler {
@@ -44,6 +68,13 @@ func NewHandler(svc *promptuc.Service, quotas *quotauc.Service) *Handler {
 func (h *Handler) SetHistoryDeps(activity *activityuc.Service, users repo.UserRepository) {
 	h.activity = activity
 	h.users = users
+}
+
+// SetInsightsRecomputer подключает hot-refresh кэша Smart Insights.
+// После DELETE /api/prompts/{id} пересчитываются 7 affected типов
+// в personal scope (teamID=nil). Вызывается из app.go.
+func (h *Handler) SetInsightsRecomputer(r analyticsuc.InsightsRecomputer) {
+	h.insights = r
 }
 
 // GET /api/prompts
@@ -214,6 +245,17 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Delete(r.Context(), id, userID); err != nil {
 		respondError(w, err)
 		return
+	}
+
+	// Hot-refresh Smart Insights кэша: soft-delete промпта аффектит
+	// все 7 типов (см. allInsightsAffectedByPromptMutation). teamID=nil —
+	// personal scope; team-scoped пересчитается на nightly cron. Ошибки
+	// swallow — recompute fail не должен ломать DELETE.
+	if h.insights != nil {
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, allInsightsAffectedByPromptMutation); rerr != nil {
+			slog.WarnContext(r.Context(), "prompt.delete.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "prompt_id", id)
+		}
 	}
 
 	utils.WriteNoContent(w)

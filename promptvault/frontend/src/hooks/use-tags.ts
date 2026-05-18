@@ -28,6 +28,9 @@ export function useDeleteTag() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tags"] })
       qc.invalidateQueries({ queryKey: ["prompts"] })
+      // Backend пересчитывает orphan_tags insight inline после DELETE —
+      // обновляем analytics панель сразу вместо ожидания ночного cron.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
     },
   })
 }

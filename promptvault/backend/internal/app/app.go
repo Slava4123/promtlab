@@ -470,6 +470,20 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		nil,
 	)
 
+	// Hot-refresh кэша Smart Insights после mutations (delete tag/collection/
+	// prompt + merge). analyticsSvc реализует InsightsRecomputer через
+	// Recompute → ComputeInsights. Handlers инициализируются ниже и получают
+	// InsightsRecomputer через SetInsightsRecomputer — nil-safe scaffolding.
+	tagHandler := taghttp.NewHandler(tagSvc)
+	tagHandler.SetInsightsRecomputer(analyticsSvc)
+	collectionHandler := collhttp.NewHandler(collectionSvc)
+	collectionHandler.SetInsightsRecomputer(analyticsSvc)
+	promptHandler := prompthttp.NewHandler(promptSvc, quotaSvc)
+	promptHandler.SetHistoryDeps(activitySvc, userRepo)
+	promptHandler.SetInsightsRecomputer(analyticsSvc)
+	promptInsightsHandler := prompthttp.NewInsightsHandler(promptInsightsSvc)
+	promptInsightsHandler.SetInsightsRecomputer(analyticsSvc)
+
 	return &App{
 		cfg:               cfg,
 		authSvc:           authSvc,
@@ -481,14 +495,9 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		userLookup:        userRepo,
 		auditSvc:          auditSvc,
 		oauthHandler:      authhttp.NewOAuthHandler(oauthSvc, cfg.Server.FrontendURL, cfg.JWT.Secret, cfg.Server.SecureCookies),
-		promptHandler: func() *prompthttp.Handler {
-			h := prompthttp.NewHandler(promptSvc, quotaSvc)
-			// Phase 14 B.4: activity+users → склейка в GET /api/prompts/:id/history
-			h.SetHistoryDeps(activitySvc, userRepo)
-			return h
-		}(),
-		promptInsightsHandler:  prompthttp.NewInsightsHandler(promptInsightsSvc),
-		collectionHandler:      collhttp.NewHandler(collectionSvc),
+		promptHandler:          promptHandler,
+		promptInsightsHandler:  promptInsightsHandler,
+		collectionHandler:      collectionHandler,
 		collectionEmptyHandler: collhttp.NewEmptyHandler(analyticsRepo),
 		chainHandler: func() *chainhttp.Handler {
 			if chainSvc == nil {
@@ -496,7 +505,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 			}
 			return chainhttp.NewHandler(chainSvc)
 		}(),
-		tagHandler:        taghttp.NewHandler(tagSvc),
+		tagHandler:        tagHandler,
 		tagOrphanHandler:  taghttp.NewOrphanHandler(analyticsRepo),
 		searchHandler:     searchhttp.NewHandler(searchSvc),
 		teamHandler:       teamhttp.NewHandler(teamSvc),

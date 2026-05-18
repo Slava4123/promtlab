@@ -34,8 +34,14 @@ export function useMergePrompts() {
     mutationFn: ({ keepID, mergeID }: { keepID: number; mergeID: number }) =>
       mergePrompts(keepID, mergeID),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prompt-insights", "duplicates"] })
+      // Полная инвалидация prompt-insights — merge затрагивает 5 списков
+      // (unused, duplicates, trending, declining, most_edited), invalidate
+      // на parent key обновит всё одним движением.
+      qc.invalidateQueries({ queryKey: ["prompt-insights"] })
       qc.invalidateQueries({ queryKey: ["prompts"] })
+      // Backend пересчитывает 7 affected типов Smart Insights inline после
+      // merge — обновляем analytics панель сразу вместо ожидания cron.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
     },
   })
 }

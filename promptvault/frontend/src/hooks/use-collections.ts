@@ -59,6 +59,9 @@ export function useDeleteCollection() {
       qc.invalidateQueries({ queryKey: ["trash-count"] })
       // Collections count уменьшается.
       qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
+      // Backend пересчитывает empty_collections insight inline после DELETE —
+      // обновляем analytics панель сразу вместо ожидания ночного cron.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
     },
   })
 }
