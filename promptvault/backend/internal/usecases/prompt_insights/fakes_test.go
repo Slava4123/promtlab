@@ -73,6 +73,10 @@ func (f *fakeAnalyticsRepo) GetInsights(ctx context.Context, userID uint, teamID
 	return nil, nil
 }
 
+func (f *fakeAnalyticsRepo) DeleteInsight(ctx context.Context, userID uint, teamID *uint, insightType string) error {
+	return nil
+}
+
 // --- CLEANUP ---
 
 func (f *fakeAnalyticsRepo) DeleteShareViewsOlderThan(ctx context.Context, before time.Time) (int64, error) {

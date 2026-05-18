@@ -91,6 +91,10 @@ func (r *trackingAnalyticsRepo) UpsertInsight(_ context.Context, in *models.Smar
 	r.inc("UpsertInsight:" + in.InsightType)
 	return nil
 }
+func (r *trackingAnalyticsRepo) DeleteInsight(_ context.Context, _ uint, _ *uint, insightType string) error {
+	r.inc("DeleteInsight:" + insightType)
+	return nil
+}
 
 // ----- Не используются ComputeInsights, но нужны для удовлетворения интерфейса. -----
 

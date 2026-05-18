@@ -229,6 +229,12 @@ func (r *analyticsRepo) GetInsights(ctx context.Context, userID uint, teamID *ui
 	return insights, err
 }
 
+func (r *analyticsRepo) DeleteInsight(ctx context.Context, userID uint, teamID *uint, insightType string) error {
+	q := r.db.WithContext(ctx).Where("user_id = ? AND insight_type = ?", userID, insightType)
+	q = scopeTeam(q, "team_id", teamID)
+	return q.Delete(&models.SmartInsight{}).Error
+}
+
 // --- CLEANUP (cron) ---
 
 func (r *analyticsRepo) DeleteShareViewsOlderThan(ctx context.Context, before time.Time) (int64, error) {
