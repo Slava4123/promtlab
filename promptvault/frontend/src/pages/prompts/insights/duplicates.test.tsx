@@ -54,7 +54,7 @@ describe("DuplicatesPage", () => {
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof hooks.useDuplicates>)
+    } as unknown as ReturnType<typeof hooks.useDuplicates>)
     render(wrap(<DuplicatesPage />))
     expect(screen.getByText(/дубликатов не нашлось|нет дубликатов/i)).toBeInTheDocument()
   })

@@ -45,7 +45,7 @@ describe("UnusedInsightsPage", () => {
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof insightsHooks.useUnusedPrompts>)
+    } as unknown as ReturnType<typeof insightsHooks.useUnusedPrompts>)
     render(wrap(<UnusedInsightsPage />))
     expect(screen.getByText(/нет забытых/i)).toBeInTheDocument()
   })

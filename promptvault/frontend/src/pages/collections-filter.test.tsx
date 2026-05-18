@@ -47,12 +47,12 @@ describe("CollectionsPage filter=empty", () => {
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof collectionsHooks.useCollections>)
+    } as unknown as ReturnType<typeof collectionsHooks.useCollections>)
     vi.mocked(emptyHooks.useEmptyCollections).mockReturnValue({
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof emptyHooks.useEmptyCollections>)
+    } as unknown as ReturnType<typeof emptyHooks.useEmptyCollections>)
   })
 
   it("default shows all collections", () => {

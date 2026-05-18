@@ -33,12 +33,12 @@ describe("TagsPage", () => {
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof orphanHooks.useOrphanTags>)
+    } as unknown as ReturnType<typeof orphanHooks.useOrphanTags>)
     vi.mocked(tagHooks.useTags).mockReturnValue({
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof tagHooks.useTags>)
+    } as unknown as ReturnType<typeof tagHooks.useTags>)
   })
 
   it("default shows all tags", () => {
