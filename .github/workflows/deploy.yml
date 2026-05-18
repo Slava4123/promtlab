@@ -111,7 +111,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-coverage
           path: promptvault/frontend/coverage/
@@ -172,7 +172,7 @@ jobs:
           fi
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: promptvault-extension-chrome-${{ github.sha }}
           path: promptvault/extension/.output/*.zip
