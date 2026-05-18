@@ -315,7 +315,7 @@ jobs:
       # attack vector (см. tj-actions/changed-files March 2025: подмена тега
       # увела секреты из 23k+ репозиториев). SHA = v1.0.3 release.
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.0.3
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.0.3
         env:
           GITHUB_SHA: ${{ github.sha }}
         with:
