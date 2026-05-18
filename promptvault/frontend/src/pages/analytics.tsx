@@ -170,7 +170,7 @@ export default function AnalyticsPage() {
               <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Стоит сделать сегодня
               </h2>
-              <InsightsPanel insights={insightsQuery.data.items} />
+              <InsightsPanel insights={insightsQuery.data.items} showAll={isMax} />
               {!isMax && (
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   <InsightsLockedCard title="Растёт" description="Промпты, использование которых выросло за 7 дней." />

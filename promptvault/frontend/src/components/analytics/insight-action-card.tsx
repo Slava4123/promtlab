@@ -12,6 +12,10 @@ interface InsightActionCardProps {
   href: string
   ctaLabel: string
   count?: number
+  // empty=true — для discoverability: рендерим карточку даже когда инсайтов
+  // этого типа нет. Приглушённая рамка (dashed), без count-badge, неактивный
+  // CTA. Юзер видит, какие категории умной аналитики существуют.
+  empty?: boolean
 }
 
 // Tailwind expects literal class names — no dynamic interpolation.
@@ -39,26 +43,49 @@ export function InsightActionCard({
   href,
   ctaLabel,
   count,
+  empty = false,
 }: InsightActionCardProps) {
   return (
-    <div className={cn("rounded-lg border p-4", TONE_BORDER[tone])}>
+    <div
+      className={cn(
+        "rounded-lg border p-4",
+        empty
+          ? "border-dashed border-foreground/15 bg-transparent text-muted-foreground"
+          : TONE_BORDER[tone],
+      )}
+    >
       <div className="mb-1.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Icon className={cn("size-4", TONE_ACCENT[tone])} aria-hidden="true" />
-          <span className={cn("text-[11px] font-semibold uppercase tracking-wide", TONE_ACCENT[tone])}>
+          <Icon
+            className={cn("size-4", empty ? "text-muted-foreground" : TONE_ACCENT[tone])}
+            aria-hidden="true"
+          />
+          <span
+            className={cn(
+              "text-[11px] font-semibold uppercase tracking-wide",
+              empty ? "text-muted-foreground" : TONE_ACCENT[tone],
+            )}
+          >
             {title}
           </span>
         </div>
-        {count !== undefined && (
+        {!empty && count !== undefined && (
           <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-[11px] font-medium tabular-nums">
             {count}
           </span>
         )}
       </div>
-      <p className="mb-2 text-sm text-foreground/90">{description}</p>
+      <p className={cn("mb-2 text-sm", empty ? "text-muted-foreground" : "text-foreground/90")}>
+        {description}
+      </p>
       <Link
         to={href}
-        className="inline-flex items-center gap-1 text-xs font-medium text-foreground/80 transition-colors hover:text-foreground"
+        className={cn(
+          "inline-flex items-center gap-1 text-xs font-medium transition-colors",
+          empty
+            ? "text-muted-foreground hover:text-foreground/80"
+            : "text-foreground/80 hover:text-foreground",
+        )}
       >
         {ctaLabel}
         <ArrowRight className="size-3" aria-hidden="true" />
