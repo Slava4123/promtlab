@@ -1,6 +1,7 @@
 package trash
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -9,15 +10,30 @@ import (
 	httperr "promptvault/internal/delivery/http/errors"
 	"promptvault/internal/delivery/http/utils"
 	authmw "promptvault/internal/middleware/auth"
+	"promptvault/internal/models"
+	analyticsuc "promptvault/internal/usecases/analytics"
 	trashuc "promptvault/internal/usecases/trash"
 )
 
 type Handler struct {
 	svc *trashuc.Service
+	// insights — опциональный hot-refresh кэша Smart Insights после Restore.
+	// nil-safe: если не подключён через SetInsightsRecomputer, recompute
+	// пропускается и состояние догонит nightly cron loop.
+	insights analyticsuc.InsightsRecomputer
 }
 
 func NewHandler(svc *trashuc.Service) *Handler {
 	return &Handler{svc: svc}
+}
+
+// SetInsightsRecomputer подключает hot-refresh кэша Smart Insights.
+// После POST /api/trash/prompt/{id}/restore пересчитываются все 7 типов
+// в personal scope (teamID=nil): восстановленный промпт может попасть в
+// unused/possible_duplicates/trending/declining/most_edited, его теги в
+// orphan_tags, его коллекция в empty_collections. Вызывается из app.go.
+func (h *Handler) SetInsightsRecomputer(r analyticsuc.InsightsRecomputer) {
+	h.insights = r
 }
 
 // GET /api/trash
@@ -90,6 +106,29 @@ func (h *Handler) Restore(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Restore(r.Context(), itemType, id, userID); err != nil {
 		respondError(w, err)
 		return
+	}
+
+	// Hot-refresh Smart Insights кэша: восстановленный промпт возвращается
+	// в библиотеку → может аффектить все 7 типов (он сам мог стать unused/
+	// most_edited/trending/declining/possible_duplicates; его теги — orphan;
+	// его коллекция перестаёт быть пустой). Recompute только для prompt:
+	// collection restore не меняет insights (метрики строятся на промптах).
+	// teamID=nil — personal scope. Ошибки swallow — recompute fail не должен
+	// ломать RESTORE.
+	if h.insights != nil && itemType == trashuc.TypePrompt {
+		types := []string{
+			models.InsightUnusedPrompts,
+			models.InsightPossibleDuplicates,
+			models.InsightTrending,
+			models.InsightDeclining,
+			models.InsightMostEdited,
+			models.InsightOrphanTags,
+			models.InsightEmptyCollections,
+		}
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, types); rerr != nil {
+			slog.WarnContext(r.Context(), "trash.restore.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "prompt_id", id)
+		}
 	}
 
 	utils.WriteOK(w, map[string]string{"status": "restored"})

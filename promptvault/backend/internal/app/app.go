@@ -483,6 +483,8 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	promptHandler.SetInsightsRecomputer(analyticsSvc)
 	promptInsightsHandler := prompthttp.NewInsightsHandler(promptInsightsSvc)
 	promptInsightsHandler.SetInsightsRecomputer(analyticsSvc)
+	trashHandler := trashhttp.NewHandler(trashSvc)
+	trashHandler.SetInsightsRecomputer(analyticsSvc)
 
 	return &App{
 		cfg:               cfg,
@@ -512,7 +514,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		teamUsageHandler:  teamhttp.NewUsageHandler(teamSvc, quotaSvc),
 		userHandler:       userhttp.NewHandler(userSvc),
 		starterHandler:    starterhttp.NewHandler(starterSvc),
-		trashHandler:      trashhttp.NewHandler(trashSvc),
+		trashHandler:      trashHandler,
 		apiKeyHandler:     apikeyhttp.NewHandler(apiKeySvc, teamSvc, cfg.MCP.MaxKeysPerUser),
 		shareHandler:      sharehttp.NewHandler(shareSvc),
 		streakHandler:     streakhttp.NewHandler(streakSvc),

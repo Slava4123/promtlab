@@ -70,6 +70,10 @@ export function useCreatePrompt() {
       qc.invalidateQueries({ queryKey: ["subscription", "usage"], refetchType: "active" })
       // Activity feed обновляется в team-mode после создания promptа.
       qc.invalidateQueries({ queryKey: ["activity"], refetchType: "active" })
+      // Backend пересчитывает possible_duplicates после Create —
+      // обновляем analytics + prompt-insights сразу.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
+      qc.invalidateQueries({ queryKey: ["prompt-insights"] })
       handleBadges(data.newly_unlocked_badges)
     },
   })
@@ -95,6 +99,10 @@ export function useUpdatePrompt() {
       }
       qc.invalidateQueries({ queryKey: ["streak"], refetchType: "active" })
       qc.invalidateQueries({ queryKey: ["activity"], refetchType: "active" })
+      // Backend пересчитывает most_edited + possible_duplicates после Update —
+      // обновляем analytics + prompt-insights сразу.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
+      qc.invalidateQueries({ queryKey: ["prompt-insights"] })
       handleBadges(data.newly_unlocked_badges)
     },
   })

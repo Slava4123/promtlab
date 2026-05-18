@@ -39,6 +39,12 @@ export function useRestoreItem() {
       qc.invalidateQueries({ queryKey: ["prompts"] })
       qc.invalidateQueries({ queryKey: ["collections"] })
       qc.invalidateQueries({ queryKey: ["tags"] })
+      // Backend пересчитывает все 7 типов insights после prompt-restore —
+      // обновляем analytics + prompt-insights сразу. Для collection-restore
+      // recompute не вызывается, но invalidate cheap — пересчёт на сервере
+      // не запустится, просто перечитаются cached insights (no-op).
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
+      qc.invalidateQueries({ queryKey: ["prompt-insights"] })
     },
   })
 }

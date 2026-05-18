@@ -109,6 +109,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Hot-refresh Smart Insights кэша: только что созданная коллекция всегда
+	// пустая → empty_collections гарантированно увеличивается.
+	// teamID=nil — personal scope (team-scoped пересчитается на nightly cron).
+	// Ошибки swallow — recompute fail не должен ломать CREATE.
+	if h.insights != nil {
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, []string{models.InsightEmptyCollections}); rerr != nil {
+			slog.WarnContext(r.Context(), "collection.create.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "collection_id", c.ID)
+		}
+	}
+
 	utils.WriteCreated(w, NewCollectionResponse(*c, badgehttp.NewBadgeSummaries(newBadges)))
 }
 

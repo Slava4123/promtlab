@@ -66,6 +66,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Hot-refresh Smart Insights кэша: только что созданный тег ещё не
+	// прикреплён к промптам → orphan_tags гарантированно увеличивается.
+	// teamID=nil — personal scope (team-scoped пересчитается на nightly cron).
+	// Ошибки swallow — recompute fail не должен ломать CREATE.
+	if h.insights != nil {
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, []string{models.InsightOrphanTags}); rerr != nil {
+			slog.WarnContext(r.Context(), "tag.create.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "tag_id", tag.ID)
+		}
+	}
+
 	utils.WriteCreated(w, tag)
 }
 

@@ -179,6 +179,21 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Hot-refresh Smart Insights кэша: новый промпт мог создать пару-дубликат
+	// (similarity > threshold) → possible_duplicates пересчитываем сразу.
+	// Остальные insight'ы не аффектятся: новый промпт не unused (только что
+	// создан), не trending/declining (0 uses), не most_edited (1 версия),
+	// orphan_tags не меняется (только если тег без промптов появился), а
+	// empty_collections инвертно к этому промпту (если у него есть коллекция —
+	// она перестаёт быть пустой, но это считается на чтении). teamID=nil —
+	// personal scope. Ошибки swallow — recompute fail не должен ломать CREATE.
+	if h.insights != nil {
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, []string{models.InsightPossibleDuplicates}); rerr != nil {
+			slog.WarnContext(r.Context(), "prompt.create.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "prompt_id", p.ID)
+		}
+	}
+
 	utils.WriteCreated(w, h.promptWithPinStatus(r, *p, newBadges...))
 }
 
@@ -228,6 +243,19 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, err)
 		return
+	}
+
+	// Hot-refresh Smart Insights кэша: каждый Update создаёт новую версию
+	// промпта → most_edited rank может измениться. Content change может
+	// сделать промпт похожим на другой → possible_duplicates пересчитываем.
+	// Остальные типы (unused/trending/declining/orphan_tags/empty_collections)
+	// не аффектятся Update'ом. teamID=nil — personal scope. Ошибки swallow.
+	if h.insights != nil {
+		types := []string{models.InsightMostEdited, models.InsightPossibleDuplicates}
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, types); rerr != nil {
+			slog.WarnContext(r.Context(), "prompt.update.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "prompt_id", id)
+		}
 	}
 
 	utils.WriteOK(w, h.promptWithPinStatus(r, *p, newBadges...))
