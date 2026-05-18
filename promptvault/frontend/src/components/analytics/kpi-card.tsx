@@ -41,13 +41,22 @@ export function KpiCard({ label, value, delta, sparkline, icon: Icon, className 
 function DeltaInline({ delta }: { delta: number | null | undefined }) {
   if (delta === null) return <span className="text-xs text-muted-foreground">—</span>
   if (delta === undefined || delta === 0)
-    return <span className="text-xs text-muted-foreground">≡ 0%</span>
+    return (
+      <span className="rounded-md bg-foreground/[0.04] px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+        0%
+      </span>
+    )
   const up = delta > 0
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 text-xs font-medium",
-        up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+        // Pill-бейдж по Tremor-паттерну (bg-emerald-100 / dark bg-emerald-500/15):
+        // явный visual marker лучше чистого цвета текста, его легче заметить
+        // в потоке KPI-карточек.
+        "inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-medium",
+        up
+          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+          : "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400",
       )}
     >
       {up ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />}

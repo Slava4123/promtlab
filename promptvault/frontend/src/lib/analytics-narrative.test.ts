@@ -106,9 +106,8 @@ describe("buildNarrative", () => {
     const result = buildNarrative(
       {
         ...baseDashboard,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         streak: { current: 0, longest: 5 },
-      } as any,
+      } as PersonalDashboard & { streak: { current: number; longest: number } },
       [],
     )
     expect(result.streak).toBeNull()
@@ -118,9 +117,8 @@ describe("buildNarrative", () => {
     const result = buildNarrative(
       {
         ...baseDashboard,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         streak: { current: 3, longest: 5 },
-      } as any,
+      } as PersonalDashboard & { streak: { current: number; longest: number } },
       [],
     )
     expect(result.streak).toMatch(/3/)

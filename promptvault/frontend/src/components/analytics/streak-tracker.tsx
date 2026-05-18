@@ -14,12 +14,12 @@ export function StreakTracker({ current, longest, activeToday }: StreakTrackerPr
   return (
     <Card className="p-4">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Streak</span>
+        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Серия</span>
         <Flame className="size-4 text-amber-500" aria-hidden="true" />
       </div>
       <div className="flex items-baseline gap-2">
         <span className="text-2xl font-bold tabular-nums">{current}</span>
-        <span className="text-xs text-muted-foreground">{`best ${longest}`}</span>
+        <span className="text-xs text-muted-foreground">{`макс. ${longest}`}</span>
       </div>
       <div className="mt-2 flex gap-1">
         {Array.from({ length: 7 }, (_, i) => {

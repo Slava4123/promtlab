@@ -18,30 +18,44 @@ export function CompactQuotas({ quotas }: CompactQuotasProps) {
   ]
 
   return (
-    <Card className="flex items-center gap-6 px-4 py-3">
-      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Лимиты:</span>
-      {items.map((item) => {
-        const pct = item.limit > 0 ? (item.used / item.limit) * 100 : 0
-        const isHigh = pct >= 90
-        const isMid = pct >= 75 && pct < 90
-        const barColor = isHigh ? "bg-rose-500" : isMid ? "bg-amber-500" : "bg-violet-500"
-        return (
-          <div key={item.label} className="flex flex-1 items-center gap-2">
-            <span className="text-xs text-muted-foreground">{item.label}</span>
-            <div className="flex-1">
-              <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+    <Card className="px-5 py-4">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Лимиты</span>
+      </div>
+      {/* Grid вместо flex: на mobile столбиком, на ≥md в три равные колонки.
+          Старый flex с gap-6 на узких экранах схлопывался в вертикаль с
+          centered текстом и узкими прогресс-барами. Grid даёт стабильную
+          раскладку и одинаковую ширину bar'ам. */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {items.map((item) => {
+          const pct = item.limit > 0 ? (item.used / item.limit) * 100 : 0
+          const isHigh = pct >= 90
+          const isMid = pct >= 75 && pct < 90
+          const barColor = isHigh ? "bg-rose-500" : isMid ? "bg-amber-500" : "bg-violet-500"
+          return (
+            <div key={item.label} className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-xs font-medium text-foreground/80">{item.label}</span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                  {item.used.toLocaleString("ru")} / {item.limit.toLocaleString("ru")}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-foreground/15">
                 <div
-                  className={`h-full ${barColor}`}
-                  style={{ width: `${Math.min(pct, 100)}%` }}
+                  className={`h-full rounded-full transition-[width] duration-300 ${barColor}`}
+                  // min-width 6px: при квоте 7/10000 = 0.07% реальная ширина
+                  // была 1px (~невидимо). Минимальный показ — чтобы юзер
+                  // видел «активность есть, просто далеко от лимита».
+                  // При 0 — 0 (полностью пустой trek).
+                  style={{
+                    width: pct > 0 ? `max(${Math.min(pct, 100)}%, 6px)` : "0",
+                  }}
                 />
               </div>
             </div>
-            <span className="font-mono text-xs tabular-nums">
-              {item.used.toLocaleString("ru")}/{item.limit.toLocaleString("ru")}
-            </span>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </Card>
   )
 }

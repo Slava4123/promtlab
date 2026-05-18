@@ -77,7 +77,7 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="container mx-auto space-y-4 px-4 py-8">
+    <div className="container mx-auto space-y-6 px-4 py-8">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -170,7 +170,15 @@ export default function AnalyticsPage() {
               <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Стоит сделать сегодня
               </h2>
-              <InsightsPanel insights={insightsQuery.data.items} showAll={isMax} />
+              <InsightsPanel
+                insights={insightsQuery.data.items}
+                showAll
+                allowedTypes={
+                  isMax
+                    ? undefined
+                    : ["unused_prompts", "possible_duplicates"]
+                }
+              />
               {!isMax && (
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   <InsightsLockedCard title="Растёт" description="Промпты, использование которых выросло за 7 дней." />
@@ -183,20 +191,30 @@ export default function AnalyticsPage() {
             </section>
           )}
 
-          {/* Bento Grid main charts */}
+          {/* 52-week heatmap — full-row над основной bento-сеткой.
+              Узкая col-span-2 (старый layout) не вмещала 53 столбца —
+              ячейки схлопывались до 2-3px. Full-row решает обе проблемы
+              (читаемость + узнаваемый GitHub-style формат). */}
+          <ActivityHeatmap points={data.usage_per_day} />
+
+          {/* Bento Grid main charts — UsageChart + ModelsDonut в одной строке.
+              Top-10 вынесен ниже отдельным блоком, потому что bento
+              auto-rows-[90px] обрезал таблицу до 2-3 строк (lg:row-span-2 =
+              180px фикс) и не позволял ей раскрыться по содержимому. */}
           <div className="grid gap-3 lg:grid-cols-6 lg:auto-rows-[90px]">
-            <div className="lg:col-span-4 lg:row-span-3">
+            {/* min-w-0 на grid-children — без него flex/grid item получает
+                min-width: auto = ширина контента, и chart inside может вылезти
+                за viewport (mobile 375px). */}
+            <div className="min-w-0 lg:col-span-4 lg:row-span-3">
               <UsageChart title="Использование по дням" data={data.usage_per_day} />
             </div>
-            <div className="lg:col-span-2 lg:row-span-3">
-              <ActivityHeatmap points={data.usage_per_day} />
-            </div>
-            <div className="lg:col-span-2 lg:row-span-2">
+            <div className="min-w-0 lg:col-span-2 lg:row-span-3">
               <ModelsDonut data={data.usage_by_model} />
             </div>
-            <div className="lg:col-span-4 lg:row-span-2">
-              <TopPromptsTable title="Топ-10 промптов" prompts={data.top_prompts} />
-            </div>
+          </div>
+
+          <div className="pt-4">
+            <TopPromptsTable title="Топ-10 промптов" prompts={data.top_prompts} />
           </div>
 
           {/* Compact Quotas */}

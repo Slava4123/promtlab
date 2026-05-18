@@ -4,33 +4,42 @@ import { ActivityHeatmap } from "./activity-heatmap"
 
 afterEach(() => cleanup())
 
-describe("ActivityHeatmap padding", () => {
-  it("renders exactly 28 cells when data is empty", () => {
+// 52-week GitHub-style heatmap: 53 колонки × 7 строк, последняя колонка
+// частично заполнена в зависимости от weekday сегодня. Точное число cells:
+// 52 * 7 + todayWeekday + 1 ∈ [365, 371].
+const MIN_CELLS = 365
+const MAX_CELLS = 371
+
+describe("ActivityHeatmap", () => {
+  it("renders ~365 cells when data is empty (52 weeks coverage)", () => {
     const { container } = render(<ActivityHeatmap points={[]} />)
-    expect(container.querySelectorAll("[data-cell]")).toHaveLength(28)
+    const cells = container.querySelectorAll("[data-cell]")
+    expect(cells.length).toBeGreaterThanOrEqual(MIN_CELLS)
+    expect(cells.length).toBeLessThanOrEqual(MAX_CELLS)
   })
 
-  it("renders exactly 28 cells when partial data", () => {
+  it("renders ~365 cells with partial data", () => {
     const points = Array.from({ length: 5 }, (_, i) => ({
       day: `2026-05-${String(12 + i).padStart(2, "0")}`,
       count: i,
     }))
     const { container } = render(<ActivityHeatmap points={points} />)
-    expect(container.querySelectorAll("[data-cell]")).toHaveLength(28)
+    const cells = container.querySelectorAll("[data-cell]")
+    expect(cells.length).toBeGreaterThanOrEqual(MIN_CELLS)
+    expect(cells.length).toBeLessThanOrEqual(MAX_CELLS)
   })
 
-  it("renders 28 cells for 4 weeks of data", () => {
-    const points = Array.from({ length: 28 }, (_, i) => ({
+  it("renders all 365+ cells regardless of data shape", () => {
+    const points = Array.from({ length: 30 }, (_, i) => ({
       day: `2026-05-${String(i + 1).padStart(2, "0")}`,
       count: i,
     }))
     const { container } = render(<ActivityHeatmap points={points} />)
     const cells = container.querySelectorAll("[data-cell]")
-    expect(cells.length).toBe(28)
+    expect(cells.length).toBeGreaterThanOrEqual(MIN_CELLS)
   })
 
-  it("varies opacity by count", () => {
-    // Use yesterday and day-before-yesterday so they fall in 28-day window.
+  it("assigns higher tier to higher count days", () => {
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
     const dayBefore = new Date()
@@ -41,18 +50,15 @@ describe("ActivityHeatmap padding", () => {
       { day: iso(yesterday), count: 100 },
     ]
     const { container } = render(<ActivityHeatmap points={points} />)
-    const cells = container.querySelectorAll("[data-cell]")
-    const opacityAt = (key: string) => {
+    const tierAt = (key: string) => {
       const el = container.querySelector(`[data-cell][data-day="${key}"]`) as HTMLElement | null
-      return el ? parseFloat(el.style.opacity || "1") : NaN
+      return el ? parseInt(el.dataset.tier ?? "0", 10) : -1
     }
-    expect(opacityAt(iso(dayBefore))).toBeLessThan(opacityAt(iso(yesterday)))
-    // sanity: all 28 cells present
-    expect(cells.length).toBe(28)
+    expect(tierAt(iso(dayBefore))).toBe(0)
+    expect(tierAt(iso(yesterday))).toBe(4) // max → tier 4
   })
 
   it("renders russian month in tooltip aria-label", () => {
-    // Use yesterday — guaranteed within 28-day window.
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
     const iso = yesterday.toISOString().slice(0, 10)
@@ -62,7 +68,6 @@ describe("ActivityHeatmap padding", () => {
     }).format(yesterday)
     const points = [{ day: iso, count: 3 }]
     render(<ActivityHeatmap points={points} />)
-    // Escape any special regex chars from the formatted month (e.g., the dot in "1 дек.").
     const escaped = monthShort.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     const matches = screen.getAllByLabelText(new RegExp(escaped, "i"))
     expect(matches.length).toBeGreaterThan(0)
@@ -75,5 +80,23 @@ describe("ActivityHeatmap padding", () => {
     const points = [{ day: iso, count: 1 }]
     render(<ActivityHeatmap points={points} />)
     expect(screen.getAllByLabelText(/1 использование(?!\w)/i).length).toBeGreaterThan(0)
+  })
+
+  it("displays total uses count in header", () => {
+    const points = [
+      { day: "2026-05-10", count: 3 },
+      { day: "2026-05-11", count: 7 },
+    ]
+    render(<ActivityHeatmap points={points} />)
+    expect(screen.getByText(/10 использований за год/i)).toBeInTheDocument()
+  })
+
+  it("renders weekday and legend labels in russian", () => {
+    render(<ActivityHeatmap points={[]} />)
+    expect(screen.getByText("Пн")).toBeInTheDocument()
+    expect(screen.getByText("Ср")).toBeInTheDocument()
+    expect(screen.getByText("Пт")).toBeInTheDocument()
+    expect(screen.getByText("Меньше")).toBeInTheDocument()
+    expect(screen.getByText("Больше")).toBeInTheDocument()
   })
 })

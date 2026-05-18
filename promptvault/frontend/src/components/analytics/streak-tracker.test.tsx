@@ -8,7 +8,7 @@ describe("StreakTracker", () => {
   it("renders current and longest streak", () => {
     render(<StreakTracker current={5} longest={12} activeToday={true} />)
     expect(screen.getByText("5")).toBeInTheDocument()
-    expect(screen.getByText(/best 12/i)).toBeInTheDocument()
+    expect(screen.getByText(/макс\. 12/i)).toBeInTheDocument()
   })
 
   it("renders 7 dots for last 7 days", () => {

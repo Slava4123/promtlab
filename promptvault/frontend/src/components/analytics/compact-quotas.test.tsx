@@ -19,7 +19,7 @@ describe("CompactQuotas", () => {
     render(<CompactQuotas quotas={baseQuota} />)
     expect(screen.getByText(/230/)).toBeInTheDocument()
     expect(screen.getByText(/500/)).toBeInTheDocument()
-    expect(screen.getByText(/30\/100/)).toBeInTheDocument()
+    expect(screen.getByText(/30 \/ 100/)).toBeInTheDocument()
     expect(screen.getByText(/100/)).toBeInTheDocument()
   })
 

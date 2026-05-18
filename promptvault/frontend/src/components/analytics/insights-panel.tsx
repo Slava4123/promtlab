@@ -121,18 +121,27 @@ interface InsightsPanelProps {
   // доступные категории умной аналитики целиком, даже если данных пока нет.
   // По умолчанию false (legacy behaviour: только cards с реальными данными).
   showAll?: boolean
+  // allowedTypes — фильтр для discovery-режима (showAll=true): рендерим
+  // только типы из этого списка (сохраняя порядок INSIGHT_ORDER), остальные
+  // не показываем. Используется для Pro-юзеров, которым доступны только 2 типа
+  // (unused_prompts + possible_duplicates по ADR-0008): backend может не
+  // прислать пустой possible_duplicates, но фронт всё равно показывает empty
+  // карточку, чтобы юзер видел доступную категорию. Не задано → все 7 типов.
+  allowedTypes?: Insight["type"][]
 }
 
-export function InsightsPanel({ insights, showAll = false }: InsightsPanelProps) {
+export function InsightsPanel({ insights, showAll = false, allowedTypes }: InsightsPanelProps) {
   if (!showAll && insights.length === 0) {
     return <p className="text-sm text-muted-foreground">Пока нет инсайтов. Возвращайтесь завтра.</p>
   }
 
   if (showAll) {
     const byType = new Map(insights.map((ins) => [ins.type, ins]))
+    const allowed = allowedTypes ? new Set(allowedTypes) : null
+    const types = allowed ? INSIGHT_ORDER.filter((t) => allowed.has(t)) : INSIGHT_ORDER
     return (
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {INSIGHT_ORDER.map((type) => {
+        {types.map((type) => {
           const meta = INSIGHT_META[type]
           const ins = byType.get(type)
           const count = ins && Array.isArray(ins.payload) ? ins.payload.length : 0
