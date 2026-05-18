@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterEach } from "vitest"
 import { render, screen, cleanup } from "@testing-library/react"
 import { UsageChart } from "./usage-chart"
 import { createUsageChartConfig } from "./usage-chart-config"
+import { formatDayShort } from "@/lib/date-format"
 
 // jsdom не имеет ResizeObserver, на котором держится recharts ResponsiveContainer.
 // Достаточно no-op стаба, чтобы компонент не крашился при mount с непустым data.
@@ -64,5 +65,23 @@ describe("UsageChart", () => {
       />,
     )
     expect(screen.getByText("Создание промптов по дням")).toBeInTheDocument()
+  })
+
+  it("formatDayShort преобразует ISO в русский короткий формат '7 мая'", () => {
+    // Recharts в jsdom не отрисовывает <text> внутри SVG (нет размеров ResponsiveContainer),
+    // поэтому container.textContent пуст на тиках. Контракт XAxis tickFormatter
+    // покрываем через прямой вызов formatDayShort — той же функции, которую
+    // компонент передаёт в <XAxis tickFormatter={formatDayShort} />.
+    expect(formatDayShort("2026-05-07")).toBe("7 мая")
+    expect(formatDayShort("2026-05-16")).toBe("16 мая")
+  })
+
+  it("x-axis tickFormatter в коде использует formatDayShort (а не v.slice(5))", async () => {
+    // Регресс-гард: source-of-truth — содержание usage-chart.tsx. Если кто-то
+    // вернёт `tickFormatter={(v) => v.slice(5)}`, тест упадёт. Достаточно lightweight,
+    // потому что jsdom + ResponsiveContainer не дают надёжно проверить SVG-тики.
+    const src = await import("./usage-chart.tsx?raw").then((m) => m.default as string)
+    expect(src).toMatch(/tickFormatter=\{formatDayShort\}/)
+    expect(src).not.toMatch(/tickFormatter=\{\(v\)\s*=>\s*v\.slice\(5\)/)
   })
 })

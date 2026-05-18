@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"promptvault/internal/infrastructure/config"
+	"promptvault/internal/infrastructure/metrics"
 	"promptvault/internal/infrastructure/payment"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
+	"promptvault/internal/usecases/referral"
 )
 
 // Service — бизнес-логика подписок: оформление, отмена, обработка webhook.
@@ -24,6 +26,16 @@ type Service struct {
 	users   repo.UserRepository
 	payment payment.PaymentProvider // может быть nil, если оплата не настроена
 	cfg     *config.PaymentConfig
+
+	// M-7 Referral (Pricing v3 Phase 3). Опциональные зависимости —
+	// инжектируются через SetReferralPendingRepo / SetReferralRewardEnabled.
+	// Если referralPending==nil или referralRewardEnabled==false —
+	// activateSubscription пропускает INSERT pending (feature off).
+	referralPending       repo.ReferralRewardRepository
+	referralRewardEnabled bool
+	// nowFn — инжектируемый источник времени для тестов (eligible_at deterministic).
+	// Default time.Now (см. NewService).
+	nowFn func() time.Time
 }
 
 // NewService создаёт сервис подписок. payment может быть nil — в этом случае
@@ -43,6 +55,28 @@ func NewService(
 		users:   users,
 		payment: payment,
 		cfg:     cfg,
+		nowFn:   time.Now,
+	}
+}
+
+// SetReferralPendingRepo инжектирует repository для отложенных реферальных
+// наград. Без него tryRecordReferralPending no-op'ит (graceful если фича
+// отключена на этапе сборки app.go).
+func (s *Service) SetReferralPendingRepo(r repo.ReferralRewardRepository) {
+	s.referralPending = r
+}
+
+// SetReferralRewardEnabled включает запись pending'ов в activateSubscription.
+// Контролируется env-флагом REFERRAL_REWARD_ENABLED (см. app.go wire-up).
+func (s *Service) SetReferralRewardEnabled(v bool) {
+	s.referralRewardEnabled = v
+}
+
+// SetNowFn — for tests. nowFn используется при вычислении eligible_at
+// для pending reward, чтобы тесты могли заморозить время.
+func (s *Service) SetNowFn(fn func() time.Time) {
+	if fn != nil {
+		s.nowFn = fn
 	}
 }
 
@@ -503,6 +537,11 @@ func (s *Service) activateSubscription(ctx context.Context, pay *models.Payment,
 			"payment_id", pay.ID, "sub_id", sub.ID, "user_id", pay.UserID, "error", linkErr)
 	}
 
+	// M-7 Referral: на первом платеже реферри (isRenewal=false branch — renewal
+	// возвращает выше) записываем pending row для отложенного grant'а через 14
+	// дней. Не блокирует активацию: любая ошибка → лог + return из helper'а.
+	s.tryRecordReferralPending(ctx, pay)
+
 	// Warn если первичная активация с auto_renew=true, но T-Bank не выдал RebillId.
 	// В prod это не должно случаться (Recurrent=Y всегда возвращает RebillId в CONFIRMED
 	// webhook). Ловим через Sentry чтобы узнать раньше, чем юзер попытается автопродлиться.
@@ -577,6 +616,89 @@ func generateIdempotencyKey() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// tryRecordReferralPending — на первом успешном платеже реферри (referee)
+// INSERT pending row, который ReferralRewardLoop через 14 дней превратит в
+// grant пригласившему (referrer). Все ошибки swallow'ятся: активация подписки
+// не должна fail'иться из-за реферальной аналитики.
+//
+// Skip conditions:
+//   - Feature off (referralRewardEnabled=false или referralPending=nil).
+//   - referee не найден / ReferredBy пусто (юзер пришёл не по рефералке).
+//   - referrer не найден по коду (corrupted state — лог Warn).
+//   - referrer.ReferralRewardedAt уже выставлен (уже наградили в прошлом).
+//   - Pending row для этого referee уже существует (idempotency, повторный
+//     webhook первого платежа после change-plan и т.п.).
+//
+// EligibleAt = now + referral.EligibilityDays (14 дней). nowFn инжектируется
+// для тестов; см. SetNowFn.
+func (s *Service) tryRecordReferralPending(ctx context.Context, pay *models.Payment) {
+	if !s.referralRewardEnabled || s.referralPending == nil {
+		return
+	}
+	referee, err := s.users.GetByID(ctx, pay.UserID)
+	if err != nil || referee == nil {
+		// repo.ErrNotFound сюда не должно прилететь (мы только что активировали
+		// подписку этого юзера), но любая ошибка → молча skip.
+		return
+	}
+	if referee.ReferredBy == "" {
+		metrics.ReferralRewardsPendingTotal.WithLabelValues("skipped_no_referrer").Inc()
+		return
+	}
+	referrer, err := s.users.GetByReferralCode(ctx, referee.ReferredBy)
+	if err != nil || referrer == nil {
+		// Битый referred_by (код referrer'а удалён или typo). Лог чтобы знать,
+		// если paranoid — но не блокируем активацию. Считаем как
+		// skipped_no_referrer (с точки зрения метрик невалидный код ≈ нет referrer'а).
+		metrics.ReferralRewardsPendingTotal.WithLabelValues("skipped_no_referrer").Inc()
+		slog.WarnContext(ctx, "referral.pending.referrer_missing",
+			"referee_id", referee.ID, "referred_by", referee.ReferredBy, "err", err)
+		return
+	}
+	if referrer.ReferralRewardedAt != nil {
+		// Один referrer = один reward за всю жизнь. Если уже награждён (другим
+		// реферри ранее) — этот первый платёж нового реферри не даёт повторной
+		// награды. Skip silently.
+		metrics.ReferralRewardsPendingTotal.WithLabelValues("skipped_already_rewarded").Inc()
+		return
+	}
+	existing, err := s.referralPending.FindByReferee(ctx, referee.ID)
+	if err != nil {
+		slog.WarnContext(ctx, "referral.pending.find_failed",
+			"err", err, "referee_id", referee.ID)
+		return
+	}
+	if existing != nil {
+		// Pending уже записан (повторный webhook первого платежа, change-plan
+		// сценарий и т.п.). Не дублируем — uniqueIndex на referee_id всё равно
+		// бы блокнул INSERT, но лучше избежать лишнего DB hit.
+		return
+	}
+	eligibleAt := s.nowFn().Add(time.Duration(referral.EligibilityDays) * 24 * time.Hour)
+	pending := &models.ReferralPendingReward{
+		ReferrerID: referrer.ID,
+		RefereeID:  referee.ID,
+		PaymentID:  pay.ID,
+		EligibleAt: eligibleAt,
+	}
+	if err := s.referralPending.Create(ctx, pending); err != nil {
+		slog.WarnContext(ctx, "referral.pending.insert_failed",
+			"err", err,
+			"referrer_id", referrer.ID,
+			"referee_id", referee.ID,
+			"payment_id", pay.ID,
+		)
+		return
+	}
+	metrics.ReferralRewardsPendingTotal.WithLabelValues("recorded").Inc()
+	slog.InfoContext(ctx, "referral.pending.inserted",
+		"referrer_id", referrer.ID,
+		"referee_id", referee.ID,
+		"payment_id", pay.ID,
+		"eligible_at", eligibleAt,
+	)
 }
 
 // buildReceipt формирует фискальный чек 54-ФЗ для подписки. Возвращает nil

@@ -31,6 +31,11 @@ export function useCreateCollection() {
       qc.invalidateQueries({ queryKey: ["collections"] })
       // Collections count в Подписке растёт.
       qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
+      // Backend пересчитывает empty_collections после Create (новая коллекция
+      // всегда пустая → гарантированно empty). Обновляем analytics панель
+      // и /collections?filter=empty overlay сразу.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
+      qc.invalidateQueries({ queryKey: ["collections", "empty"] })
       handleBadges(data.newly_unlocked_badges)
     },
   })
@@ -59,6 +64,9 @@ export function useDeleteCollection() {
       qc.invalidateQueries({ queryKey: ["trash-count"] })
       // Collections count уменьшается.
       qc.invalidateQueries({ queryKey: ["subscription", "usage"] })
+      // Backend пересчитывает empty_collections insight inline после DELETE —
+      // обновляем analytics панель сразу вместо ожидания ночного cron.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
     },
   })
 }

@@ -1,6 +1,7 @@
 package tag
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -10,16 +11,29 @@ import (
 	httperr "promptvault/internal/delivery/http/errors"
 	"promptvault/internal/delivery/http/utils"
 	authmw "promptvault/internal/middleware/auth"
+	"promptvault/internal/models"
+	analyticsuc "promptvault/internal/usecases/analytics"
 	taguc "promptvault/internal/usecases/tag"
 )
 
 type Handler struct {
 	svc      *taguc.Service
 	validate *validator.Validate
+	// insights — опциональный hot-refresh кэша Smart Insights после Delete.
+	// nil-safe: если не подключён через SetInsightsRecomputer, recompute
+	// пропускается и состояние догонит nightly cron loop.
+	insights analyticsuc.InsightsRecomputer
 }
 
 func NewHandler(svc *taguc.Service) *Handler {
 	return &Handler{svc: svc, validate: validator.New()}
+}
+
+// SetInsightsRecomputer подключает hot-refresh кэша Smart Insights.
+// После DELETE /api/tags/{id} пересчитываются insights типа orphan_tags
+// в personal scope (teamID=nil). Вызывается из app.go.
+func (h *Handler) SetInsightsRecomputer(r analyticsuc.InsightsRecomputer) {
+	h.insights = r
 }
 
 // GET /api/tags?team_id=123
@@ -52,6 +66,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Hot-refresh Smart Insights кэша: только что созданный тег ещё не
+	// прикреплён к промптам → orphan_tags гарантированно увеличивается.
+	// teamID=nil — personal scope (team-scoped пересчитается на nightly cron).
+	// Ошибки swallow — recompute fail не должен ломать CREATE.
+	if h.insights != nil {
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, []string{models.InsightOrphanTags}); rerr != nil {
+			slog.WarnContext(r.Context(), "tag.create.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "tag_id", tag.ID)
+		}
+	}
+
 	utils.WriteCreated(w, tag)
 }
 
@@ -80,6 +105,16 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Delete(r.Context(), uint(id), userID); err != nil {
 		respondError(w, err)
 		return
+	}
+
+	// Hot-refresh Smart Insights кэша: orphan_tags мог измениться после
+	// удаления тега. teamID=nil — personal scope (team-scoped пересчитается
+	// на nightly cron). Ошибки swallow — recompute fail не ломает DELETE.
+	if h.insights != nil {
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, []string{models.InsightOrphanTags}); rerr != nil {
+			slog.WarnContext(r.Context(), "tag.delete.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "tag_id", id)
+		}
 	}
 
 	utils.WriteNoContent(w)

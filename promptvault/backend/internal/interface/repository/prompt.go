@@ -52,4 +52,10 @@ type PromptRepository interface {
 
 	// ListPublic — для sitemap.xml. Возвращает (id, slug, updated_at) с LIMIT.
 	ListPublic(ctx context.Context, limit int) ([]models.Prompt, error)
+
+	// MergeWith soft-deletes mergeID после проверки что оба промпта принадлежат
+	// userID. Возвращает gorm.ErrRecordNotFound если любой prompt не найден или
+	// не принадлежит юзеру. Возвращает errors.New("cannot merge prompt with itself")
+	// если keepID == mergeID.
+	MergeWith(ctx context.Context, keepID, mergeID, userID uint) error
 }

@@ -17,7 +17,14 @@ export function useCreateTag() {
   return useMutation({
     mutationFn: (data: { name: string; color?: string; team_id?: number | null }) =>
       api<Tag>("/tags", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tags"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tags"] })
+      // Backend пересчитывает orphan_tags после Create (новый тег не имеет
+      // привязок к промптам → гарантированно orphan). Обновляем analytics
+      // панель и /tags?filter=orphan overlay сразу.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
+      qc.invalidateQueries({ queryKey: ["tags", "orphan"] })
+    },
   })
 }
 
@@ -28,6 +35,9 @@ export function useDeleteTag() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tags"] })
       qc.invalidateQueries({ queryKey: ["prompts"] })
+      // Backend пересчитывает orphan_tags insight inline после DELETE —
+      // обновляем analytics панель сразу вместо ожидания ночного cron.
+      qc.invalidateQueries({ queryKey: ["analytics", "insights"] })
     },
   })
 }

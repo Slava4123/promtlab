@@ -1,6 +1,7 @@
 package collection
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -11,16 +12,29 @@ import (
 	httperr "promptvault/internal/delivery/http/errors"
 	"promptvault/internal/delivery/http/utils"
 	authmw "promptvault/internal/middleware/auth"
+	"promptvault/internal/models"
+	analyticsuc "promptvault/internal/usecases/analytics"
 	colluc "promptvault/internal/usecases/collection"
 )
 
 type Handler struct {
 	svc      *colluc.Service
 	validate *validator.Validate
+	// insights — опциональный hot-refresh кэша Smart Insights после Delete.
+	// nil-safe: если не подключён через SetInsightsRecomputer, recompute
+	// пропускается и состояние догонит nightly cron loop.
+	insights analyticsuc.InsightsRecomputer
 }
 
 func NewHandler(svc *colluc.Service) *Handler {
 	return &Handler{svc: svc, validate: validator.New()}
+}
+
+// SetInsightsRecomputer подключает hot-refresh кэша Smart Insights.
+// После DELETE /api/collections/{id} пересчитываются insights типа
+// empty_collections в personal scope (teamID=nil). Вызывается из app.go.
+func (h *Handler) SetInsightsRecomputer(r analyticsuc.InsightsRecomputer) {
+	h.insights = r
 }
 
 // GET /api/collections?team_id=123
@@ -95,6 +109,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Hot-refresh Smart Insights кэша: только что созданная коллекция всегда
+	// пустая → empty_collections гарантированно увеличивается.
+	// teamID=nil — personal scope (team-scoped пересчитается на nightly cron).
+	// Ошибки swallow — recompute fail не должен ломать CREATE.
+	if h.insights != nil {
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, []string{models.InsightEmptyCollections}); rerr != nil {
+			slog.WarnContext(r.Context(), "collection.create.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "collection_id", c.ID)
+		}
+	}
+
 	utils.WriteCreated(w, NewCollectionResponse(*c, badgehttp.NewBadgeSummaries(newBadges)))
 }
 
@@ -152,6 +177,17 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Delete(r.Context(), id, userID); err != nil {
 		respondError(w, err)
 		return
+	}
+
+	// Hot-refresh Smart Insights кэша: empty_collections мог измениться
+	// после удаления коллекции. teamID=nil — personal scope (team-scoped
+	// пересчитается на nightly cron). Ошибки swallow — recompute fail
+	// не должен ломать DELETE.
+	if h.insights != nil {
+		if rerr := h.insights.Recompute(r.Context(), userID, nil, []string{models.InsightEmptyCollections}); rerr != nil {
+			slog.WarnContext(r.Context(), "collection.delete.insights_recompute_failed",
+				"err", rerr, "user_id", userID, "collection_id", id)
+		}
 	}
 
 	utils.WriteNoContent(w)

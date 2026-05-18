@@ -9,24 +9,44 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 )
 
-// fakeUsersForLoop — минимальный fake UserRepository, нужен только ListMaxUsers.
+// fakeUsersForLoop — минимальный fake UserRepository, нужен ListPaidUsers +
+// GetByID (Task 7: per-plan dispatch).
 type fakeUsersForLoop struct {
 	ids []uint
 	err error
+	// plans — мапа uid → plan_id для GetByID. По умолчанию (если nil) — "max"
+	// (тесты до Task 7 покрывали Max-only loop, сохраняем backward-compat).
+	plans     map[uint]string
+	getByErr  error
+	getByMiss bool // если true — возвращаем repo.ErrNotFound
 }
 
-func (f *fakeUsersForLoop) ListMaxUsers(_ context.Context) ([]uint, error) {
+func (f *fakeUsersForLoop) ListPaidUsers(_ context.Context) ([]uint, error) {
 	return f.ids, f.err
 }
 
-// Остальные методы UserRepository не используются loop'ом — паника.
-func (f *fakeUsersForLoop) Create(context.Context, *models.User) error      { panic("unused") }
-func (f *fakeUsersForLoop) GetByID(context.Context, uint) (*models.User, error) {
-	panic("unused")
+func (f *fakeUsersForLoop) GetByID(_ context.Context, uid uint) (*models.User, error) {
+	if f.getByMiss {
+		return nil, repo.ErrNotFound
+	}
+	if f.getByErr != nil {
+		return nil, f.getByErr
+	}
+	plan := "max"
+	if f.plans != nil {
+		if p, ok := f.plans[uid]; ok {
+			plan = p
+		}
+	}
+	return &models.User{ID: uid, PlanID: plan}, nil
 }
+
+// Остальные методы UserRepository не используются loop'ом — паника.
+func (f *fakeUsersForLoop) Create(context.Context, *models.User) error { panic("unused") }
 func (f *fakeUsersForLoop) GetByEmail(context.Context, string) (*models.User, error) {
 	panic("unused")
 }
@@ -204,8 +224,8 @@ func TestInsightsComputeLoop_PersonalComputeFails_ContinuesNextUser(t *testing.T
 	assert.Equal(t, 3, r.calls["UnusedPrompts"], "loop должен дойти до всех юзеров несмотря на ошибку")
 }
 
-// MN-13: ListMaxUsers вернул empty — loop корректно завершается без вызовов.
-func TestInsightsComputeLoop_NoMaxUsers_NoOp(t *testing.T) {
+// MN-13: ListPaidUsers вернул empty — loop корректно завершается без вызовов.
+func TestInsightsComputeLoop_NoPaidUsers_NoOp(t *testing.T) {
 	r := newTrackingRepo()
 	svc := newServiceForTest(r, true, true)
 
@@ -218,9 +238,9 @@ func TestInsightsComputeLoop_NoMaxUsers_NoOp(t *testing.T) {
 	assert.Zero(t, r.calls["UnusedPrompts"], "пустой список — никаких вызовов не должно быть")
 }
 
-// MN-13: ListMaxUsers вернул ошибку — loop тихо завершается, метрика error
+// MN-13: ListPaidUsers вернул ошибку — loop тихо завершается, метрика error
 // инкрементится, panic нет.
-func TestInsightsComputeLoop_ListMaxUsersError_NoPanic(t *testing.T) {
+func TestInsightsComputeLoop_ListPaidUsersError_NoPanic(t *testing.T) {
 	r := newTrackingRepo()
 	svc := newServiceForTest(r, true, true)
 
@@ -241,4 +261,64 @@ func TestListOwnedTeams_InterfaceContract(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, uint(99), got[0].ID)
+}
+
+// Task 7: per-plan dispatch — Pro юзер получает 2 типа (unused +
+// duplicates), Max юзер получает все 7. Loop читает plan через GetByID и
+// передаёт InsightsForPlan(plan) в ComputeInsights. Free (race-window
+// после ListPaidUsers) — skip без compute.
+func TestInsightsComputeLoop_PerPlanDispatch(t *testing.T) {
+	r := newTrackingRepo()
+	svc := newServiceForTest(r, true, true)
+
+	users := &fakeUsersForLoop{
+		ids: []uint{1, 2, 3},
+		plans: map[uint]string{
+			1: "pro",
+			2: "max_yearly",
+			3: "free", // race: downgrade между ListPaidUsers и GetByID
+		},
+	}
+	teams := &fakeTeamsForLoop{ownedByUser: map[uint][]models.Team{}}
+
+	loop := NewInsightsComputeLoop(svc, users, teams, time.Hour)
+	loop.compute()
+
+	// Pro юзер 1: unused + duplicates = 2 типа.
+	// Max юзер 2: 7 типов (unused + 2×trending + most_edited + duplicates +
+	//   orphan_tags + empty_collections).
+	// Free юзер 3: skip — никаких compute-вызовов.
+	//
+	// UnusedPrompts вызвалась 2 раза (Pro 1 + Max 2), не 3.
+	assert.Equal(t, 2, r.calls["UnusedPrompts"], "Pro+Max → 2, Free → skip")
+	// PossibleDuplicates тоже в обоих наборах (Pro teaser + Max).
+	assert.Equal(t, 2, r.calls["PossibleDuplicates"], "Pro+Max → 2, Free → skip")
+	// Trending/declining — только Max (1 раз × 2 вызова = 2).
+	assert.Equal(t, 2, r.calls["GetTrendingPrompts"], "только Max → trending + declining")
+	// MostEdited — только Max (1 раз).
+	assert.Equal(t, 1, r.calls["MostEditedPrompts"], "только Max")
+	// OrphanTags — только Max (1 раз).
+	assert.Equal(t, 1, r.calls["OrphanTags"], "только Max")
+	// EmptyCollections — только Max (1 раз).
+	assert.Equal(t, 1, r.calls["EmptyCollections"], "только Max")
+}
+
+// Task 7: race-window — юзер удалён между ListPaidUsers и GetByID.
+// Repo.ErrNotFound → skip без логирования error, остальные юзеры
+// обрабатываются.
+func TestInsightsComputeLoop_UserDeletedBetweenSnapshotAndCompute_Skip(t *testing.T) {
+	r := newTrackingRepo()
+	svc := newServiceForTest(r, true, true)
+
+	users := &fakeUsersForLoop{
+		ids:       []uint{42},
+		getByMiss: true, // GetByID вернёт repo.ErrNotFound
+	}
+	teams := &fakeTeamsForLoop{}
+
+	loop := NewInsightsComputeLoop(svc, users, teams, time.Hour)
+	require.NotPanics(t, func() { loop.compute() })
+
+	// Никаких compute-вызовов: ErrNotFound → skip.
+	assert.Zero(t, r.calls["UnusedPrompts"])
 }

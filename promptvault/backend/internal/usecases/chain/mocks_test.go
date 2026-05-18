@@ -188,6 +188,9 @@ func (m *mockPromptRepo) GetPublicBySlug(ctx context.Context, slug string) (*mod
 func (m *mockPromptRepo) ListPublic(ctx context.Context, limit int) ([]models.Prompt, error) {
 	panic("not used")
 }
+func (m *mockPromptRepo) MergeWith(ctx context.Context, keepID, mergeID, userID uint) error {
+	panic("not used")
+}
 
 // --- TeamRepository mock ---
 
@@ -395,7 +398,7 @@ func (m *mockUserRepo) GetByReferralCode(_ context.Context, _ string) (*models.U
 func (m *mockUserRepo) MarkReferralRewarded(_ context.Context, _ uint) (bool, error) {
 	panic("not used")
 }
-func (m *mockUserRepo) ListMaxUsers(_ context.Context) ([]uint, error) { panic("not used") }
+func (m *mockUserRepo) ListPaidUsers(_ context.Context) ([]uint, error) { panic("not used") }
 func (m *mockUserRepo) SetInsightEmailsEnabled(_ context.Context, _ uint, _ bool) error {
 	panic("not used")
 }

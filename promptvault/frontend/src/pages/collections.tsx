@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import {
   Plus, FolderOpen, Pencil, Trash2, Loader2, FileText,
   Code, Palette, FileCode, Wrench, Rocket, BarChart3, FlaskConical,
@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { EmptyState } from "@/components/ui/empty-state"
 import { PageLayout } from "@/components/layout/page-layout"
 import { useCollections, useCreateCollection, useUpdateCollection, useDeleteCollection } from "@/hooks/use-collections"
+import { useEmptyCollections } from "@/hooks/use-empty-collections"
 import type { Collection } from "@/api/types"
 import { useCurrentTeam } from "@/hooks/use-current-team"
 import { useQuotaStore } from "@/stores/quota-store"
@@ -58,10 +59,21 @@ function CollectionIcon({ icon, color, size = 16 }: { icon?: string; color?: str
 
 export default function Collections() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  // Overlay `?filter=empty` показывает коллекции без активных промптов
+  // (бэкенд B11: GET /api/collections/empty). Не отдельный route — просто
+  // другой источник данных + поясняющий заголовок, чтобы юзер из Smart
+  // Insights мог сюда «провалиться» и почистить мусор. Структура карточки
+  // упрощённая (без icon/color/prompt_count) — бэк отдаёт только {id, name}.
+  const isEmptyFilter = params.get("filter") === "empty"
+
   const team = useCurrentTeam()
   const teamId = team?.teamId ?? null
   const teamName = team?.teamName ?? null
-  const { data: collections, isLoading } = useCollections(teamId)
+  const allCollections = useCollections(teamId)
+  const emptyCollections = useEmptyCollections()
+  const collections = isEmptyFilter ? emptyCollections.data : allCollections.data
+  const isLoading = isEmptyFilter ? emptyCollections.isLoading : allCollections.isLoading
   const createCollection = useCreateCollection()
   const updateCollection = useUpdateCollection()
   const deleteCollection = useDeleteCollection()
@@ -132,13 +144,25 @@ export default function Collections() {
 
   return (
     <PageLayout
-      title={teamName ? `Коллекции — ${teamName}` : "Коллекции"}
-      description="Группируйте промпты по темам и проектам"
+      title={
+        isEmptyFilter
+          ? "Коллекции без активных промптов"
+          : teamName
+            ? `Коллекции — ${teamName}`
+            : "Коллекции"
+      }
+      description={
+        isEmptyFilter
+          ? "Эти коллекции не содержат активных промптов — можно удалить."
+          : "Группируйте промпты по темам и проектам"
+      }
       action={
-        <Button variant="brand" size="sm" onClick={openCreate}>
-          <Plus className="h-3.5 w-3.5" />
-          Новая коллекция
-        </Button>
+        isEmptyFilter ? null : (
+          <Button variant="brand" size="sm" onClick={openCreate}>
+            <Plus className="h-3.5 w-3.5" />
+            Новая коллекция
+          </Button>
+        )
       }
     >
       {/* List */}
@@ -153,20 +177,64 @@ export default function Collections() {
           ))}
         </div>
       ) : !collections || collections.length === 0 ? (
-        <EmptyState
-          icon={<FolderOpen className="h-7 w-7 text-brand-muted-foreground/60" />}
-          title="Пока нет коллекций"
-          description="Создайте первую коллекцию для организации промптов"
-          action={
-            <Button variant="brand" size="sm" onClick={openCreate}>
-              <Plus className="h-3.5 w-3.5" />
-              Создать коллекцию
-            </Button>
-          }
-        />
+        isEmptyFilter ? (
+          <EmptyState
+            icon={<FolderOpen className="h-7 w-7 text-brand-muted-foreground/60" />}
+            title="Нет «пустых» коллекций"
+            description="Все коллекции содержат хотя бы один активный промпт."
+          />
+        ) : (
+          <EmptyState
+            icon={<FolderOpen className="h-7 w-7 text-brand-muted-foreground/60" />}
+            title="Пока нет коллекций"
+            description="Создайте первую коллекцию для организации промптов"
+            action={
+              <Button variant="brand" size="sm" onClick={openCreate}>
+                <Plus className="h-3.5 w-3.5" />
+                Создать коллекцию
+              </Button>
+            }
+          />
+        )
+      ) : isEmptyFilter ? (
+        // Упрощённый список для overlay: бэк отдаёт только {id, name},
+        // без icon/color/prompt_count. Строка кликабельна → переход
+        // в детальный view коллекции; справа кнопка Удалить.
+        // Используем <div role="button"> (не <li>) — для интерактивных
+        // ролей jsx-a11y требует «полу-natural» элементы, тот же подход
+        // что и в основном grid-режиме.
+        <div className="space-y-2">
+          {collections.map((c) => (
+            <div
+              key={c.id}
+              role="button"
+              tabIndex={0}
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
+              onClick={() => navigate(`/collections/${c.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  navigate(`/collections/${c.id}`)
+                }
+              }}
+            >
+              <span className="flex items-center gap-2 text-sm">
+                <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                {c.name}
+              </span>
+              <button
+                aria-label="Удалить коллекцию"
+                className="rounded-md p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-400"
+                onClick={(e) => { e.stopPropagation(); confirmDelete(c.id) }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {collections.map((c) => (
+          {(collections as Collection[]).map((c) => (
             <div
               key={c.id}
               role="button"

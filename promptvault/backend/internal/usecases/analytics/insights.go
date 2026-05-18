@@ -4,51 +4,116 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"slices"
 
 	"promptvault/internal/models"
 )
 
-// ComputeInsights — полный пересчёт детерминистических инсайтов для юзера
-// (Max-only). Идемпотентно: UpsertInsight перезапишет существующие записи.
+// proAllowedInsights — типы Smart Insights, доступные на Pro тарифе.
+// Pro получает teaser из 2 housekeeping-типов; остальные 5 (trending,
+// declining, most_edited, orphan_tags, empty_collections) — Max-only.
+// Решение принято в ADR-0008. Изменение состава тиров требует:
+//  1. обновить этот список
+//  2. обновить ADR-0008
+//  3. проверить frontend `analytics.tsx` (зеркало lock-карточек)
+var proAllowedInsights = []string{
+	models.InsightUnusedPrompts,
+	models.InsightPossibleDuplicates,
+}
+
+// maxAllInsights — все 7 типов, доступные на Max.
+var maxAllInsights = []string{
+	models.InsightUnusedPrompts,
+	models.InsightTrending,
+	models.InsightDeclining,
+	models.InsightMostEdited,
+	models.InsightPossibleDuplicates,
+	models.InsightOrphanTags,
+	models.InsightEmptyCollections,
+}
+
+// InsightsForPlan возвращает разрешённые SmartInsight типы для тарифа.
+// nil — план не имеет доступа (Free / unknown / Pro при выключенном teaser).
+// Pro имеет 2 типа (только при включённом teaser-flag), Max — все 7.
+// Используется в GetInsightsGated, InsightsComputeLoop и в prompt_insights
+// usecase для per-type gating.
+//
+// Pricing iteration v3 (ADR-0008): feature flag PRO_INSIGHTS_TEASER_ENABLED
+// (s.proInsightsTeaserEnabled) — kill-switch для Pro teaser'а. При выключенном
+// flag'е Pro/pro_yearly обрабатываются как Free (nil) → legacy Max-only поведение.
+// Max не зависит от флага — всегда 7 типов.
+func (s *Service) InsightsForPlan(planID string) []string {
+	switch planID {
+	case "pro", "pro_yearly":
+		if !s.proInsightsTeaserEnabled {
+			return nil
+		}
+		return proAllowedInsights
+	case "max", "max_yearly":
+		return maxAllInsights
+	default:
+		return nil
+	}
+}
+
+// ComputeInsights — пересчёт детерминистических инсайтов для юзера.
+// allowed — список разрешённых типов (см. InsightsForPlan); если содержит
+// тип — он считается и upsert'ится, иначе skip без SQL-запроса.
+//
+// Pro: allowed = proAllowedInsights (2 типа — unused + duplicates).
+// Max: allowed = maxAllInsights (7 типов).
+// Free: allowed = nil → no-op (loop фильтрует Free через ListPaidUsers — Task 7).
+//
+// Идемпотентно: UpsertInsight перезапишет существующие записи.
 //
 // Вызывается:
-//   - ежесуточно из InsightsComputeLoop (только для Max-юзеров);
-//   - on-demand из HTTP handler /api/analytics/insights/refresh (опционально).
+//   - ежесуточно из InsightsComputeLoop (только для платных юзеров);
+//   - on-demand из HTTP handler /api/analytics/insights/refresh.
 //
 // teamID == nil → личный scope, teamID != nil → команда.
 //
 // M3: repo-fail в каждом расчёте логируется отдельно. Функция возвращает
 // nil даже если часть insights fail'нула — это детерминистическое поведение
 // идемпотентного пересчёта (следующая итерация попробует снова).
-func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint) error {
+func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint, allowed []string) error {
+	if len(allowed) == 0 {
+		return nil
+	}
 	now := s.nowFn()
+	isAllowed := func(t string) bool { return slices.Contains(allowed, t) }
 
 	// 1. UNUSED PROMPTS — не использовались 30+ дней.
-	unused, err := s.analytics.UnusedPrompts(ctx, userID, teamID, now.AddDate(0, 0, -30), 20)
-	if err != nil {
-		slog.WarnContext(ctx, "analytics.insights.unused_failed",
-			"err", err, "user_id", userID, "team_id", teamID)
-	} else if len(unused) > 0 {
-		s.upsertSafe(ctx, userID, teamID, models.InsightUnusedPrompts, unused)
+	if isAllowed(models.InsightUnusedPrompts) {
+		unused, err := s.analytics.UnusedPrompts(ctx, userID, teamID, now.AddDate(0, 0, -30), 20)
+		if err != nil {
+			slog.WarnContext(ctx, "analytics.insights.unused_failed",
+				"err", err, "user_id", userID, "team_id", teamID)
+		} else if len(unused) > 0 {
+			s.upsertSafe(ctx, userID, teamID, models.InsightUnusedPrompts, unused)
+		}
 	}
 
 	// 2. TRENDING — uses(last 7d) > 2× uses(prev 7d).
 	// SQL CTE в одном запросе — избегаем 2× TopPrompts + in-memory map.
-	trending, err := s.analytics.GetTrendingPrompts(ctx, userID, teamID, 2.0, true, 5)
-	if err != nil {
-		slog.WarnContext(ctx, "analytics.insights.trending_failed",
-			"err", err, "user_id", userID, "team_id", teamID)
-	} else if len(trending) > 0 {
-		s.upsertSafe(ctx, userID, teamID, models.InsightTrending, trending)
+	if isAllowed(models.InsightTrending) {
+		trending, err := s.analytics.GetTrendingPrompts(ctx, userID, teamID, 2.0, true, 5)
+		if err != nil {
+			slog.WarnContext(ctx, "analytics.insights.trending_failed",
+				"err", err, "user_id", userID, "team_id", teamID)
+		} else if len(trending) > 0 {
+			s.upsertSafe(ctx, userID, teamID, models.InsightTrending, trending)
+		}
 	}
 
 	// 3. DECLINING — uses(last 7d) < 0.5× uses(prev 7d).
-	declining, err := s.analytics.GetTrendingPrompts(ctx, userID, teamID, 0.5, false, 5)
-	if err != nil {
-		slog.WarnContext(ctx, "analytics.insights.declining_failed",
-			"err", err, "user_id", userID, "team_id", teamID)
-	} else if len(declining) > 0 {
-		s.upsertSafe(ctx, userID, teamID, models.InsightDeclining, declining)
+	if isAllowed(models.InsightDeclining) {
+		declining, err := s.analytics.GetTrendingPrompts(ctx, userID, teamID, 0.5, false, 5)
+		if err != nil {
+			slog.WarnContext(ctx, "analytics.insights.declining_failed",
+				"err", err, "user_id", userID, "team_id", teamID)
+		} else if len(declining) > 0 {
+			s.upsertSafe(ctx, userID, teamID, models.InsightDeclining, declining)
+		}
 	}
 
 	// 4-7. MOST EDITED / POSSIBLE DUPLICATES / ORPHAN TAGS / EMPTY COLLECTIONS.
@@ -57,44 +122,52 @@ func (s *Service) ComputeInsights(ctx context.Context, userID uint, teamID *uint
 	// недоступно (managed PG без прав), тип пропускается, остальные работают.
 	if s.experimentalInsights {
 		// 4. MOST EDITED — по количеству версий.
-		edited, err := s.analytics.MostEditedPrompts(ctx, userID, teamID, 5)
-		if err != nil {
-			slog.WarnContext(ctx, "analytics.insights.most_edited_failed",
-				"err", err, "user_id", userID, "team_id", teamID)
-		} else if len(edited) > 0 {
-			s.upsertSafe(ctx, userID, teamID, models.InsightMostEdited, edited)
+		if isAllowed(models.InsightMostEdited) {
+			edited, err := s.analytics.MostEditedPrompts(ctx, userID, teamID, 5)
+			if err != nil {
+				slog.WarnContext(ctx, "analytics.insights.most_edited_failed",
+					"err", err, "user_id", userID, "team_id", teamID)
+			} else if len(edited) > 0 {
+				s.upsertSafe(ctx, userID, teamID, models.InsightMostEdited, edited)
+			}
 		}
 
 		// 5. POSSIBLE DUPLICATES — только если pg_trgm доступен.
-		if s.trgmAvailable {
-			dups, err := s.analytics.PossibleDuplicates(ctx, userID, teamID, 0.8, 10)
-			if err != nil {
-				slog.WarnContext(ctx, "analytics.insights.duplicates_failed",
-					"err", err, "user_id", userID, "team_id", teamID)
-			} else if len(dups) > 0 {
-				s.upsertSafe(ctx, userID, teamID, models.InsightPossibleDuplicates, dups)
+		if isAllowed(models.InsightPossibleDuplicates) {
+			if s.trgmAvailable {
+				dups, err := s.analytics.PossibleDuplicates(ctx, userID, teamID, 0.8, 10)
+				if err != nil {
+					slog.WarnContext(ctx, "analytics.insights.duplicates_failed",
+						"err", err, "user_id", userID, "team_id", teamID)
+				} else if len(dups) > 0 {
+					s.upsertSafe(ctx, userID, teamID, models.InsightPossibleDuplicates, dups)
+				}
+			} else {
+				slog.DebugContext(ctx, "analytics.insights.duplicates_skipped",
+					"reason", "pg_trgm_unavailable", "user_id", userID)
 			}
-		} else {
-			slog.DebugContext(ctx, "analytics.insights.duplicates_skipped",
-				"reason", "pg_trgm_unavailable", "user_id", userID)
 		}
 
 		// 6. ORPHAN TAGS — теги без промптов.
-		orphans, err := s.analytics.OrphanTags(ctx, userID, teamID, 10)
-		if err != nil {
-			slog.WarnContext(ctx, "analytics.insights.orphan_tags_failed",
-				"err", err, "user_id", userID, "team_id", teamID)
-		} else if len(orphans) > 0 {
-			s.upsertSafe(ctx, userID, teamID, models.InsightOrphanTags, orphans)
+		if isAllowed(models.InsightOrphanTags) {
+			orphans, err := s.analytics.OrphanTags(ctx, userID, teamID, 10)
+			if err != nil {
+				slog.WarnContext(ctx, "analytics.insights.orphan_tags_failed",
+					"err", err, "user_id", userID, "team_id", teamID)
+			} else if len(orphans) > 0 {
+				s.upsertSafe(ctx, userID, teamID, models.InsightOrphanTags, orphans)
+			}
 		}
 
 		// 7. EMPTY COLLECTIONS — коллекции без промптов.
-		empties, err := s.analytics.EmptyCollections(ctx, userID, teamID, 10)
-		if err != nil {
-			slog.WarnContext(ctx, "analytics.insights.empty_collections_failed",
-				"err", err, "user_id", userID, "team_id", teamID)
-		} else if len(empties) > 0 {
-			s.upsertSafe(ctx, userID, teamID, models.InsightEmptyCollections, empties)
+		if isAllowed(models.InsightEmptyCollections) {
+			empties, err := s.analytics.EmptyCollections(ctx, userID, teamID, 10)
+			if err != nil {
+				slog.WarnContext(ctx, "analytics.insights.empty_collections_failed",
+					"err", err, "user_id", userID, "team_id", teamID)
+			} else if len(empties) > 0 {
+				s.upsertSafe(ctx, userID, teamID, models.InsightEmptyCollections, empties)
+			}
 		}
 	}
 

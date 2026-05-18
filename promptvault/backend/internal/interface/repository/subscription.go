@@ -65,6 +65,12 @@ type SubscriptionRepository interface {
 	// Сбрасывает renewal_attempts=0 и статус past_due→active.
 	ExtendPeriod(ctx context.Context, subID uint, newPeriodEnd time.Time) error
 
+	// UpdatePeriodEnd сдвигает current_period_end без сброса других полей
+	// (renewal_attempts, status, period_start). Используется в referral.GrantReward
+	// для продления текущей подписки Pro/Max на 30 дней — это бонус, а не renewal,
+	// поэтому статус past_due/active и счётчики попыток не трогаем.
+	UpdatePeriodEnd(ctx context.Context, subID uint, newPeriodEnd time.Time) error
+
 	// RecordRenewalFailure фиксирует неудачную попытку Charge: переводит подписку
 	// в past_due (если была active), инкрементирует renewal_attempts и ставит
 	// last_renewal_attempt_at=now. Используется renewLoop при ошибке Init/Charge.
@@ -124,6 +130,12 @@ type PaymentRepository interface {
 	// Без этого невозможно корректно обработать refund конкретной подписки и
 	// составить историю платежей за подписку.
 	LinkSubscription(ctx context.Context, paymentID, subscriptionID uint) error
+
+	// GetByID — PK lookup. Используется в referral.GrantReward для проверки
+	// что payment всё ещё в статусе succeeded (защита от arbitrage: реферри
+	// сделал refund между webhook'ом и истечением eligibility-окна).
+	// Возвращает repo.ErrNotFound если payment отсутствует.
+	GetByID(ctx context.Context, id uint) (*models.Payment, error)
 }
 
 // QuotaRepository — подсчёт использованных ресурсов для enforcement квот.

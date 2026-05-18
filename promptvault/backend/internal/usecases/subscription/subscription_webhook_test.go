@@ -86,6 +86,9 @@ func (m *mockPaymentRepo) TransitionStatus(_ context.Context, id uint, expected,
 	return false, nil
 }
 func (m *mockPaymentRepo) LinkSubscription(context.Context, uint, uint) error { panic("unused") }
+func (m *mockPaymentRepo) GetByID(context.Context, uint) (*models.Payment, error) {
+	panic("unused")
+}
 
 // newWebhookService собирает Service с минимальным набором mocks для
 // webhook-тестов. subs/users/plans = nil — мы не доходим до их вызовов

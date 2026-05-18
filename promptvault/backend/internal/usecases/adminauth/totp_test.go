@@ -149,7 +149,7 @@ func (s *stubAdminUserRepo) GetByReferralCode(context.Context, string) (*models.
 func (s *stubAdminUserRepo) MarkReferralRewarded(context.Context, uint) (bool, error) {
 	panic("unused")
 }
-func (s *stubAdminUserRepo) ListMaxUsers(context.Context) ([]uint, error) { panic("unused") }
+func (s *stubAdminUserRepo) ListPaidUsers(context.Context) ([]uint, error) { panic("unused") }
 func (s *stubAdminUserRepo) SetInsightEmailsEnabled(context.Context, uint, bool) error {
 	panic("unused")
 }

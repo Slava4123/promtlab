@@ -1,42 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { ModelUsageRow } from "@/api/analytics"
+import { colorFor, labelFor, DEFAULT_COLOR, UNKNOWN_MODEL_HINT } from "./model-colors"
 
 interface ModelSegmentationChartProps {
   data: ModelUsageRow[]
   title?: string
 }
-
-// Palette для известных семейств моделей. Неузнанные модели получают серый.
-// Хранение palette'а здесь (не в theme.css) — эти цвета специфичны только
-// для этого chart'а и не должны утекать в другие компоненты.
-const MODEL_COLORS: Array<[RegExp, string]> = [
-  [/^claude/i, "#cc7a3e"], // оранж-коричневый как Anthropic brand
-  [/^gpt/i, "#10a37f"],     // зелёный как OpenAI
-  [/deepseek/i, "#4a7fff"], // синий
-  [/gemini|google/i, "#8ab4f8"],
-  [/llama|meta/i, "#0668e1"],
-  [/mistral/i, "#ff7000"],
-]
-const DEFAULT_COLOR = "#94a3b8" // серый для «Без модели» и неопознанных
-
-function colorFor(model: string): string {
-  for (const [re, color] of MODEL_COLORS) {
-    if (re.test(model)) return color
-  }
-  return DEFAULT_COLOR
-}
-
-// Backend агрегирует строки с пустой `prompts.model` под пустой строкой
-// (через COALESCE(model_used,'') в analytics_repo.go). Для пользователя
-// показываем расшифровку, а не голое "" или "Без модели", чтобы не было
-// неоднозначности — это промпты, в которых пользователь не выбрал модель
-// при создании, не legacy-данные и не баг.
-function labelFor(model: string): string {
-  return model === "" ? "Модель не указана" : model
-}
-
-const UNKNOWN_MODEL_HINT =
-  "Промпты, в которых при создании не указана target-модель в редакторе"
 
 // ModelSegmentationChart — простая горизонтальная полоса без тяжёлых recharts-
 // зависимостей. Показывает долю каждой модели в общем использовании + список

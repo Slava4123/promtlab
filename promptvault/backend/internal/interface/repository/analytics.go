@@ -136,6 +136,11 @@ type AnalyticsRepository interface {
 	// GetInsights — все активные инсайты для (userID, teamID).
 	GetInsights(ctx context.Context, userID uint, teamID *uint) ([]models.SmartInsight, error)
 
+	// DeleteInsight — удалить кэшированную строку по типу для (userID, teamID).
+	// Используется Recompute hot-path: перед пересчётом стираем stale, чтобы
+	// empty SQL результат корректно убирал карточку (вместо вечной заморозки).
+	DeleteInsight(ctx context.Context, userID uint, teamID *uint, insightType string) error
+
 	// --- CLEANUP (cron) ---
 
 	// DeleteShareViewsOlderThan — retention cleanup. Возвращает количество удалённых.

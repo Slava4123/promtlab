@@ -10,4 +10,10 @@ type AnalyticsConfig struct {
 	// possible_duplicates дополнительно требует расширения pg_trgm — при его
 	// отсутствии тип тихо пропускается (см. analytics.Service.trgmAvailable).
 	ExperimentalInsights bool `koanf:"experimental_insights"`
+	// ProInsightsTeaserEnabled — Pricing iteration v3 (ADR-0008).
+	// При false: GetInsightsGated отдаёт ErrProRequired для Pro (legacy поведение, Max-only).
+	// При true: Pro получает teaser из 2 типов (unused + duplicates).
+	// Loop insights_loop соответственно либо обрабатывает Max-only, либо Pro+Max.
+	// Default false — включить после 1 недели observability после Wave 2 deploy.
+	ProInsightsTeaserEnabled bool `koanf:"pro_insights_teaser_enabled"`
 }

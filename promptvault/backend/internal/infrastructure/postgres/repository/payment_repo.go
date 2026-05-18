@@ -81,3 +81,17 @@ func (r *paymentRepo) LinkSubscription(ctx context.Context, paymentID, subscript
 		Where("id = ?", paymentID).
 		Update("subscription_id", subscriptionID).Error
 }
+
+func (r *paymentRepo) GetByID(ctx context.Context, id uint) (*models.Payment, error) {
+	var p models.Payment
+	err := r.db.WithContext(ctx).
+		Where("id = ?", id).
+		First(&p).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repo.ErrNotFound
+		}
+		return nil, err
+	}
+	return &p, nil
+}

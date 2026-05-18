@@ -90,7 +90,7 @@ func (f *fakeUserRepo) GetByReferralCode(_ context.Context, _ string) (*models.U
 func (f *fakeUserRepo) MarkReferralRewarded(_ context.Context, _ uint) (bool, error) {
 	return false, nil
 }
-func (f *fakeUserRepo) ListMaxUsers(_ context.Context) ([]uint, error) { return nil, nil }
+func (f *fakeUserRepo) ListPaidUsers(_ context.Context) ([]uint, error) { return nil, nil }
 func (f *fakeUserRepo) SetInsightEmailsEnabled(_ context.Context, _ uint, _ bool) error {
 	return nil
 }
@@ -280,7 +280,8 @@ func (f *fakeSubsRepo) SetAutoRenew(context.Context, uint, bool) error          
 func (f *fakeSubsRepo) ListReadyForRenewal(context.Context, time.Time, time.Time, int) ([]models.Subscription, error) {
 	panic("unused")
 }
-func (f *fakeSubsRepo) ExtendPeriod(context.Context, uint, time.Time) error { panic("unused") }
+func (f *fakeSubsRepo) ExtendPeriod(context.Context, uint, time.Time) error    { panic("unused") }
+func (f *fakeSubsRepo) UpdatePeriodEnd(context.Context, uint, time.Time) error { panic("unused") }
 func (f *fakeSubsRepo) RecordRenewalFailure(context.Context, uint) error    { panic("unused") }
 func (f *fakeSubsRepo) ListPreExpiring(context.Context, time.Time, time.Time, int16) ([]models.Subscription, error) {
 	panic("unused")

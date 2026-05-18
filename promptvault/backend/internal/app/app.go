@@ -60,7 +60,9 @@ import (
 	colluc "promptvault/internal/usecases/collection"
 	feedbackuc "promptvault/internal/usecases/feedback"
 	promptuc "promptvault/internal/usecases/prompt"
+	promptinsightsuc "promptvault/internal/usecases/prompt_insights"
 	quotauc "promptvault/internal/usecases/quota"
+	referraluc "promptvault/internal/usecases/referral"
 	searchuc "promptvault/internal/usecases/search"
 	streakuc "promptvault/internal/usecases/streak"
 	shareuc "promptvault/internal/usecases/share"
@@ -84,9 +86,16 @@ type App struct {
 	authHandler      *authhttp.Handler
 	oauthHandler     *authhttp.OAuthHandler
 	promptHandler     *prompthttp.Handler
+	// Pricing iteration v3 (Wave 1 deep linking): 5 GET'ов + 1 merge POST
+	// под /api/prompts/insights/*. Использует analytics_repo SQL, без новых таблиц.
+	promptInsightsHandler  *prompthttp.InsightsHandler
 	collectionHandler *collhttp.Handler
+	// Wave 1: GET /api/collections/empty — фильтр-overlay над списком коллекций.
+	collectionEmptyHandler *collhttp.EmptyHandler
 	chainHandler      *chainhttp.Handler
 	tagHandler        *taghttp.Handler
+	// Wave 1: GET /api/tags/orphan — фильтр-overlay над списком тегов.
+	tagOrphanHandler  *taghttp.OrphanHandler
 	searchHandler     *searchhttp.Handler
 	teamHandler       *teamhttp.Handler
 	teamUsageHandler  *teamhttp.UsageHandler
@@ -126,6 +135,10 @@ type App struct {
 	reminderLoop      *subscriptionuc.ReminderLoop
 	reengagementLoop  *engagementuc.ReengagementLoop
 	streakReminderLoop *engagementuc.StreakReminderLoop
+	// Pricing iteration v3 (ADR-0009): обработчик отложенных реферальных
+	// наград. Создаётся всегда, но Start/Stop вызываются только при
+	// cfg.Referral.RewardEnabled (см. lifecycle.go).
+	referralRewardLoop *referraluc.RewardLoop
 	// Phase 14: audit + analytics фоновые воркеры.
 	activityCleanupLoop *analyticsuc.CleanupLoop
 	insightsLoop        *analyticsuc.InsightsComputeLoop
@@ -200,6 +213,10 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 	analyticsSvc := analyticsuc.NewService(analyticsRepo, promptRepo, teamRepo, userRepo, quotaSvc)
 	// kill-switch расширенных Smart Insights (Phase 15: default true).
 	analyticsSvc.SetExperimentalInsights(cfg.Analytics.ExperimentalInsights)
+	// Pricing iteration v3 (ADR-0008): kill-switch для Pro Smart Insights teaser.
+	// Default false — включается вручную после 1 недели observability post-deploy.
+	// При выключенном flag'е Pro обрабатывается как Free (ErrProRequired).
+	analyticsSvc.SetProInsightsTeaserEnabled(cfg.Analytics.ProInsightsTeaserEnabled)
 	// M9: чтение PlanID из ctx без users.GetByID на каждый запрос.
 	// Передаём через callback чтобы analytics не импортировал middleware/auth.
 	analyticsSvc.SetPlanFromCtx(func(ctx context.Context) (string, bool) {
@@ -374,6 +391,24 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		paymentProvider, &cfg.Payment,
 	)
 
+	// Pricing iteration v3 (ADR-0009): реферальная награда +30 дней Pro
+	// пригласившему. Repo создаётся всегда (нужен и subscription.Service для
+	// записи pending'ов, и RewardLoop для обработки). Feature gate работает
+	// двумя путями:
+	//   1) subscriptionSvc.SetReferralRewardEnabled(false) → webhook не пишет
+	//      pending'и (no-op в activateSubscription).
+	//   2) lifecycle.StartBackground() не запускает loop при flag=false.
+	// Двойной gate — defence-in-depth: даже если в БД остались legacy pending'и
+	// от прошлого включения, при выключенном flag'е они не обработаются.
+	referralPendingRepo := pgrepo.NewReferralRewardRepository(db)
+	subscriptionSvc.SetReferralPendingRepo(referralPendingRepo)
+	subscriptionSvc.SetReferralRewardEnabled(cfg.Referral.RewardEnabled)
+	referralRewardSvc := referraluc.NewService(subscriptionRepo, userRepo, paymentRepo, referralPendingRepo)
+	// Interval: 1h prod / 1m dev. Batch 100 — лимит одного тика, чтобы
+	// bootstrap-всплеск (много pending'ов одновременно eligible) не блокировал
+	// DB надолго. Pending'ы обрабатываются в нескольких тиках.
+	referralRewardLoop := referraluc.NewRewardLoop(referralRewardSvc, referralPendingRepo, pick(1*time.Hour, 1*time.Minute), 100)
+
 	purgeLoop := trashuc.NewPurgeLoop(trashRepo, pick(1*time.Hour, 1*time.Minute), 30)
 
 	// Email-уведомления для subscription loops. Если SMTP не сконфигурирован
@@ -422,6 +457,35 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		panic(fmt.Sprintf("starter catalog load failed: %v", err))
 	}
 
+	// Prompt insights (Pricing iteration v3, Wave 1 deep linking).
+	// Использует существующие analytics_repo SQL-запросы; нет новых таблиц.
+	// Plan-gating ходит через analytics.Service.InsightsForPlan (ADR-0008)
+	// через адаптер promptInsightsPlanGate — изолируем prompt_insights от
+	// прямой зависимости на analytics service (избегаем usecases→usecases цикла).
+	// nowFn=nil → default time.Now (см. prompt_insights.NewService).
+	promptInsightsSvc := promptinsightsuc.NewService(
+		analyticsRepo,
+		promptRepo,
+		promptInsightsPlanGate{analytics: analyticsSvc, users: userRepo},
+		nil,
+	)
+
+	// Hot-refresh кэша Smart Insights после mutations (delete tag/collection/
+	// prompt + merge). analyticsSvc реализует InsightsRecomputer через
+	// Recompute → ComputeInsights. Handlers инициализируются ниже и получают
+	// InsightsRecomputer через SetInsightsRecomputer — nil-safe scaffolding.
+	tagHandler := taghttp.NewHandler(tagSvc)
+	tagHandler.SetInsightsRecomputer(analyticsSvc)
+	collectionHandler := collhttp.NewHandler(collectionSvc)
+	collectionHandler.SetInsightsRecomputer(analyticsSvc)
+	promptHandler := prompthttp.NewHandler(promptSvc, quotaSvc)
+	promptHandler.SetHistoryDeps(activitySvc, userRepo)
+	promptHandler.SetInsightsRecomputer(analyticsSvc)
+	promptInsightsHandler := prompthttp.NewInsightsHandler(promptInsightsSvc)
+	promptInsightsHandler.SetInsightsRecomputer(analyticsSvc)
+	trashHandler := trashhttp.NewHandler(trashSvc)
+	trashHandler.SetInsightsRecomputer(analyticsSvc)
+
 	return &App{
 		cfg:               cfg,
 		authSvc:           authSvc,
@@ -433,26 +497,24 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		userLookup:        userRepo,
 		auditSvc:          auditSvc,
 		oauthHandler:      authhttp.NewOAuthHandler(oauthSvc, cfg.Server.FrontendURL, cfg.JWT.Secret, cfg.Server.SecureCookies),
-		promptHandler: func() *prompthttp.Handler {
-			h := prompthttp.NewHandler(promptSvc, quotaSvc)
-			// Phase 14 B.4: activity+users → склейка в GET /api/prompts/:id/history
-			h.SetHistoryDeps(activitySvc, userRepo)
-			return h
-		}(),
-		collectionHandler: collhttp.NewHandler(collectionSvc),
+		promptHandler:          promptHandler,
+		promptInsightsHandler:  promptInsightsHandler,
+		collectionHandler:      collectionHandler,
+		collectionEmptyHandler: collhttp.NewEmptyHandler(analyticsRepo),
 		chainHandler: func() *chainhttp.Handler {
 			if chainSvc == nil {
 				return nil
 			}
 			return chainhttp.NewHandler(chainSvc)
 		}(),
-		tagHandler: taghttp.NewHandler(tagSvc),
+		tagHandler:        tagHandler,
+		tagOrphanHandler:  taghttp.NewOrphanHandler(analyticsRepo),
 		searchHandler:     searchhttp.NewHandler(searchSvc),
 		teamHandler:       teamhttp.NewHandler(teamSvc),
 		teamUsageHandler:  teamhttp.NewUsageHandler(teamSvc, quotaSvc),
 		userHandler:       userhttp.NewHandler(userSvc),
 		starterHandler:    starterhttp.NewHandler(starterSvc),
-		trashHandler:      trashhttp.NewHandler(trashSvc),
+		trashHandler:      trashHandler,
 		apiKeyHandler:     apikeyhttp.NewHandler(apiKeySvc, teamSvc, cfg.MCP.MaxKeysPerUser),
 		shareHandler:      sharehttp.NewHandler(shareSvc),
 		streakHandler:     streakhttp.NewHandler(streakSvc),
@@ -505,6 +567,7 @@ func New(cfg *config.Config, db *gorm.DB) *App {
 		activityCleanupLoop:  activityCleanupLoop,
 		insightsLoop:         insightsLoop,
 		quotaCleanupLoop:     quotaCleanupLoop,
+		referralRewardLoop:   referralRewardLoop,
 		purgeLoop:         purgeLoop,
 		feedbackRL:        ratelimit.NewLimiterWithWindow[uint](5, time.Hour, ratelimit.UintHash),
 		insightsRL:        ratelimit.NewLimiterWithWindow[uint](1, time.Hour, ratelimit.UintHash),

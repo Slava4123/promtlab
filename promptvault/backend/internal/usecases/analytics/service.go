@@ -3,11 +3,14 @@ package analytics
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
+	"promptvault/internal/infrastructure/metrics"
 	repo "promptvault/internal/interface/repository"
 	"promptvault/internal/models"
 	quotauc "promptvault/internal/usecases/quota"
+	"promptvault/internal/usecases/referral"
 	"promptvault/internal/usecases/subscription"
 	"promptvault/internal/usecases/teamcheck"
 )
@@ -41,6 +44,12 @@ type Service struct {
 	// делает fallback на DB. Устанавливается из app.go (см. SetPlanFromCtx).
 	// Если nil — всегда fallback (legacy-behaviour до M9).
 	planFromCtx func(ctx context.Context) (string, bool)
+	// proInsightsTeaserEnabled — Pricing iteration v3 (ADR-0008) kill-switch.
+	// При false Pro обрабатывается как Free в InsightsForPlan (legacy Max-only
+	// поведение). При true Pro получает teaser из 2 типов (unused + duplicates).
+	// Max не зависит от флага — всегда 7 типов. Default false; включается из
+	// app.go через SetProInsightsTeaserEnabled на основе cfg.Analytics.
+	proInsightsTeaserEnabled bool
 }
 
 func NewService(
@@ -81,6 +90,15 @@ func (s *Service) SetPlanFromCtx(fn func(ctx context.Context) (string, bool)) {
 	s.planFromCtx = fn
 }
 
+// SetProInsightsTeaserEnabled — Pricing iteration v3 (ADR-0008) kill-switch.
+// При выключенном flag Pro обрабатывается как Free в InsightsForPlan
+// (ErrProRequired через GetInsightsGated, skip в InsightsComputeLoop).
+// При включённом — Pro получает 2 типа teaser (unused + duplicates).
+// Max не зависит от флага. Вызывается из app.go на основе config.
+func (s *Service) SetProInsightsTeaserEnabled(v bool) {
+	s.proInsightsTeaserEnabled = v
+}
+
 // lookupPlanID — read-through helper: сначала из ctx (zero DB hit), потом
 // fallback на users.GetByID. Возвращает PlanID юзера и nil error при успехе.
 func (s *Service) lookupPlanID(ctx context.Context, userID uint) (string, error) {
@@ -106,17 +124,49 @@ func (s *Service) SetNotifier(n InsightsNotifier) {
 	s.notifier = n
 }
 
-// GetInsightsGated — проверка плана + чтение insights. Free/Pro получают
-// ErrMaxRequired. Логика плана вынесена из handler'а в service (H5).
+// GetInsightsGated — публичный endpoint /api/analytics/insights.
+// Pricing Iteration v3 Task 6: per-type filter вместо master-gate.
+//
+//   - Free → ErrProRequired (HTTP 402, upgrade prompt).
+//   - Pro/pro_yearly → 2 типа teaser (unused + duplicates).
+//   - Max/max_yearly → все 7 типов.
+//
+// Repo читает все типы юзера; service фильтрует in-memory по `InsightsForPlan`.
+// Логика плана вынесена из handler'а в service (H5).
 func (s *Service) GetInsightsGated(ctx context.Context, userID uint, teamID *uint) ([]models.SmartInsight, error) {
 	planID, err := s.lookupPlanID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if !subscription.IsMax(planID) {
-		return nil, ErrMaxRequired
+	allowed := s.InsightsForPlan(planID)
+	planLabel := referral.NormalizePlanLabel(planID)
+	if len(allowed) == 0 {
+		// Free / unknown — 402 с подсказкой апгрейда на Pro (минимальный платный).
+		// При выключенном PRO_INSIGHTS_TEASER_ENABLED сюда также попадают Pro.
+		metrics.AnalyticsInsightsGatedTotal.WithLabelValues(planLabel, "blocked").Inc()
+		return nil, ErrProRequired
 	}
-	return s.analytics.GetInsights(ctx, userID, teamID)
+	all, err := s.analytics.GetInsights(ctx, userID, teamID)
+	if err != nil {
+		return nil, err
+	}
+	// Filter в памяти: repo отдаёт всё что есть, service режет по тарифу.
+	filtered := make([]models.SmartInsight, 0, len(all))
+	for _, ins := range all {
+		if slices.Contains(allowed, ins.InsightType) {
+			filtered = append(filtered, ins)
+		}
+	}
+	// full — все 7 типов (Max); partial — 2 типа teaser (Pro при включённом флаге).
+	// Длина allowed (а не filtered) определяет category: пустой результат при
+	// allowed=[unused,duplicates] всё ещё считается partial, потому что
+	// эндпоинт обработал запрос как Pro-teaser, а не Max.
+	result := "full"
+	if len(allowed) < len(maxAllInsights) {
+		result = "partial"
+	}
+	metrics.AnalyticsInsightsGatedTotal.WithLabelValues(planLabel, result).Inc()
+	return filtered, nil
 }
 
 // RefreshInsightsGated — Max-only force-пересчёт. Обычно инсайты считаются
@@ -130,7 +180,7 @@ func (s *Service) RefreshInsightsGated(ctx context.Context, userID uint, teamID 
 	if !subscription.IsMax(planID) {
 		return nil, ErrMaxRequired
 	}
-	if err := s.ComputeInsights(ctx, userID, teamID); err != nil {
+	if err := s.ComputeInsights(ctx, userID, teamID, maxAllInsights); err != nil {
 		return nil, err
 	}
 	return s.analytics.GetInsights(ctx, userID, teamID)

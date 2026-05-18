@@ -3,6 +3,7 @@ package analytics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -24,6 +25,10 @@ type trackingAnalyticsRepo struct {
 	// возвращают ошибку. Используется для resilience-теста errgroup'а
 	// (один failed user не должен блокировать остальные).
 	failOnUserID uint
+	// insightsAll — Task 6: возвращается из GetInsights. Используется тестами
+	// GetInsightsGated для проверки per-type filter'а (repo отдаёт все 7 типов,
+	// service фильтрует по plan'у).
+	insightsAll []models.SmartInsight
 }
 
 func newTrackingRepo() *trackingAnalyticsRepo {
@@ -86,6 +91,10 @@ func (r *trackingAnalyticsRepo) UpsertInsight(_ context.Context, in *models.Smar
 	r.inc("UpsertInsight:" + in.InsightType)
 	return nil
 }
+func (r *trackingAnalyticsRepo) DeleteInsight(_ context.Context, _ uint, _ *uint, insightType string) error {
+	r.inc("DeleteInsight:" + insightType)
+	return nil
+}
 
 // ----- Не используются ComputeInsights, но нужны для удовлетворения интерфейса. -----
 
@@ -123,7 +132,8 @@ func (r *trackingAnalyticsRepo) LogShareView(context.Context, *models.ShareView)
 	return nil
 }
 func (r *trackingAnalyticsRepo) GetInsights(context.Context, uint, *uint) ([]models.SmartInsight, error) {
-	return nil, nil
+	r.inc("GetInsights")
+	return r.insightsAll, nil
 }
 func (r *trackingAnalyticsRepo) DeleteShareViewsOlderThan(context.Context, time.Time) (int64, error) {
 	return 0, nil
@@ -156,6 +166,12 @@ func newServiceForTest(repo *trackingAnalyticsRepo, experimental, trgm bool) *Se
 	s := NewService(repo, nil, nil, nil, nil)
 	s.SetExperimentalInsights(experimental)
 	s.SetTrgmAvailable(trgm)
+	// Pricing iteration v3 (Task 9): тесты, использующие этот helper, написаны
+	// до feature flag'а и ожидают что Pro получает teaser. Включаем flag
+	// по умолчанию, чтобы избежать каскадных правок. Тесты, специально
+	// проверяющие выключенный flag (TestService_InsightsForPlan), создают
+	// Service вручную без этого helper'а.
+	s.SetProInsightsTeaserEnabled(true)
 	return s
 }
 
@@ -163,7 +179,7 @@ func TestComputeInsights_AllSevenTypesWhenTrgmAvailable(t *testing.T) {
 	r := newTrackingRepo()
 	s := newServiceForTest(r, true, true)
 
-	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil))
+	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil, maxAllInsights))
 
 	// 3 базовых типа
 	assert.Equal(t, 1, r.calls["UnusedPrompts"])
@@ -187,7 +203,7 @@ func TestComputeInsights_SkipsDuplicatesWhenTrgmUnavailable(t *testing.T) {
 	r := newTrackingRepo()
 	s := newServiceForTest(r, true, false) // experimental=true, trgm=false
 
-	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil))
+	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil, maxAllInsights))
 
 	// PossibleDuplicates НЕ вызван
 	assert.Equal(t, 0, r.calls["PossibleDuplicates"])
@@ -202,7 +218,7 @@ func TestComputeInsights_KillSwitchOff_OnlyThreeBaseTypes(t *testing.T) {
 	r := newTrackingRepo()
 	s := newServiceForTest(r, false, true) // kill-switch on
 
-	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil))
+	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil, maxAllInsights))
 
 	// Только 3 базовых типа
 	assert.Equal(t, 1, r.calls["UnusedPrompts"])
@@ -282,7 +298,175 @@ func (f *fakeUsersForLookup) GetByReferralCode(context.Context, string) (*models
 func (f *fakeUsersForLookup) MarkReferralRewarded(context.Context, uint) (bool, error) {
 	panic("unused")
 }
-func (f *fakeUsersForLookup) ListMaxUsers(context.Context) ([]uint, error) { panic("unused") }
+func (f *fakeUsersForLookup) ListPaidUsers(context.Context) ([]uint, error) { panic("unused") }
 func (f *fakeUsersForLookup) SetInsightEmailsEnabled(context.Context, uint, bool) error {
 	panic("unused")
+}
+
+// upsertedTypes возвращает список insight-типов, для которых был
+// UpsertInsight (используется в Task 5 для проверки allowed-фильтра).
+func (r *trackingAnalyticsRepo) upsertedTypes() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, 0, len(r.calls))
+	const prefix = "UpsertInsight:"
+	for k, v := range r.calls {
+		if v > 0 && len(k) > len(prefix) && k[:len(prefix)] == prefix {
+			out = append(out, k[len(prefix):])
+		}
+	}
+	return out
+}
+
+// TestComputeInsights_FiltersByAllowed — Pricing Iteration v3 Task 5:
+// ComputeInsights должен считать и upsert'ить только те типы, что переданы
+// в allowed []string. Остальные skip'аются без SQL-запроса.
+//
+// Сценарий: allowed = Pro набор (unused + duplicates). Trending/declining/
+// most_edited/orphan_tags/empty_collections — НЕ должны попасть в upsert.
+func TestComputeInsights_FiltersByAllowed(t *testing.T) {
+	r := newTrackingRepo()
+	s := newServiceForTest(r, true, true) // experimental=true, trgm=true
+	s.SetNowFn(func() time.Time { return time.Date(2026, 5, 17, 0, 0, 0, 0, time.UTC) })
+
+	// Allowed только unused + duplicates (Pro набор).
+	err := s.ComputeInsights(context.Background(), 42, nil, []string{
+		models.InsightUnusedPrompts,
+		models.InsightPossibleDuplicates,
+	})
+	require.NoError(t, err)
+
+	upserted := r.upsertedTypes()
+	require.ElementsMatch(t, []string{
+		models.InsightUnusedPrompts,
+		models.InsightPossibleDuplicates,
+	}, upserted, "trending/declining/most_edited/orphan_tags/empty_collections должны быть skip'нуты — не в allowed list")
+
+	// Дополнительно: репо-методы НЕ должны быть вызваны для не-allowed типов.
+	assert.Equal(t, 0, r.calls["GetTrendingPrompts"], "trending/declining не вызваны — не в allowed")
+	assert.Equal(t, 0, r.calls["MostEditedPrompts"], "most_edited не вызван — не в allowed")
+	assert.Equal(t, 0, r.calls["OrphanTags"], "orphan_tags не вызван — не в allowed")
+	assert.Equal(t, 0, r.calls["EmptyCollections"], "empty_collections не вызван — не в allowed")
+}
+
+// TestComputeInsights_EmptyAllowedNoOp — пустой allowed list → no-op (нет
+// SQL-запросов, нет upsert'ов). Используется loop'ом для Free юзеров
+// (хотя Task 7 заменит на ListPaidUsers, чтобы Free не доходили сюда).
+func TestComputeInsights_EmptyAllowedNoOp(t *testing.T) {
+	r := newTrackingRepo()
+	s := newServiceForTest(r, true, true)
+
+	require.NoError(t, s.ComputeInsights(context.Background(), 42, nil, nil))
+
+	assert.Empty(t, r.upsertedTypes(), "пустой allowed → ни одного upsert'а")
+	assert.Equal(t, 0, r.calls["UnusedPrompts"])
+	assert.Equal(t, 0, r.calls["GetTrendingPrompts"])
+	assert.Equal(t, 0, r.calls["MostEditedPrompts"])
+	assert.Equal(t, 0, r.calls["PossibleDuplicates"])
+	assert.Equal(t, 0, r.calls["OrphanTags"])
+	assert.Equal(t, 0, r.calls["EmptyCollections"])
+}
+
+// TestService_InsightsForPlan — Pricing Iteration v3 Task 4 + Task 9:
+// метод Service.InsightsForPlan маппит plan_id на разрешённые insight типы
+// под guard'ом feature flag PRO_INSIGHTS_TEASER_ENABLED.
+//
+//   - Free/unknown → nil (всегда, независимо от flag'а).
+//   - Pro / pro_yearly → 2 типа teaser при flag=true; nil при flag=false (legacy fallback).
+//   - Max / max_yearly → все 7 типов всегда (Max не зависит от flag'а).
+//
+// Решение зафиксировано в ADR-0008.
+func TestService_InsightsForPlan(t *testing.T) {
+	proTeaser := []string{models.InsightUnusedPrompts, models.InsightPossibleDuplicates}
+	cases := []struct {
+		plan          string
+		teaserEnabled bool
+		want          []string
+	}{
+		{"pro", true, proTeaser},
+		{"pro", false, nil}, // teaser off → free-like fallback
+		{"pro_yearly", true, proTeaser},
+		{"pro_yearly", false, nil},
+		{"max", true, allInsightTypes()},
+		{"max", false, allInsightTypes()}, // Max не зависит от flag'а
+		{"max_yearly", true, allInsightTypes()},
+		{"max_yearly", false, allInsightTypes()},
+		{"free", true, nil},
+		{"free", false, nil},
+		{"unknown", true, nil},
+		{"unknown", false, nil},
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%s/teaser=%v", tc.plan, tc.teaserEnabled), func(t *testing.T) {
+			svc := &Service{proInsightsTeaserEnabled: tc.teaserEnabled}
+			got := svc.InsightsForPlan(tc.plan)
+			require.ElementsMatch(t, tc.want, got)
+		})
+	}
+}
+
+// helper для теста — все 7 типов.
+func allInsightTypes() []string {
+	return []string{
+		models.InsightUnusedPrompts,
+		models.InsightTrending,
+		models.InsightDeclining,
+		models.InsightMostEdited,
+		models.InsightPossibleDuplicates,
+		models.InsightOrphanTags,
+		models.InsightEmptyCollections,
+	}
+}
+
+// TestService_GetInsightsGated_PerTypeFilter — Pricing Iteration v3 Task 6:
+// GetInsightsGated больше не master-gate (Pro/Free → 402), а per-type filter:
+//   - Free → ErrProRequired (HTTP 402) — upgrade prompt.
+//   - Pro/pro_yearly → 2 типа (unused + duplicates) teaser.
+//   - Max/max_yearly → все 7 типов.
+//
+// Repo возвращает все 7 типов; service фильтрует по тарифу.
+// Task 9: для Pro cases выставляем PRO_INSIGHTS_TEASER_ENABLED=true,
+// иначе Pro обработался бы как Free (legacy fallback).
+func TestService_GetInsightsGated_PerTypeFilter(t *testing.T) {
+	ctx := context.Background()
+	allTypes := []models.SmartInsight{
+		{InsightType: models.InsightUnusedPrompts},
+		{InsightType: models.InsightTrending},
+		{InsightType: models.InsightDeclining},
+		{InsightType: models.InsightMostEdited},
+		{InsightType: models.InsightPossibleDuplicates},
+		{InsightType: models.InsightOrphanTags},
+		{InsightType: models.InsightEmptyCollections},
+	}
+	cases := []struct {
+		plan          string
+		wantErr       error
+		wantTypeCount int
+	}{
+		{"free", ErrProRequired, 0},
+		{"pro", nil, 2},
+		{"pro_yearly", nil, 2},
+		{"max", nil, 7},
+		{"max_yearly", nil, 7},
+	}
+	for _, tc := range cases {
+		t.Run(tc.plan, func(t *testing.T) {
+			repo := &trackingAnalyticsRepo{
+				calls:       make(map[string]int),
+				insightsAll: allTypes,
+			}
+			users := &fakeUsersForLookup{user: &models.User{ID: 1, PlanID: tc.plan}}
+			svc := NewService(repo, nil, nil, users, nil)
+			// Task 9: Pro teaser flag должен быть включён, иначе Pro → Free fallback.
+			svc.SetProInsightsTeaserEnabled(true)
+			// Не выставляем planFromCtx — lookupPlanID идёт через users.GetByID.
+			insights, err := svc.GetInsightsGated(ctx, 1, nil)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, insights, tc.wantTypeCount)
+		})
+	}
 }

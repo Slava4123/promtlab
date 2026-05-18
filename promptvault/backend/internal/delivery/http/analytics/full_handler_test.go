@@ -165,18 +165,66 @@ func TestHandler_Prompt_NotFound_404(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
-// --- Insights (402 on non-Max) ---
+// --- Insights (402 on non-paid) ---
 
-func TestHandler_Insights_NonMax_402(t *testing.T) {
+// TestHandler_Insights_NonPaid_402_Pro — Pricing iteration v3 (Task 6+8):
+// после рефактора GetInsightsGated больше не Max-only; Free → ErrProRequired,
+// Pro/Max → данные (с фильтром по plan). Handler должен маппить ErrProRequired
+// в 402 с plan="pro" (lowercase, match frontend PlanBadge) — для UI upgrade prompt.
+//
+// Раньше тест мокал ErrMaxRequired (insights были Max-only) — это semantic
+// stale после Task 6.
+func TestHandler_Insights_NonPaid_402_Pro(t *testing.T) {
 	svc := new(mockAnalyticsSvc)
 	svc.On("GetInsightsGated", mock.Anything, uint(1), (*uint)(nil)).
-		Return(([]models.SmartInsight)(nil), analyticsuc.ErrMaxRequired)
+		Return(([]models.SmartInsight)(nil), analyticsuc.ErrProRequired)
 
 	h := NewHandler(svc)
 	rr := httptest.NewRecorder()
 	h.Insights(rr, authedReq(t, http.MethodGet, "/api/analytics/insights", 1))
 
-	assert.Equal(t, http.StatusPaymentRequired, rr.Code)
+	require.Equal(t, http.StatusPaymentRequired, rr.Code)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &body))
+	assert.Equal(t, "pro", body["plan"], "ErrProRequired → plan='pro' для upgrade prompt")
+	assert.Equal(t, "/pricing", body["upgrade_url"])
+	assert.Equal(t, "premium_feature", body["quota_type"])
+}
+
+// TestRespondError_InsightsProRequired_Returns402WithProPlan — unit-тест
+// низкоуровневого маппинга respondError(ErrProRequired) → 402 с правильным
+// body. Дублирует cover'едж handler-теста, но без mock'а service —
+// гарантирует контракт самого маппинга на случай рефактора handler'ов.
+// plan="pro" lowercase — match frontend PlanBadge planConfig lookup.
+func TestRespondError_InsightsProRequired_Returns402WithProPlan(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/analytics/insights", nil)
+	respondError(rec, req, analyticsuc.ErrProRequired)
+
+	require.Equal(t, http.StatusPaymentRequired, rec.Code)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "pro", body["plan"])
+	assert.Equal(t, "/pricing", body["upgrade_url"])
+}
+
+// TestRespondError_RefreshMaxRequired_Returns402WithMaxPlan — guard'ит
+// что refresh endpoint (Max-only) остался на ErrMaxRequired → plan="max"
+// (lowercase, match frontend PlanBadge planConfig lookup).
+// После Task 8 mapping ErrMaxRequired не трогали, но проверяем явно.
+func TestRespondError_RefreshMaxRequired_Returns402WithMaxPlan(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/analytics/insights/refresh", nil)
+	respondError(rec, req, analyticsuc.ErrMaxRequired)
+
+	require.Equal(t, http.StatusPaymentRequired, rec.Code)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "max", body["plan"])
+	assert.Equal(t, "insights", body["quota_type"])
 }
 
 func TestHandler_Insights_Max_OK(t *testing.T) {
